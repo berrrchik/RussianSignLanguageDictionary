@@ -6,8 +6,28 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668A2EC78C50007D9784 /* PostgREST */; };
+		57D3668D2EC78C50007D9784 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668C2EC78C50007D9784 /* Storage */; };
+		57D366982ECA4C6C007D9784 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 57D366972ECA4C6C007D9784 /* Supabase */; };
+		57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3669A2ECA5716007D9784 /* SimilaritySearchKit */; };
+		57D366CC2ECA6797007D9784 /* signs_data.json in Resources */ = {isa = PBXBuildFile; fileRef = 57D366CB2ECA6797007D9784 /* signs_data.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		57D366C02ECA64B9007D9784 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 57D364A02EC4FC3E007D9784 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 57D364A72EC4FC3E007D9784;
+			remoteInfo = RussianSignLanguageDictionary;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RussianSignLanguageDictionary.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		57D366BC2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RussianSignLanguageDictionaryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		57D366CB2ECA6797007D9784 /* signs_data.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = signs_data.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +36,26 @@
 			path = RussianSignLanguageDictionary;
 			sourceTree = "<group>";
 		};
+		57D366BD2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = RussianSignLanguageDictionaryTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		57D364A52EC4FC3E007D9784 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */,
+				57D3668D2EC78C50007D9784 /* Storage in Frameworks */,
+				57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */,
+				57D366982ECA4C6C007D9784 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		57D366B92ECA64B8007D9784 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -32,7 +68,10 @@
 		57D3649F2EC4FC3E007D9784 = {
 			isa = PBXGroup;
 			children = (
+				57D366CB2ECA6797007D9784 /* signs_data.json */,
 				57D364AA2EC4FC3E007D9784 /* RussianSignLanguageDictionary */,
+				57D366BD2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests */,
+				57D366962ECA4C6C007D9784 /* Frameworks */,
 				57D364A92EC4FC3E007D9784 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +80,16 @@
 			isa = PBXGroup;
 			children = (
 				57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */,
+				57D366BC2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		57D366962ECA4C6C007D9784 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,10 +112,37 @@
 			);
 			name = RussianSignLanguageDictionary;
 			packageProductDependencies = (
+				57D3668A2EC78C50007D9784 /* PostgREST */,
+				57D3668C2EC78C50007D9784 /* Storage */,
+				57D366972ECA4C6C007D9784 /* Supabase */,
+				57D3669A2ECA5716007D9784 /* SimilaritySearchKit */,
 			);
 			productName = RussianSignLanguageDictionary;
 			productReference = 57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */;
 			productType = "com.apple.product-type.application";
+		};
+		57D366BB2ECA64B8007D9784 /* RussianSignLanguageDictionaryTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 57D366C22ECA64B9007D9784 /* Build configuration list for PBXNativeTarget "RussianSignLanguageDictionaryTests" */;
+			buildPhases = (
+				57D366B82ECA64B8007D9784 /* Sources */,
+				57D366B92ECA64B8007D9784 /* Frameworks */,
+				57D366BA2ECA64B8007D9784 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				57D366C12ECA64B9007D9784 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				57D366BD2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests */,
+			);
+			name = RussianSignLanguageDictionaryTests;
+			packageProductDependencies = (
+			);
+			productName = RussianSignLanguageDictionaryTests;
+			productReference = 57D366BC2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -83,6 +157,10 @@
 					57D364A72EC4FC3E007D9784 = {
 						CreatedOnToolsVersion = 16.2;
 					};
+					57D366BB2ECA64B8007D9784 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 57D364A72EC4FC3E007D9784;
+					};
 				};
 			};
 			buildConfigurationList = 57D364A32EC4FC3E007D9784 /* Build configuration list for PBXProject "RussianSignLanguageDictionary" */;
@@ -94,18 +172,31 @@
 			);
 			mainGroup = 57D3649F2EC4FC3E007D9784;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 57D364A92EC4FC3E007D9784 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				57D364A72EC4FC3E007D9784 /* RussianSignLanguageDictionary */,
+				57D366BB2ECA64B8007D9784 /* RussianSignLanguageDictionaryTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		57D364A62EC4FC3E007D9784 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57D366CC2ECA6797007D9784 /* signs_data.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		57D366BA2ECA64B8007D9784 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +213,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		57D366B82ECA64B8007D9784 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		57D366C12ECA64B9007D9784 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 57D364A72EC4FC3E007D9784 /* RussianSignLanguageDictionary */;
+			targetProxy = 57D366C02ECA64B9007D9784 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		57D364B42EC4FC42007D9784 /* Debug */ = {
@@ -302,6 +408,42 @@
 			};
 			name = Release;
 		};
+		57D366C32ECA64B9007D9784 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 373B9Z76LT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = berchik.RussianSignLanguageDictionaryTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RussianSignLanguageDictionary.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RussianSignLanguageDictionary";
+			};
+			name = Debug;
+		};
+		57D366C42ECA64B9007D9784 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 373B9Z76LT;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = berchik.RussianSignLanguageDictionaryTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RussianSignLanguageDictionary.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RussianSignLanguageDictionary";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -323,7 +465,58 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		57D366C22ECA64B9007D9784 /* Build configuration list for PBXNativeTarget "RussianSignLanguageDictionaryTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57D366C32ECA64B9007D9784 /* Debug */,
+				57D366C42ECA64B9007D9784 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+		57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ZachNagengast/similarity-search-kit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.0.15;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		57D3668A2EC78C50007D9784 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		57D3668C2EC78C50007D9784 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		57D366972ECA4C6C007D9784 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		57D3669A2ECA5716007D9784 /* SimilaritySearchKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */;
+			productName = SimilaritySearchKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 57D364A02EC4FC3E007D9784 /* Project object */;
 }
