@@ -92,3 +92,23 @@ iOSInjectionProject/
 # macOS
 .DS_Store
 
+
+# Supabase Config (contains sensitive keys)
+RussianSignLanguageDictionary/SupabaseConfig.swift
+
+# Environment variables
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Backup files
+*.backup_*
+*_backup*.json
+
+*Example*.swift
