@@ -11,7 +11,6 @@
 		57D3668D2EC78C50007D9784 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668C2EC78C50007D9784 /* Storage */; };
 		57D366982ECA4C6C007D9784 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 57D366972ECA4C6C007D9784 /* Supabase */; };
 		57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3669A2ECA5716007D9784 /* SimilaritySearchKit */; };
-		57D366CC2ECA6797007D9784 /* signs_data.json in Resources */ = {isa = PBXBuildFile; fileRef = 57D366CB2ECA6797007D9784 /* signs_data.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,7 +26,6 @@
 /* Begin PBXFileReference section */
 		57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RussianSignLanguageDictionary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57D366BC2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RussianSignLanguageDictionaryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		57D366CB2ECA6797007D9784 /* signs_data.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = signs_data.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -68,7 +66,6 @@
 		57D3649F2EC4FC3E007D9784 = {
 			isa = PBXGroup;
 			children = (
-				57D366CB2ECA6797007D9784 /* signs_data.json */,
 				57D364AA2EC4FC3E007D9784 /* RussianSignLanguageDictionary */,
 				57D366BD2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests */,
 				57D366962ECA4C6C007D9784 /* Frameworks */,
@@ -192,7 +189,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				57D366CC2ECA6797007D9784 /* signs_data.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
