@@ -2,6 +2,10 @@ import SwiftUI
 
 struct CategoriesView: View {
     @StateObject private var viewModel: CategoriesViewModel
+    @EnvironmentObject private var favoritesRepository: FavoritesRepository
+    
+    private let signRepository: SignRepositoryProtocol
+    private let videoRepository: VideoRepositoryProtocol
     
     private let columns: [GridItem] = [
         GridItem(
@@ -13,7 +17,12 @@ struct CategoriesView: View {
         )
     ]
     
-    init(signRepository: SignRepositoryProtocol) {
+    init(
+        signRepository: SignRepositoryProtocol,
+        videoRepository: VideoRepositoryProtocol
+    ) {
+        self.signRepository = signRepository
+        self.videoRepository = videoRepository
         _viewModel = StateObject(wrappedValue: CategoriesViewModel(signRepository: signRepository))
     }
     
@@ -53,7 +62,13 @@ struct CategoriesView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: LayoutConstants.CategoryCard.gridSpacing) {
                 ForEach(viewModel.categories) { category in
-                    NavigationLink(destination: CategoryDetailView(category: category)) {
+                    NavigationLink(destination: CategoryDetailView(
+                        viewModel: CategoryDetailViewModel(
+                            category: category,
+                            signRepository: signRepository
+                        ),
+                        videoRepository: videoRepository
+                    )) {
                         CategoryCardView(category: category)
                     }
                     .buttonStyle(.plain)
@@ -66,26 +81,15 @@ struct CategoriesView: View {
 
 // MARK: - Preview
 
+#if DEBUG
 struct CategoriesView_Previews: PreviewProvider {
     static var previews: some View {
-        CategoriesView(signRepository: MockSignRepository())
+        CategoriesView(
+            signRepository: PreviewData.signRepository,
+            videoRepository: PreviewData.videoRepository
+        )
+        .environmentObject(PreviewData.favoritesRepository)
     }
 }
-
-// MARK: - Mock
-
-private class MockSignRepository: SignRepositoryProtocol {
-    func loadAllSigns() async throws -> [Sign] { [] }
-    
-    func loadCategories() async throws -> [Category] {
-        [
-            Category(id: "alphabet", name: "Алфавит", order: 1, signCount: 33, icon: "textformat.abc", color: nil),
-            Category(id: "animals", name: "Животные", order: 2, signCount: 69, icon: "pawprint.fill", color: nil)
-        ]
-    }
-    
-    func getSign(byId id: String) async throws -> Sign? { nil }
-    func getSigns(byCategory categoryId: String) async throws -> [Sign] { [] }
-    func searchSigns(query: String) async throws -> [Sign] { [] }
-}
+#endif
 

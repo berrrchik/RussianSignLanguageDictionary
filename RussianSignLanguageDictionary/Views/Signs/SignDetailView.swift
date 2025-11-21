@@ -17,14 +17,6 @@ struct SignDetailView: View {
         ))
     }
     
-    init(sign: Sign) {
-        _viewModel = StateObject(wrappedValue: SignDetailViewModel(
-            sign: sign,
-            videoRepository: VideoRepository(),
-            favoritesRepository: FavoritesRepository()
-        ))
-    }
-    
     // MARK: - Body
     
     var body: some View {
@@ -149,30 +141,17 @@ struct FlowLayout<Content: View>: View {
 
 // MARK: - Preview
 
+#if DEBUG
 struct SignDetailView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
             SignDetailView(
-                sign: Sign(
-                    id: "sign_001",
-                    word: "Привет",
-                    description: "Жест приветствия",
-                    category: "greetings",
-                    videoId: "video_001",
-                    supabaseStoragePath: "test/path.mp4",
-                    supabaseUrl: "https://example.com/video.mp4",
-                    keywords: ["привет", "приветствие", "здравствуй"],
-                    embeddings: [],
-                    metadata: SignMetadata(
-                        duration: 3.0,
-                        fileSize: 500000,
-                        resolution: "1080x1920",
-                        format: "mp4",
-                        fps: 30
-                    )
-                )
+                sign: PreviewData.sign,
+                videoRepository: PreviewData.videoRepository,
+                favoritesRepository: PreviewData.favoritesRepository
             )
         }
     }
 }
+#endif
 

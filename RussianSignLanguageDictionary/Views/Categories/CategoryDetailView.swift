@@ -1,21 +1,17 @@
 import SwiftUI
 
 struct CategoryDetailView: View {
-    @StateObject private var viewModel: CategoryDetailViewModel
+    @ObservedObject private var viewModel: CategoryDetailViewModel
+    @EnvironmentObject private var favoritesRepository: FavoritesRepository
     
-    init(category: Category, signRepository: SignRepositoryProtocol) {
-        _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(
-            category: category,
-            signRepository: signRepository
-        ))
-    }
+    private let videoRepository: VideoRepositoryProtocol
     
-    init(category: Category) {
-        let repository = SignRepository()
-        _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(
-            category: category,
-            signRepository: repository
-        ))
+    init(
+        viewModel: CategoryDetailViewModel,
+        videoRepository: VideoRepositoryProtocol
+    ) {
+        self.viewModel = viewModel
+        self.videoRepository = videoRepository
     }
     
     var body: some View {
@@ -58,8 +54,16 @@ struct CategoryDetailView: View {
         List {
             Section {
                 ForEach(viewModel.signs) { sign in
-                    NavigationLink(destination: SignDetailView(sign: sign)) {
-                        SignRowView(sign: sign)
+                    NavigationLink(destination: SignDetailView(
+                        sign: sign,
+                        videoRepository: videoRepository,
+                        favoritesRepository: favoritesRepository
+                    )) {
+                        SignRowView(
+                            sign: sign,
+                            showFavoriteIndicator: true,
+                            isFavorite: favoritesRepository.isFavorite(signId: sign.id)
+                        )
                     }
                 }
             }
@@ -70,51 +74,22 @@ struct CategoryDetailView: View {
 
 // MARK: - Preview
 
+#if DEBUG
 struct CategoryDetailView_Previews: PreviewProvider {
     static var previews: some View {
+        let viewModel = CategoryDetailViewModel(
+            category: PreviewData.category,
+            signRepository: PreviewData.signRepository
+        )
+        
         NavigationStack {
             CategoryDetailView(
-                category: Category(id: "alphabet", name: "Алфавит", order: 1, signCount: 33, icon: "textformat.abc", color: nil),
-                signRepository: MockSignRepository()
+                viewModel: viewModel,
+                videoRepository: PreviewData.videoRepository
             )
+            .environmentObject(PreviewData.favoritesRepository)
         }
     }
 }
-
-private class MockSignRepository: SignRepositoryProtocol {
-    func loadAllSigns() async throws -> [Sign] { [] }
-    func loadCategories() async throws -> [Category] { [] }
-    func getSign(byId id: String) async throws -> Sign? { nil }
-    
-    func getSigns(byCategory categoryId: String) async throws -> [Sign] {
-        [
-            Sign(
-                id: "sign_001",
-                word: "Привет",
-                description: "Жест приветствия",
-                category: "alphabet",
-                videoId: "video_001",
-                supabaseStoragePath: "test/path.mp4",
-                supabaseUrl: "https://example.com/video.mp4",
-                keywords: ["привет"],
-                embeddings: [],
-                metadata: SignMetadata(duration: 3.0, fileSize: 500000, resolution: "1080x1920", format: "mp4", fps: 30)
-            ),
-            Sign(
-                id: "sign_002",
-                word: "Спасибо",
-                description: "Жест благодарности",
-                category: "alphabet",
-                videoId: "video_002",
-                supabaseStoragePath: "test/path2.mp4",
-                supabaseUrl: "https://example.com/video2.mp4",
-                keywords: ["спасибо"],
-                embeddings: [],
-                metadata: SignMetadata(duration: 3.0, fileSize: 500000, resolution: "1080x1920", format: "mp4", fps: 30)
-            )
-        ]
-    }
-    
-    func searchSigns(query: String) async throws -> [Sign] { [] }
-}
+#endif
 
