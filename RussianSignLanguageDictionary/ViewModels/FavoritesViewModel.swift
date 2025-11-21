@@ -24,7 +24,7 @@ final class FavoritesViewModel: ObservableObject {
     
     // MARK: - Dependencies
     
-    private let favoritesRepository: FavoritesRepositoryProtocol
+    let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
     
     // MARK: - Init
