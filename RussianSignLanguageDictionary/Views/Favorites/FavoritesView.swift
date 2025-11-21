@@ -4,19 +4,17 @@ struct FavoritesView: View {
     @StateObject private var viewModel: FavoritesViewModel
     @State private var showClearAlert = false
     
-    init(favoritesRepository: FavoritesRepositoryProtocol, signRepository: SignRepositoryProtocol) {
+    private let videoRepository: VideoRepositoryProtocol
+    
+    init(
+        signRepository: SignRepositoryProtocol,
+        favoritesRepository: FavoritesRepositoryProtocol,
+        videoRepository: VideoRepositoryProtocol
+    ) {
+        self.videoRepository = videoRepository
         _viewModel = StateObject(wrappedValue: FavoritesViewModel(
             favoritesRepository: favoritesRepository,
             signRepository: signRepository
-        ))
-    }
-    
-    init() {
-        let favoritesRepo = FavoritesRepository()
-        let signRepo = SignRepository()
-        _viewModel = StateObject(wrappedValue: FavoritesViewModel(
-            favoritesRepository: favoritesRepo,
-            signRepository: signRepo
         ))
     }
     
@@ -77,7 +75,11 @@ struct FavoritesView: View {
         List {
             Section {
                 ForEach(viewModel.favoriteSigns) { sign in
-                    NavigationLink(destination: SignDetailView(sign: sign)) {
+                    NavigationLink(destination: SignDetailView(
+                        sign: sign,
+                        videoRepository: videoRepository,
+                        favoritesRepository: viewModel.favoritesRepository
+                    )) {
                         SignRowView(sign: sign, showFavoriteIndicator: false)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -105,9 +107,17 @@ struct FavoritesView: View {
 
 // MARK: - Preview
 
+#if DEBUG
 struct FavoritesView_Previews: PreviewProvider {
     static var previews: some View {
-        FavoritesView()
+        NavigationStack {
+            FavoritesView(
+                signRepository: PreviewData.signRepository,
+                favoritesRepository: PreviewData.favoritesRepository,
+                videoRepository: PreviewData.videoRepository
+            )
+        }
     }
 }
+#endif
 
