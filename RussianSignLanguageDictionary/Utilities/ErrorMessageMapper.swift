@@ -16,6 +16,8 @@ enum ErrorMessageMapper {
             return "Ошибка обработки данных: \(underlyingError.localizedDescription)"
         case .invalidDataFormat:
             return "Неверный формат данных"
+        case .noDataAvailable:
+            return "Данные недоступны. Проверьте подключение к интернету."
         }
     }
     
@@ -32,6 +34,23 @@ enum ErrorMessageMapper {
         }
     }
     
+    // MARK: - SyncError Mapping
+    
+    static func message(for error: SyncError) -> String {
+        switch error {
+        case .noInternet:
+            return "Нет подключения к интернету. Проверьте соединение и попробуйте снова."
+        case .serverError(let code):
+            return "Ошибка сервера: \(code). Попробуйте позже."
+        case .networkError(let underlyingError):
+            return "Ошибка сети: \(underlyingError.localizedDescription)"
+        case .decodingError(let underlyingError):
+            return "Ошибка обработки данных: \(underlyingError.localizedDescription)"
+        case .invalidResponse:
+            return "Неверный ответ сервера. Попробуйте позже."
+        }
+    }
+    
     // MARK: - Generic Error Mapping
     
     static func message(for error: Error) -> String {
@@ -41,6 +60,10 @@ enum ErrorMessageMapper {
         
         if let videoError = error as? VideoRepositoryError {
             return message(for: videoError)
+        }
+        
+        if let syncError = error as? SyncError {
+            return message(for: syncError)
         }
         
         return "Произошла ошибка: \(error.localizedDescription)"
