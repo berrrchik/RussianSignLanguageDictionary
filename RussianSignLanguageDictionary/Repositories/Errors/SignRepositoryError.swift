@@ -14,5 +14,8 @@ enum SignRepositoryError: Error {
     
     /// Неверный формат данных
     case invalidDataFormat
+    
+    /// Данные недоступны (нет кеша и нет интернета)
+    case noDataAvailable
 }
 
