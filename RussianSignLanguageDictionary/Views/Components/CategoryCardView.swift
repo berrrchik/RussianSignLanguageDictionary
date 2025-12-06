@@ -48,7 +48,9 @@ struct CategoryCardView_Previews: PreviewProvider {
             order: 1,
             signCount: 33,
             icon: "textformat.abc",
-            color: nil
+            color: nil,
+            createdAt: nil,
+            updatedAt: nil
         )
         
         return VStack {
@@ -61,7 +63,9 @@ struct CategoryCardView_Previews: PreviewProvider {
                 order: 2,
                 signCount: 69,
                 icon: "pawprint.fill",
-                color: nil
+                color: nil,
+                createdAt: nil,
+                updatedAt: nil
             ))
             .padding()
         }

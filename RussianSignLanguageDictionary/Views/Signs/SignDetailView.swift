@@ -53,7 +53,7 @@ struct SignDetailView: View {
         VStack(alignment: .leading, spacing: LayoutConstants.SignDetail.elementSpacing) {
             signHeader
             categoryBadge
-            if !viewModel.sign.keywords.isEmpty {
+            if let keywords = viewModel.sign.keywords, !keywords.isEmpty {
                 keywordsSection
             }
         }
@@ -84,19 +84,26 @@ struct SignDetailView: View {
     
     private var keywordsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("")
+            Text("Ключевые слова")
                 .font(.headline)
             
-            FlowLayout(spacing: LayoutConstants.SignDetail.keywordSpacing) {
-                ForEach(viewModel.sign.keywords, id: \.self) { keyword in
-                    keywordBadge(keyword)
+            if let keywords = viewModel.sign.keywords {
+                FlowLayout(spacing: LayoutConstants.SignDetail.keywordSpacing) {
+                    ForEach(keywords, id: \.self) { keyword in
+                        keywordBadge(keyword)
+                    }
                 }
             }
         }
     }
     
     private func keywordBadge(_ keyword: String) -> some View {
-        Text("")
+        Text(keyword)
+            .font(.caption)
+            .padding(.horizontal, LayoutConstants.SignDetail.keywordHorizontalPadding)
+            .padding(.vertical, LayoutConstants.SignDetail.keywordVerticalPadding)
+            .background(Color.accentColor.opacity(LayoutConstants.Opacity.accent))
+            .cornerRadius(LayoutConstants.SignDetail.keywordCornerRadius)
     }
     
     private var toolbarContent: some ToolbarContent {
