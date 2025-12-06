@@ -14,22 +14,59 @@ struct Sign: Identifiable, Codable, Hashable {
     /// Идентификатор категории
     let category: String
     
-    /// Идентификатор видео файла
-    let videoId: String
+    /// Массив видео для жеста (новая структура из API)
+    let videos: [SignVideo]?
     
-    /// Путь к видео в Supabase Storage
-    let supabaseStoragePath: String
+    /// Массив синонимов жеста (опционально)
+    let synonyms: [SignSynonym]?
     
-    /// Публичный URL видео в Supabase Storage
-    let supabaseUrl: String
+    /// Эмбеддинги для семантического поиска (RuBERT) - опционально
+    let embeddings: [Double]?
     
-    /// Ключевые слова для поиска
-    let keywords: [String]
+    // MARK: - Обратная совместимость (для старых JSON данных)
     
-    /// Эмбеддинги для семантического поиска (RuBERT)
-    let embeddings: [Double]
+    /// Идентификатор видео файла (устаревшее, используется для обратной совместимости)
+    let videoId: String?
     
-    /// Метаданные видео файла
-    let metadata: SignMetadata
+    /// Путь к видео в Supabase Storage (устаревшее)
+    let supabaseStoragePath: String?
+    
+    /// Публичный URL видео в Supabase Storage (устаревшее)
+    let supabaseUrl: String?
+    
+    /// Ключевые слова для поиска (устаревшее, может быть пустым)
+    let keywords: [String]?
+    
+    /// Метаданные видео файла (устаревшее)
+    let metadata: SignMetadata?
+    
+    // MARK: - CodingKeys
+    
+    enum CodingKeys: String, CodingKey {
+        case id, word, description, videos, synonyms, embeddings
+        case category = "category_id"
+        case videoId = "video_id"
+        case supabaseStoragePath = "supabase_storage_path"
+        case supabaseUrl = "supabase_url"
+        case keywords
+        case metadata
+    }
+    
+    // MARK: - Computed Properties (для обратной совместимости)
+    
+    /// Получает первое видео из массива или nil
+    var firstVideo: SignVideo? {
+        return videos?.first
+    }
+    
+    /// Получает URL первого видео для обратной совместимости
+    var primaryVideoURL: String? {
+        return videos?.first?.url ?? supabaseUrl
+    }
+    
+    /// Получает массив видео или пустой массив
+    var videosArray: [SignVideo] {
+        return videos ?? []
+    }
 }
 
