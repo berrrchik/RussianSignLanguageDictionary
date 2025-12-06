@@ -3,6 +3,13 @@ import Combine
 
 @MainActor
 final class SearchViewModel: ObservableObject {
+    // MARK: - Constants
+    
+    private enum Constants {
+        /// Задержка для debounce поиска в миллисекундах
+        static let debounceMilliseconds: Int = 300
+    }
+    
     // MARK: - Published Properties
     
     @Published var searchQuery: String = ""
@@ -57,7 +64,7 @@ final class SearchViewModel: ObservableObject {
                 SearchableSign(
                     sign: sign,
                     lowercasedWord: sign.word.lowercased(),
-                    lowercasedKeywords: sign.keywords.map { $0.lowercased() }
+                    lowercasedKeywords: (sign.keywords ?? []).map { $0.lowercased() }
                 )
             }
             
@@ -110,7 +117,7 @@ final class SearchViewModel: ObservableObject {
     
     private func setupDebouncing() {
         $searchQuery
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(Constants.debounceMilliseconds), scheduler: DispatchQueue.main)
             .removeDuplicates()
             .sink { [weak self] query in
                 guard let self = self else { return }
