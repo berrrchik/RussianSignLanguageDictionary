@@ -22,11 +22,13 @@ extension Sign {
             word: word,
             description: description,
             category: category,
+            videos: nil,
+            synonyms: nil,
+            embeddings: nil,
             videoId: "video_\(id)",
             supabaseStoragePath: "test/\(id).mp4",
             supabaseUrl: "https://example.com/\(id).mp4",
             keywords: keywords ?? [word.lowercased()],
-            embeddings: [],
             metadata: .mock()
         )
     }
