@@ -25,7 +25,9 @@ extension Category {
             order: order,
             signCount: signCount,
             icon: icon,
-            color: color
+            color: color,
+            createdAt: nil,
+            updatedAt: nil
         )
     }
     
