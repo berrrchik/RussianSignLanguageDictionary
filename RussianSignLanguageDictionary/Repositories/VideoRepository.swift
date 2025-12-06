@@ -2,6 +2,15 @@ import Foundation
 
 /// Репозиторий для работы с видео из Supabase Storage
 final class VideoRepository: VideoRepositoryProtocol {
+    // MARK: - Constants
+    
+    private enum Constants {
+        /// Максимальное количество URL в кеше
+        static let cacheCountLimit: Int = 100
+        /// Максимальный размер кеша в байтах (10 МБ)
+        static let cacheTotalCostLimit: Int = 10 * 1024 * 1024
+    }
+    
     // MARK: - Properties
     
     /// Кэш для URL видео
@@ -14,20 +23,40 @@ final class VideoRepository: VideoRepositoryProtocol {
     
     init() {
         // Настройка кэша
-        cache.countLimit = 100 // Храним до 100 URL
+        cache.countLimit = Constants.cacheCountLimit
+        cache.totalCostLimit = Constants.cacheTotalCostLimit
     }
     
     // MARK: - VideoRepositoryProtocol
     
     func getVideoURL(for sign: Sign) async throws -> URL {
-        // Проверка кэша
+        // Используем первое видео из массива (новый формат)
+        if let firstVideo = sign.videos?.first {
+            let cacheKey = "video_\(firstVideo.id)" as NSString
+            if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
+                return cachedURL
+            }
+            
+            guard let url = URL(string: firstVideo.url) else {
+                throw VideoRepositoryError.invalidURL
+            }
+            
+            // Сохранение в кэш
+            cacheQueue.sync {
+                cache.setObject(url as NSURL, forKey: cacheKey)
+            }
+            
+            return url
+        }
+        
+        // Fallback на старый формат (обратная совместимость)
         let cacheKey = sign.id as NSString
         if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
             return cachedURL
         }
         
-        // Используем публичный URL из модели Sign
-        guard let url = URL(string: sign.supabaseUrl) else {
+        // Используем публичный URL из модели Sign (старый формат)
+        guard let supabaseUrl = sign.supabaseUrl, let url = URL(string: supabaseUrl) else {
             throw VideoRepositoryError.invalidURL
         }
         

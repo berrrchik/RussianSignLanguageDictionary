@@ -26,10 +26,8 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     // MARK: - FavoritesRepositoryProtocol
     
     func getFavorites() -> [String] {
-        guard Thread.isMainThread else {
-            return DispatchQueue.main.sync { getFavorites() }
-        }
-        
+        // UserDefaults.standard является thread-safe для чтения
+        // Поэтому можем безопасно читать с любого потока
         return userDefaults.stringArray(forKey: favoritesKey) ?? []
     }
     
