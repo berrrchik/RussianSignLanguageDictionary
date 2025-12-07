@@ -29,11 +29,16 @@ struct VideoPlayerView: View {
         .onAppear {
             setupPlayer()
         }
+        .onChange(of: videoURL) { _ in
+            setupPlayer()
+        }
     }
     
     // MARK: - Private Methods
     
     private func setupPlayer() {
+        cleanupPlayer()
+        
         let playerItem = AVPlayerItem(url: videoURL)
         let newPlayer = AVPlayer(playerItem: playerItem)
         newPlayer.actionAtItemEnd = .none
@@ -48,6 +53,7 @@ struct VideoPlayerView: View {
         }
         
         self.player = newPlayer
+        newPlayer.play()
     }
     
     private func cleanupPlayer() {

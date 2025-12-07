@@ -3,10 +3,12 @@ import SwiftUI
 struct ErrorView: View {
     let message: String
     let retryAction: (() -> Void)?
+    let skipAction: (() -> Void)?
     
-    init(message: String, retryAction: (() -> Void)? = nil) {
+    init(message: String, retryAction: (() -> Void)? = nil, skipAction: (() -> Void)? = nil) {
         self.message = message
         self.retryAction = retryAction
+        self.skipAction = skipAction
     }
     
     var body: some View {
@@ -25,20 +27,36 @@ struct ErrorView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             
-            if let retryAction = retryAction {
-                Button(action: retryAction) {
-                    Label("Повторить", systemImage: "arrow.clockwise")
-                        .font(.headline)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+            HStack(spacing: 12) {
+                if let retryAction = retryAction {
+                    Button(action: retryAction) {
+                        Label("Повторить", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .accessibilityLabel("Повторить попытку")
+                    .accessibilityHint("Двойное нажатие для повторной загрузки")
                 }
-                .padding(.top, 8)
-                .accessibilityLabel("Повторить попытку")
-                .accessibilityHint("Двойное нажатие для повторной загрузки")
+                
+                if let skipAction = skipAction {
+                    Button(action: skipAction) {
+                        Label("Пропустить", systemImage: "arrow.right")
+                            .font(.headline)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.secondary.opacity(0.2))
+                            .foregroundColor(.primary)
+                            .cornerRadius(10)
+                    }
+                    .accessibilityLabel("Пропустить видео")
+                    .accessibilityHint("Двойное нажатие для перехода к следующему видео")
+                }
             }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .combine)
@@ -63,9 +81,10 @@ struct ErrorView_Previews: PreviewProvider {
             
             ErrorView(
                 message: "Видео не найдено",
-                retryAction: { print("Retry") }
+                retryAction: { print("Retry") },
+                skipAction: { print("Skip") }
             )
-            .previewDisplayName("Ошибка видео")
+            .previewDisplayName("Ошибка видео с пропуском")
         }
     }
 }
