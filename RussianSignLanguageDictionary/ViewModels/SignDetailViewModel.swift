@@ -5,6 +5,7 @@ import Foundation
 final class SignDetailViewModel: ObservableObject {
     // MARK: - Published Properties
     
+    @Published var currentVideoIndex: Int = 0
     @Published private(set) var videoURL: URL?
     @Published private(set) var isLoadingVideo: Bool = false
     @Published private(set) var videoErrorMessage: String?
@@ -13,6 +14,30 @@ final class SignDetailViewModel: ObservableObject {
     // MARK: - Properties
     
     let sign: Sign
+    
+    // MARK: - Computed Properties
+    
+    var currentVideo: SignVideo? {
+        guard let videos = sign.videos,
+              currentVideoIndex >= 0,
+              currentVideoIndex < videos.count else {
+            return nil
+        }
+        return videos[currentVideoIndex]
+    }
+    
+    var currentContextDescription: String? {
+        currentVideo?.contextDescription
+    }
+    
+    var canGoNext: Bool {
+        guard let videos = sign.videos else { return false }
+        return currentVideoIndex < videos.count - 1
+    }
+    
+    var canGoBack: Bool {
+        return currentVideoIndex > 0
+    }
     
     // MARK: - Dependencies
     
@@ -35,17 +60,31 @@ final class SignDetailViewModel: ObservableObject {
     // MARK: - Public Methods
     
     func loadVideo() async {
+        guard let video = currentVideo else { return }
+        
         isLoadingVideo = true
         videoErrorMessage = nil
         
         do {
-            let url = try await videoRepository.getVideoURL(for: sign)
+            let url = try await videoRepository.getVideoURL(for: video)
             videoURL = url
             isLoadingVideo = false
         } catch {
             videoErrorMessage = ErrorMessageMapper.message(for: error)
             isLoadingVideo = false
         }
+    }
+    
+    func showNextVideo() {
+        guard canGoNext else { return }
+        currentVideoIndex += 1
+        // loadVideo() будет вызван автоматически через onChange в SignDetailView
+    }
+    
+    func showPreviousVideo() {
+        guard canGoBack else { return }
+        currentVideoIndex -= 1
+        // loadVideo() будет вызван автоматически через onChange в SignDetailView
     }
     
     func toggleFavorite() {
