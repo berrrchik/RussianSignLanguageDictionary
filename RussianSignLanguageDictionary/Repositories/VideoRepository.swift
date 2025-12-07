@@ -32,21 +32,7 @@ final class VideoRepository: VideoRepositoryProtocol {
     func getVideoURL(for sign: Sign) async throws -> URL {
         // Используем первое видео из массива (новый формат)
         if let firstVideo = sign.videos?.first {
-            let cacheKey = "video_\(firstVideo.id)" as NSString
-            if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
-                return cachedURL
-            }
-            
-            guard let url = URL(string: firstVideo.url) else {
-                throw VideoRepositoryError.invalidURL
-            }
-            
-            // Сохранение в кэш
-            cacheQueue.sync {
-                cache.setObject(url as NSURL, forKey: cacheKey)
-            }
-            
-            return url
+            return try await getVideoURL(for: firstVideo)
         }
         
         // Fallback на старый формат (обратная совместимость)
@@ -57,6 +43,27 @@ final class VideoRepository: VideoRepositoryProtocol {
         
         // Используем публичный URL из модели Sign (старый формат)
         guard let supabaseUrl = sign.supabaseUrl, let url = URL(string: supabaseUrl) else {
+            throw VideoRepositoryError.invalidURL
+        }
+        
+        // Сохранение в кэш
+        cacheQueue.sync {
+            cache.setObject(url as NSURL, forKey: cacheKey)
+        }
+        
+        return url
+    }
+    
+    func getVideoURL(for video: SignVideo) async throws -> URL {
+        let cacheKey = "video_\(video.id)" as NSString
+        
+        // Проверка кэша
+        if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
+            return cachedURL
+        }
+        
+        // Создание URL из строки
+        guard let url = URL(string: video.url) else {
             throw VideoRepositoryError.invalidURL
         }
         
