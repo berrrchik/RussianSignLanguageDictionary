@@ -30,23 +30,49 @@ struct SignDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .task { await loadData() }
+        .onChange(of: viewModel.currentVideoIndex) { _ in
+            Task { await viewModel.loadVideo() }
+        }
     }
     
     // MARK: - Subviews
     
     private var videoSection: some View {
-        Group {
+        VStack(spacing: LayoutConstants.SignDetail.sectionSpacing) {
             if viewModel.isLoadingVideo {
                 LoadingView(message: "Загрузка видео...")
+                    .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
             } else if let errorMessage = viewModel.videoErrorMessage {
-                ErrorView(message: errorMessage) {
-                    Task { await viewModel.loadVideo() }
-                }
+                ErrorView(
+                    message: errorMessage,
+                    retryAction: { Task { await viewModel.loadVideo() } },
+                    skipAction: viewModel.canGoNext ? { viewModel.showNextVideo() } : nil
+                )
+                .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
             } else if let videoURL = viewModel.videoURL {
                 VideoPlayerView(videoURL: videoURL)
+                    .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
+                    .animation(.easeInOut, value: viewModel.currentVideoIndex)
+            }
+            
+            if let videos = viewModel.sign.videos, videos.count > 1 {
+                VideoNavigationView(
+                    currentIndex: viewModel.currentVideoIndex,
+                    totalCount: videos.count,
+                    canGoBack: viewModel.canGoBack,
+                    canGoNext: viewModel.canGoNext,
+                    onPrevious: { viewModel.showPreviousVideo() },
+                    onNext: { viewModel.showNextVideo() }
+                )
+            }
+            
+            if let description = viewModel.currentContextDescription {
+                Text(description)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
             }
         }
-        .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
     }
     
     private var signInformationSection: some View {
@@ -57,6 +83,7 @@ struct SignDetailView: View {
                 keywordsSection
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
     }
     
