@@ -58,6 +58,20 @@ enum PreviewData {
         keywords: []
     )
     
+    /// Жест с синонимами для тестирования SynonymListView
+    static let signWithSynonyms = Sign.mock(
+        id: "sign_001",
+        word: "Привет",
+        category: "greetings",
+        description: "Жест приветствия",
+        keywords: ["привет", "здравствуй", "приветствие"],
+        synonyms: [
+            SignSynonym(id: "sign_002", word: "Здравствуй"),
+            SignSynonym(id: "sign_003", word: "Добро пожаловать"),
+            SignSynonym(id: "sign_004", word: "Рад видеть")
+        ]
+    )
+    
     /// Категория с большим количеством жестов
     static let categoryWithManySigns = Category.mock(
         id: "verbs",
