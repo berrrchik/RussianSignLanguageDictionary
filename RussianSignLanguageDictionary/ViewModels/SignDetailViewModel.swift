@@ -1,6 +1,5 @@
 import Foundation
 
-
 @MainActor
 final class SignDetailViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -11,9 +10,17 @@ final class SignDetailViewModel: ObservableObject {
     @Published private(set) var videoErrorMessage: String?
     @Published var isFavorite: Bool = false
     
+    // MARK: - Synonym Navigation Properties
+    
+    @Published var selectedSynonymSign: Sign?
+    @Published private(set) var isLoadingSynonym: Bool = false
+    @Published private(set) var synonymError: String?
+    private var lastRequestedSynonymId: String?
+    
     // MARK: - Properties
     
     let sign: Sign
+    let visitedSignIds: Set<String>
     
     // MARK: - Computed Properties
     
@@ -41,6 +48,7 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Dependencies
     
+    let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     private let favoritesRepository: FavoritesRepositoryProtocol
     
@@ -48,12 +56,16 @@ final class SignDetailViewModel: ObservableObject {
     
     init(
         sign: Sign,
+        signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol
+        favoritesRepository: FavoritesRepositoryProtocol,
+        visitedSignIds: Set<String> = []
     ) {
         self.sign = sign
+        self.signRepository = signRepository
         self.videoRepository = videoRepository
         self.favoritesRepository = favoritesRepository
+        self.visitedSignIds = visitedSignIds.union([sign.id])
         self.isFavorite = favoritesRepository.isFavorite(signId: sign.id)
     }
     
@@ -98,6 +110,38 @@ final class SignDetailViewModel: ObservableObject {
     
     func checkFavoriteStatus() {
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+    }
+    
+    // MARK: - Synonym Navigation Methods
+    
+    /// Навигация к жесту-синониму
+    func navigateToSign(_ signId: String) {
+        lastRequestedSynonymId = signId
+        isLoadingSynonym = true
+        synonymError = nil
+        
+        Task {
+            do {
+                if let sign = try await signRepository.getSign(byId: signId) {
+                    selectedSynonymSign = sign
+                    isLoadingSynonym = false
+                    synonymError = nil
+                } else {
+                    synonymError = "Жест не найден"
+                    isLoadingSynonym = false
+                }
+            } catch {
+                synonymError = "Не удалось загрузить жест: \(error.localizedDescription)"
+                isLoadingSynonym = false
+            }
+        }
+    }
+    
+    /// Повторная попытка загрузки последнего запрошенного синонима
+    func retrySynonymLoad() {
+        if let synonymId = lastRequestedSynonymId {
+            navigateToSign(synonymId)
+        }
     }
 }
 
