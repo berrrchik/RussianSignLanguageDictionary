@@ -4,13 +4,16 @@ struct CategoryDetailView: View {
     @ObservedObject private var viewModel: CategoryDetailViewModel
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
     
+    private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     
     init(
         viewModel: CategoryDetailViewModel,
+        signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol
     ) {
         self.viewModel = viewModel
+        self.signRepository = signRepository
         self.videoRepository = videoRepository
     }
     
@@ -56,6 +59,7 @@ struct CategoryDetailView: View {
                 ForEach(viewModel.signs) { sign in
                     NavigationLink(destination: SignDetailView(
                         sign: sign,
+                        signRepository: signRepository,
                         videoRepository: videoRepository,
                         favoritesRepository: favoritesRepository
                     )) {
@@ -85,6 +89,7 @@ struct CategoryDetailView_Previews: PreviewProvider {
         NavigationStack {
             CategoryDetailView(
                 viewModel: viewModel,
+                signRepository: PreviewData.signRepository,
                 videoRepository: PreviewData.videoRepository
             )
             .environmentObject(PreviewData.favoritesRepository)

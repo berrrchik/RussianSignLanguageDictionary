@@ -4,12 +4,14 @@ struct SearchView: View {
     @StateObject private var viewModel: SearchViewModel
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
     
+    private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     
     init(
         signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol
     ) {
+        self.signRepository = signRepository
         self.videoRepository = videoRepository
         _viewModel = StateObject(wrappedValue: SearchViewModel(signRepository: signRepository))
     }
@@ -80,6 +82,7 @@ struct SearchView: View {
                 ForEach(viewModel.searchResults) { sign in
                     NavigationLink(destination: SignDetailView(
                         sign: sign,
+                        signRepository: signRepository,
                         videoRepository: videoRepository,
                         favoritesRepository: favoritesRepository
                     )) {

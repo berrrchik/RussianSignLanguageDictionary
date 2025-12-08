@@ -67,6 +67,7 @@ struct CategoriesView: View {
                             category: category,
                             signRepository: signRepository
                         ),
+                        signRepository: signRepository,
                         videoRepository: videoRepository
                     )) {
                         CategoryCardView(category: category)

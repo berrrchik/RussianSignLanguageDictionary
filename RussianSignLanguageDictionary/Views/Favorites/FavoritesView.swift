@@ -4,6 +4,7 @@ struct FavoritesView: View {
     @StateObject private var viewModel: FavoritesViewModel
     @State private var showClearAlert = false
     
+    private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     
     init(
@@ -11,6 +12,7 @@ struct FavoritesView: View {
         favoritesRepository: FavoritesRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol
     ) {
+        self.signRepository = signRepository
         self.videoRepository = videoRepository
         _viewModel = StateObject(wrappedValue: FavoritesViewModel(
             favoritesRepository: favoritesRepository,
@@ -77,6 +79,7 @@ struct FavoritesView: View {
                 ForEach(viewModel.favoriteSigns) { sign in
                     NavigationLink(destination: SignDetailView(
                         sign: sign,
+                        signRepository: signRepository,
                         videoRepository: videoRepository,
                         favoritesRepository: viewModel.favoritesRepository
                     )) {
