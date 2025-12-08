@@ -17,11 +17,9 @@ struct MainView: View {
         syncRepository: SyncRepositoryProtocol? = nil,
         cacheService: CacheService? = nil
     ) {
-        // Создаем сервисы синхронизации, если не переданы
         let syncRepo = syncRepository ?? SyncRepository()
         let cache = cacheService ?? CacheService()
         
-        // Создаем SignRepository с синхронизацией
         let signRepo = signRepository ?? SignRepository(
             syncRepository: syncRepo,
             cacheService: cache
@@ -29,8 +27,6 @@ struct MainView: View {
         
         self.signRepository = signRepo
         self.videoRepository = videoRepository
-        
-        // Создаем SyncViewModel
         self._syncViewModel = StateObject(
             wrappedValue: SyncViewModel(
                 syncRepository: syncRepo,
@@ -69,14 +65,10 @@ struct MainView: View {
             }
         }
         .task {
-            // Загружаем категории
             await CategoryService.loadCategories(from: signRepository)
-            
-            // Выполняем синхронизацию при запуске
             await syncViewModel.sync()
         }
         .overlay {
-            // Показываем индикатор загрузки во время синхронизации
             if syncViewModel.isSyncing {
                 ZStack {
                     Color.black.opacity(0.3)
