@@ -3,17 +3,28 @@ import SwiftUI
 struct SignDetailView: View {
     @StateObject private var viewModel: SignDetailViewModel
     
+    // MARK: - Dependencies
+    
+    private let videoRepository: VideoRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
+    
     // MARK: - Init
     
     init(
         sign: Sign,
+        signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol
+        favoritesRepository: FavoritesRepositoryProtocol,
+        visitedSignIds: Set<String> = []
     ) {
+        self.videoRepository = videoRepository
+        self.favoritesRepository = favoritesRepository
         _viewModel = StateObject(wrappedValue: SignDetailViewModel(
             sign: sign,
+            signRepository: signRepository,
             videoRepository: videoRepository,
-            favoritesRepository: favoritesRepository
+            favoritesRepository: favoritesRepository,
+            visitedSignIds: visitedSignIds
         ))
     }
     
@@ -32,6 +43,15 @@ struct SignDetailView: View {
         .task { await loadData() }
         .onChange(of: viewModel.currentVideoIndex) { _ in
             Task { await viewModel.loadVideo() }
+        }
+        .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
+            SignDetailView(
+                sign: sign,
+                signRepository: viewModel.signRepository,
+                videoRepository: videoRepository,
+                favoritesRepository: favoritesRepository,
+                visitedSignIds: viewModel.visitedSignIds
+            )
         }
     }
     
@@ -79,8 +99,40 @@ struct SignDetailView: View {
         VStack(alignment: .leading, spacing: LayoutConstants.SignDetail.elementSpacing) {
             signHeader
             categoryBadge
-            if let keywords = viewModel.sign.keywords, !keywords.isEmpty {
-                keywordsSection
+            
+            if let synonyms = viewModel.sign.synonyms, !synonyms.isEmpty {
+                if viewModel.isLoadingSynonym {
+                    LoadingView(message: "Загрузка синонима...", size: .small)
+                        .frame(height: 40)
+                } else if let error = viewModel.synonymError {
+                    VStack(spacing: 8) {
+                        ErrorView(
+                            message: error,
+                            retryAction: {
+                                viewModel.retrySynonymLoad()
+                            }
+                        )
+                        .frame(height: 100)
+                        
+                        SynonymListView(
+                            synonyms: synonyms,
+                            currentSignId: viewModel.sign.id,
+                            visitedSignIds: viewModel.visitedSignIds,
+                            onSynonymTap: { synonymId in
+                                viewModel.navigateToSign(synonymId)
+                            }
+                        )
+                    }
+                } else {
+                    SynonymListView(
+                        synonyms: synonyms,
+                        currentSignId: viewModel.sign.id,
+                        visitedSignIds: viewModel.visitedSignIds,
+                        onSynonymTap: { synonymId in
+                            viewModel.navigateToSign(synonymId)
+                        }
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,30 +161,6 @@ struct SignDetailView: View {
         .cornerRadius(LayoutConstants.SignDetail.badgeCornerRadius)
     }
     
-    private var keywordsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Ключевые слова")
-                .font(.headline)
-            
-            if let keywords = viewModel.sign.keywords {
-                FlowLayout(spacing: LayoutConstants.SignDetail.keywordSpacing) {
-                    ForEach(keywords, id: \.self) { keyword in
-                        keywordBadge(keyword)
-                    }
-                }
-            }
-        }
-    }
-    
-    private func keywordBadge(_ keyword: String) -> some View {
-        Text(keyword)
-            .font(.caption)
-            .padding(.horizontal, LayoutConstants.SignDetail.keywordHorizontalPadding)
-            .padding(.vertical, LayoutConstants.SignDetail.keywordVerticalPadding)
-            .background(Color.accentColor.opacity(LayoutConstants.Opacity.accent))
-            .cornerRadius(LayoutConstants.SignDetail.keywordCornerRadius)
-    }
-    
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
             Button {
@@ -153,37 +181,33 @@ struct SignDetailView: View {
     }
 }
 
-// MARK: - FlowLayout Helper
-
-struct FlowLayout<Content: View>: View {
-    let spacing: CGFloat
-    @ViewBuilder let content: () -> Content
-    
-    var body: some View {
-        GeometryReader { _ in
-            self.generateContent()
-        }
-    }
-    
-    private func generateContent() -> some View {
-        return ZStack(alignment: .topLeading) {
-            content().fixedSize()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
 // MARK: - Preview
 
 #if DEBUG
 struct SignDetailView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationStack {
-            SignDetailView(
-                sign: PreviewData.sign,
-                videoRepository: PreviewData.videoRepository,
-                favoritesRepository: PreviewData.favoritesRepository
-            )
+        Group {
+            // Превью с синонимами
+            NavigationStack {
+                SignDetailView(
+                    sign: PreviewData.signWithSynonyms,
+                    signRepository: PreviewData.signRepository,
+                    videoRepository: PreviewData.videoRepository,
+                    favoritesRepository: PreviewData.favoritesRepository
+                )
+            }
+            .previewDisplayName("С синонимами")
+            
+            // Превью без синонимов (по умолчанию)
+            NavigationStack {
+                SignDetailView(
+                    sign: PreviewData.sign,
+                    signRepository: PreviewData.signRepository,
+                    videoRepository: PreviewData.videoRepository,
+                    favoritesRepository: PreviewData.favoritesRepository
+                )
+            }
+            .previewDisplayName("Без синонимов")
         }
     }
 }
