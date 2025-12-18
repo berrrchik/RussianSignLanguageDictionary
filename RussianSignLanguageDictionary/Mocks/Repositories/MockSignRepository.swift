@@ -50,7 +50,7 @@ final class MockSignRepository: SignRepositoryProtocol {
         if shouldFail {
             throw errorToThrow
         }
-        return mockSigns.filter { $0.category == categoryId }
+        return mockSigns.filter { $0.categoryId == categoryId }
     }
     
     func searchSigns(query: String) async throws -> [Sign] {

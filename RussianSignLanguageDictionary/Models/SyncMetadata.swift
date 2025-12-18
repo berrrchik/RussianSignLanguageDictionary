@@ -7,9 +7,4 @@ struct SyncMetadata: Codable {
     
     /// Флаг наличия обновлений
     let hasUpdates: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case lastUpdated = "last_updated"
-        case hasUpdates = "has_updates"
-    }
 }

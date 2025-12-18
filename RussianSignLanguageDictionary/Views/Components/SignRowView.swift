@@ -21,7 +21,7 @@ struct SignRowView: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text(CategoryService.name(for: sign.category))
+                Text(CategoryService.name(for: sign.categoryId))
                     .font(.caption)
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, LayoutConstants.SignRow.badgeHorizontalPadding)
@@ -42,7 +42,7 @@ struct SignRowView: View {
         .padding(.vertical, LayoutConstants.SignRow.verticalPadding)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(sign.word), \(CategoryService.name(for: sign.category))")
+        .accessibilityLabel("\(sign.word), \(CategoryService.name(for: sign.categoryId))")
         .accessibilityHint("Нажмите для просмотра деталей")
     }
     
@@ -65,7 +65,7 @@ struct SignRowView_Previews: PreviewProvider {
             id: "sign_001",
             word: "Привет",
             description: "Жест приветствия",
-            category: "общение",
+            categoryId: "общение",
             videos: nil,
             synonyms: nil,
             embeddings: nil,

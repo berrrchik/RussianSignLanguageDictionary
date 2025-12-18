@@ -45,8 +45,6 @@ struct SignDetailView: View {
             Task { await viewModel.loadVideo() }
         }
         .onDisappear {
-            // Очистка краткосрочного кеша AVPlayer при выходе из экрана
-            // Долгосрочный кеш для избранных жестов сохраняется
             viewModel.cleanupVideo()
         }
         .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
@@ -157,7 +155,7 @@ struct SignDetailView: View {
         HStack {
             Image(systemName: "folder.fill")
                 .font(.caption)
-            Text(CategoryService.name(for: viewModel.sign.category))
+            Text(CategoryService.name(for: viewModel.sign.categoryId))
                 .font(.subheadline)
         }
         .padding(.horizontal, LayoutConstants.SignDetail.categoryBadgeHorizontalPadding)

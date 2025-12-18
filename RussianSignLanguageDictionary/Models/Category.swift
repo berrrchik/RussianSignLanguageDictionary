@@ -25,12 +25,5 @@ struct Category: Identifiable, Codable, Hashable {
     
     /// Дата обновления (опционально, из API)
     let updatedAt: Date?
-    
-    enum CodingKeys: String, CodingKey {
-        case id, name, order, icon, color
-        case signCount = "sign_count"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }
 

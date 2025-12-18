@@ -19,11 +19,4 @@ struct SignVideo: Identifiable, Codable, Hashable {
     
     /// Дата обновления (опционально, из API)
     let updatedAt: Date?
-    
-    enum CodingKeys: String, CodingKey {
-        case id, url, order
-        case contextDescription = "context_description"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }

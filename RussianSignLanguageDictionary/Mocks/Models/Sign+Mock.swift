@@ -6,7 +6,7 @@ extension Sign {
     /// - Parameters:
     ///   - id: Уникальный идентификатор жеста
     ///   - word: Слово на русском языке
-    ///   - category: Категория жеста
+    ///   - categoryId: Идентификатор категории жеста
     ///   - description: Описание жеста
     ///   - keywords: Ключевые слова для поиска
     ///   - synonyms: Массив синонимов жеста
@@ -14,7 +14,7 @@ extension Sign {
     static func mock(
         id: String = "sign_001",
         word: String = "Привет",
-        category: String = "greetings",
+        categoryId: String = "greetings",
         description: String = "Жест для тестирования",
         keywords: [String]? = nil,
         synonyms: [SignSynonym]? = nil
@@ -23,7 +23,7 @@ extension Sign {
             id: id,
             word: word,
             description: description,
-            category: category,
+            categoryId: categoryId,
             videos: nil,
             synonyms: synonyms,
             embeddings: nil,
@@ -38,9 +38,9 @@ extension Sign {
     /// Создает массив тестовых жестов
     static func mockArray() -> [Sign] {
         [
-            .mock(id: "sign_001", word: "Привет", category: "greetings"),
-            .mock(id: "sign_002", word: "Спасибо", category: "greetings"),
-            .mock(id: "sign_003", word: "До свидания", category: "greetings")
+            .mock(id: "sign_001", word: "Привет", categoryId: "greetings"),
+            .mock(id: "sign_002", word: "Спасибо", categoryId: "greetings"),
+            .mock(id: "sign_003", word: "До свидания", categoryId: "greetings")
         ]
     }
 }

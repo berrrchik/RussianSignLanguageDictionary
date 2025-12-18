@@ -12,7 +12,7 @@ struct Sign: Identifiable, Codable, Hashable {
     let description: String
     
     /// Идентификатор категории
-    let category: String
+    let categoryId: String
     
     /// Массив видео для жеста (новая структура из API)
     let videos: [SignVideo]?
@@ -39,18 +39,6 @@ struct Sign: Identifiable, Codable, Hashable {
     
     /// Метаданные видео файла (устаревшее)
     let metadata: SignMetadata?
-    
-    // MARK: - CodingKeys
-    
-    enum CodingKeys: String, CodingKey {
-        case id, word, description, videos, synonyms, embeddings
-        case category = "category_id"
-        case videoId = "video_id"
-        case supabaseStoragePath = "supabase_storage_path"
-        case supabaseUrl = "supabase_url"
-        case keywords
-        case metadata
-    }
     
     // MARK: - Computed Properties (для обратной совместимости)
     

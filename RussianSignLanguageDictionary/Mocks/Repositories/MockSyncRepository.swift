@@ -81,7 +81,7 @@ final class MockSyncRepository: SyncRepositoryProtocol {
                 id: "sign\(index)",
                 word: "Тестовый жест \(index)",
                 description: "Описание жеста \(index)",
-                category: index <= 5 ? "cat1" : "cat2",
+                categoryId: index <= 5 ? "cat1" : "cat2",
                 videos: [
                     SignVideo(
                         id: index,

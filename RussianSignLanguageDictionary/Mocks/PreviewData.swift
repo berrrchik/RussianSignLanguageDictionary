@@ -62,7 +62,7 @@ enum PreviewData {
     static let signWithSynonyms = Sign.mock(
         id: "sign_001",
         word: "Привет",
-        category: "greetings",
+        categoryId: "greetings",
         description: "Жест приветствия",
         keywords: ["привет", "здравствуй", "приветствие"],
         synonyms: [

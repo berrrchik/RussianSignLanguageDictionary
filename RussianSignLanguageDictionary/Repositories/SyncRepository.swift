@@ -65,8 +65,10 @@ final class SyncRepository: SyncRepositoryProtocol {
             }
             return date
         }
-        // НЕ используем convertFromSnakeCase, так как все структуры используют явные CodingKeys
-        // decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
+        // Автоматическая конвертация snake_case → camelCase для всех ключей
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        
         return decoder
     }
     

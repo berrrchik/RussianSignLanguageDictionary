@@ -24,11 +24,6 @@ struct SyncData: Codable {
     
     /// Дата последнего обновления
     let lastUpdated: Date
-    
-    enum CodingKeys: String, CodingKey {
-        case categories, signs
-        case lastUpdated = "last_updated"
-    }
 }
 
 /// Структура ответа API
@@ -43,9 +38,4 @@ struct SyncDataResponse: Codable {
     let categories: [Category]
     let signs: [Sign]
     let lastUpdated: Date
-    
-    enum CodingKeys: String, CodingKey {
-        case categories, signs
-        case lastUpdated = "last_updated"
-    }
 }

@@ -83,7 +83,7 @@ final class SignRepository: SignRepositoryProtocol {
     
     func getSigns(byCategory categoryId: String) async throws -> [Sign] {
         let signs = try await loadAllSigns()
-        return signs.filter { $0.category == categoryId }
+        return signs.filter { $0.categoryId == categoryId }
     }
     
     func searchSigns(query: String) async throws -> [Sign] {
