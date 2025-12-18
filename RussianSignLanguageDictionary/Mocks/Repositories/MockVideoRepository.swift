@@ -34,7 +34,7 @@ final class MockVideoRepository: VideoRepositoryProtocol {
         return mockURL
     }
     
-    func getVideoURL(for video: SignVideo) async throws -> URL {
+    func getVideoURL(for video: SignVideo, useFavoritesCache: Bool) async throws -> URL {
         if shouldFail {
             throw errorToThrow
         }
@@ -51,6 +51,13 @@ final class MockVideoRepository: VideoRepositoryProtocol {
     }
     
     func preloadVideo(for sign: Sign) async throws {
+        // Ничего не делаем в mock
+        if shouldFail {
+            throw errorToThrow
+        }
+    }
+    
+    func preloadVideo(video: SignVideo, useFavoritesCache: Bool) async throws {
         // Ничего не делаем в mock
         if shouldFail {
             throw errorToThrow
