@@ -17,7 +17,7 @@ enum ErrorMessageMapper {
         case .invalidDataFormat:
             return "Неверный формат данных"
         case .noDataAvailable:
-            return "Данные недоступны. Проверьте подключение к интернету."
+            return "Для первого запуска приложения необходимо подключение к интернету. После загрузки данных приложение будет работать офлайн."
         }
     }
     
@@ -31,6 +31,10 @@ enum ErrorMessageMapper {
             return "Не удалось загрузить видео"
         case .supabaseError(let message):
             return "Ошибка сервера: \(message)"
+        case .videoNotCached:
+            return "Видео недоступно в офлайн-режиме. Добавьте жест в избранное для просмотра без интернета."
+        case .noInternetConnection:
+            return "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
         }
     }
     
@@ -40,6 +44,8 @@ enum ErrorMessageMapper {
         switch error {
         case .noInternet:
             return "Нет подключения к интернету. Проверьте соединение и попробуйте снова."
+        case .serverUnavailable:
+            return "Сервер временно недоступен. Приложение работает на сохранённых данных."
         case .serverError(let code):
             return "Ошибка сервера: \(code). Попробуйте позже."
         case .networkError(let underlyingError):
@@ -48,6 +54,36 @@ enum ErrorMessageMapper {
             return "Ошибка обработки данных: \(underlyingError.localizedDescription)"
         case .invalidResponse:
             return "Неверный ответ сервера. Попробуйте позже."
+        }
+    }
+    
+    // MARK: - CacheError Mapping
+    
+    static func message(for error: CacheError) -> String {
+        switch error {
+        case .unableToAccessDocumentsDirectory:
+            return "Не удалось получить доступ к директории документов"
+        case .unableToSave(let underlyingError):
+            return "Ошибка сохранения кеша: \(underlyingError.localizedDescription)"
+        case .unableToLoad(let underlyingError):
+            return "Ошибка загрузки кеша: \(underlyingError.localizedDescription)"
+        }
+    }
+    
+    // MARK: - VideoCacheError Mapping
+    
+    static func message(for error: VideoCacheError) -> String {
+        switch error {
+        case .invalidURL:
+            return "Невалидный URL видео"
+        case .cacheDirectoryNotAvailable:
+            return "Директория кеша недоступна"
+        case .sessionNotConfigured:
+            return "Внутренняя ошибка: сессия загрузки не настроена"
+        case .downloadFailed:
+            return "Не удалось загрузить видео"
+        case .fileNotFound:
+            return "Файл видео не найден в кеше"
         }
     }
     
@@ -64,6 +100,14 @@ enum ErrorMessageMapper {
         
         if let syncError = error as? SyncError {
             return message(for: syncError)
+        }
+        
+        if let cacheError = error as? CacheError {
+            return message(for: cacheError)
+        }
+        
+        if let videoCacheError = error as? VideoCacheError {
+            return message(for: videoCacheError)
         }
         
         return "Произошла ошибка: \(error.localizedDescription)"
