@@ -17,9 +17,16 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
     
+    /// Индикатор офлайн-режима (данные загружены из кеша, интернет недоступен)
+    @Published private(set) var isOfflineMode: Bool = false
+    
+    /// Сообщение о работе в офлайн-режиме
+    @Published private(set) var offlineMessage: String?
+    
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol
+    private let networkMonitor: NetworkMonitorProtocol
     
     // MARK: - Private Properties
     
@@ -38,8 +45,12 @@ final class SearchViewModel: ObservableObject {
     
     // MARK: - Init
     
-    init(signRepository: SignRepositoryProtocol) {
+    init(
+        signRepository: SignRepositoryProtocol,
+        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+    ) {
         self.signRepository = signRepository
+        self.networkMonitor = networkMonitor
         setupDebouncing()
     }
     
@@ -53,6 +64,8 @@ final class SearchViewModel: ObservableObject {
         
         isLoading = true
         errorMessage = nil
+        isOfflineMode = false
+        offlineMessage = nil
         
         do {
             let signs = try await signRepository.loadAllSigns()
@@ -69,6 +82,13 @@ final class SearchViewModel: ObservableObject {
             }
             
             isLoading = false
+            
+            // Проверка доступности интернета после загрузки данных
+            let isConnected = await networkMonitor.checkConnection()
+            if !isConnected {
+                isOfflineMode = true
+                offlineMessage = "Работа в офлайн-режиме. Показаны сохранённые данные."
+            }
         } catch {
             errorMessage = errorMessage(for: error)
             isLoading = false

@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 @MainActor
 final class SignDetailViewModel: ObservableObject {
@@ -18,6 +19,8 @@ final class SignDetailViewModel: ObservableObject {
     private var lastRequestedSynonymId: String?
     
     // MARK: - Properties
+    
+    private let logger = Logger(subsystem: "com.rsl.signDetail", category: "SignDetailViewModel")
     
     let sign: Sign
     let visitedSignIds: Set<String>
@@ -46,6 +49,16 @@ final class SignDetailViewModel: ObservableObject {
         return currentVideoIndex > 0
     }
     
+    /// Следующее видео в списке (для предзагрузки)
+    private var nextVideo: SignVideo? {
+        guard let videos = sign.videos,
+              currentVideoIndex >= 0,
+              currentVideoIndex < videos.count - 1 else {
+            return nil
+        }
+        return videos[currentVideoIndex + 1]
+    }
+    
     // MARK: - Dependencies
     
     let signRepository: SignRepositoryProtocol
@@ -71,19 +84,36 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Public Methods
     
+    /// Загружает видео с автоматическим определением типа кеша
+    ///
+    /// Если жест в избранном - использует долгосрочный кеш (URLCache на диске),
+    /// иначе - краткосрочный кеш AVPlayer (в памяти).
     func loadVideo() async {
         guard let video = currentVideo else { return }
         
         isLoadingVideo = true
         videoErrorMessage = nil
         
+        // Автоматическое определение типа кеша на основе статуса избранного
+        let useFavoritesCache = favoritesRepository.isFavorite(signId: sign.id)
+        
         do {
-            let url = try await videoRepository.getVideoURL(for: video)
+            let url = try await videoRepository.getVideoURL(
+                for: video,
+                useFavoritesCache: useFavoritesCache
+            )
             videoURL = url
             isLoadingVideo = false
+            
+            // Предзагрузка следующего видео для избранных жестов
+            if useFavoritesCache {
+                preloadNextVideo()
+            }
+            
         } catch {
             videoErrorMessage = ErrorMessageMapper.message(for: error)
             isLoadingVideo = false
+            logger.error("❌ Ошибка загрузки видео: \(error.localizedDescription)")
         }
     }
     
@@ -110,6 +140,15 @@ final class SignDetailViewModel: ObservableObject {
     
     func checkFavoriteStatus() {
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+    }
+    
+    /// Очистка ресурсов видео при выходе из экрана
+    ///
+    /// Освобождает память от краткосрочного кеша AVPlayer.
+    /// Долгосрочный кеш для избранных жестов сохраняется.
+    func cleanupVideo() {
+        videoURL = nil
+        logger.debug("🗑️ Видео ресурсы очищены для жеста \(self.sign.id)")
     }
     
     // MARK: - Synonym Navigation Methods
@@ -141,6 +180,33 @@ final class SignDetailViewModel: ObservableObject {
     func retrySynonymLoad() {
         if let synonymId = lastRequestedSynonymId {
             navigateToSign(synonymId)
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    /// Предзагрузка следующего видео в фоне для избранных жестов
+    ///
+    /// Ускоряет переключение между видео за счёт предварительной загрузки.
+    private func preloadNextVideo() {
+        guard let nextVideo = nextVideo else { return }
+        
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                try await self.videoRepository.preloadVideo(
+                    video: nextVideo,
+                    useFavoritesCache: true
+                )
+                await MainActor.run {
+                    self.logger.debug("✅ Предзагружено следующее видео \(nextVideo.id)")
+                }
+            } catch {
+                await MainActor.run {
+                    self.logger.warning("⚠️ Не удалось предзагрузить следующее видео: \(error.localizedDescription)")
+                }
+            }
         }
     }
 }

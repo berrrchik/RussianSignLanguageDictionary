@@ -19,15 +19,18 @@ final class SyncViewModel: ObservableObject {
     
     private let syncRepository: SyncRepositoryProtocol
     private let cacheService: CacheService
+    private let networkMonitor: NetworkMonitorProtocol
     
     // MARK: - Initialization
     
     init(
         syncRepository: SyncRepositoryProtocol,
-        cacheService: CacheService
+        cacheService: CacheService,
+        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
     ) {
         self.syncRepository = syncRepository
         self.cacheService = cacheService
+        self.networkMonitor = networkMonitor
         
         // Загружаем дату последней синхронизации из кеша
         loadLastSyncDate()
@@ -36,7 +39,22 @@ final class SyncViewModel: ObservableObject {
     // MARK: - Methods
     
     /// Выполняет синхронизацию данных
+    /// 
+    /// **Важно**: Сначала проверяет наличие интернета.
+    /// Если интернета нет - НЕ показывает overlay синхронизации,
+    /// приложение работает на кешированных данных.
     func sync() async {
+        // СНАЧАЛА проверяем интернет, чтобы не показывать overlay зря
+        let isConnected = await networkMonitor.checkConnection()
+        
+        if !isConnected {
+            print("⚠️ SyncViewModel: Нет подключения к интернету, синхронизация пропущена")
+            // НЕ показываем overlay и НЕ показываем ошибку
+            // Приложение будет работать на кешированных данных
+            return
+        }
+        
+        // Есть интернет - показываем overlay и синхронизируем
         isSyncing = true
         syncError = nil
         
@@ -81,8 +99,19 @@ final class SyncViewModel: ObservableObject {
             print("⚠️ SyncViewModel: Нет подключения к интернету, используются кешированные данные")
             syncError = nil
             
+        case .serverUnavailable:
+            // Сервер недоступен - не показываем ошибку если есть кеш
+            // (приложение будет работать на кешированных данных)
+            print("⚠️ SyncViewModel: Сервер недоступен, используются кешированные данные")
+            syncError = nil
+            
+        case .networkError:
+            // Ошибка сети - не показываем ошибку если есть кеш
+            print("⚠️ SyncViewModel: Ошибка сети, используются кешированные данные")
+            syncError = nil
+            
         default:
-            // Используем ErrorMessageMapper для консистентности сообщений
+            // Другие ошибки показываем пользователю
             syncError = ErrorMessageMapper.message(for: error)
         }
     }
