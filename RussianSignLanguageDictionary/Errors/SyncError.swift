@@ -6,6 +6,9 @@ enum SyncError: Error {
     /// Нет подключения к интернету
     case noInternet
     
+    /// Сервер недоступен (Connection refused, timeout)
+    case serverUnavailable
+    
     /// Ошибка сервера с кодом статуса
     case serverError(Int)
     
