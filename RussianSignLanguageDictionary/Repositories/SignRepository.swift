@@ -16,7 +16,7 @@ final class SignRepository: SignRepositoryProtocol {
     private let cacheService: CacheService?
     
     /// Монитор сети
-    private let networkMonitor: NetworkMonitor
+    private let networkMonitor: NetworkMonitorProtocol
     
     /// Кэш загруженных данных (для старого способа)
     private var cachedData: SignsData?
@@ -37,7 +37,7 @@ final class SignRepository: SignRepositoryProtocol {
     init(
         syncRepository: SyncRepositoryProtocol? = nil,
         cacheService: CacheService? = nil,
-        networkMonitor: NetworkMonitor = NetworkMonitor()
+        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
     ) {
         self.syncRepository = syncRepository
         self.cacheService = cacheService
@@ -126,22 +126,74 @@ final class SignRepository: SignRepositoryProtocol {
     }
     
     /// Загружает данные с использованием синхронизации
+    ///
+    /// **Порядок приоритетов:**
+    /// 1. Кеш в памяти (самый быстрый)
+    /// 2. Локальный кеш на диске (если есть)
+    /// 3. Синхронизация с сервером (если есть интернет)
+    ///
+    /// Такой порядок обеспечивает быстрый запуск приложения
+    /// и корректную работу в офлайн-режиме.
     private func loadDataWithSync(
         syncRepository: SyncRepositoryProtocol,
         cacheService: CacheService
     ) async throws -> SyncData {
-        // Проверка кэша в памяти
+        // 1. Проверка кэша в памяти (самый быстрый)
         if let cached = loadFromMemoryCache() {
             return cached
         }
         
-        // Попытка синхронизации с сервером
-        if let synced = try? await trySyncWithServer(syncRepository: syncRepository, cacheService: cacheService) {
-            return synced
+        // 2. Проверяем локальный кеш на диске СНАЧАЛА
+        // Это обеспечивает быстрый запуск и работу офлайн
+        logger.info("🔍 Проверка локального кеша...")
+        logger.info("📁 Кеш существует: \(cacheService.hasCache())")
+        
+        do {
+            if let cached = try cacheService.load() {
+                saveToMemoryCache(cached)
+                logger.info("✅ Данные загружены из локального кеша (\(cached.signs.count) жестов, \(cached.categories.count) категорий)")
+                
+                // Запускаем фоновую синхронизацию если есть интернет
+                Task {
+                    await backgroundSyncIfNeeded(syncRepository: syncRepository, cacheService: cacheService)
+                }
+                
+                return cached
+            } else {
+                logger.info("ℹ️ Локальный кеш пуст (nil)")
+            }
+        } catch {
+            logger.error("❌ Ошибка загрузки из локального кеша: \(error.localizedDescription)")
+            // Продолжаем - попробуем загрузить с сервера
         }
         
-        // Fallback на локальный кеш
-        return try loadFromLocalCache(cacheService: cacheService)
+        // 3. Нет кеша - пытаемся синхронизироваться с сервером
+        // Это нужно только при первом запуске приложения
+        logger.info("🌐 Нет кеша, попытка загрузки с сервера...")
+        return try await trySyncWithServer(syncRepository: syncRepository, cacheService: cacheService)
+    }
+    
+    /// Фоновая синхронизация (не блокирует UI)
+    private func backgroundSyncIfNeeded(
+        syncRepository: SyncRepositoryProtocol,
+        cacheService: CacheService
+    ) async {
+        let isConnected = await networkMonitor.checkConnection()
+        guard isConnected else {
+            logger.debug("📴 Фоновая синхронизация пропущена - нет интернета")
+            return
+        }
+        
+        do {
+            logger.info("🔄 Фоновая синхронизация...")
+            let syncData = try await syncRepository.fetchAllData()
+            saveToCache(syncData, cacheService: cacheService)
+            saveToMemoryCache(syncData)
+            logger.info("✅ Фоновая синхронизация завершена")
+        } catch {
+            logger.warning("⚠️ Фоновая синхронизация не удалась: \(error.localizedDescription)")
+            // Ошибку не показываем - данные из кеша уже загружены
+        }
     }
     
     /// Загружает данные из кэша памяти
@@ -154,6 +206,10 @@ final class SignRepository: SignRepositoryProtocol {
     }
     
     /// Пытается синхронизировать данные с сервером
+    /// 
+    /// **Важно**: Этот метод вызывается только при первом запуске,
+    /// когда локальный кеш пуст. При повторных запусках данные
+    /// загружаются из кеша, а синхронизация происходит в фоне.
     private func trySyncWithServer(
         syncRepository: SyncRepositoryProtocol,
         cacheService: CacheService
@@ -161,13 +217,14 @@ final class SignRepository: SignRepositoryProtocol {
         // Проверка доступности интернета
         let isConnected = await networkMonitor.checkConnection()
         guard isConnected else {
-            logger.warning("⚠️ Нет подключения к интернету, загрузка из кеша...")
+            logger.error("❌ Первый запуск без интернета - данные недоступны")
+            // Специальная ошибка для первого запуска без интернета
             throw SignRepositoryError.noDataAvailable
         }
         
         // Попытка синхронизации с сервером
         do {
-            logger.info("🔄 Попытка синхронизации с сервером...")
+            logger.info("🔄 Первая загрузка данных с сервера...")
             let syncData = try await syncRepository.fetchAllData()
             
             // Сохранение в кеш
@@ -176,17 +233,13 @@ final class SignRepository: SignRepositoryProtocol {
             // Сохранение в кэш памяти
             saveToMemoryCache(syncData)
             
+            logger.info("✅ Первая загрузка завершена успешно")
             return syncData
         } catch let error as SyncError {
-            // Если нет интернета, используем кеш без показа ошибки
-            if case .noInternet = error {
-                logger.warning("⚠️ Нет интернета, загрузка из кеша...")
-            } else {
-                logger.warning("⚠️ Ошибка синхронизации: \(error.localizedDescription), загрузка из кеша...")
-            }
+            logger.error("❌ Ошибка первой загрузки: \(error.localizedDescription)")
             throw SignRepositoryError.noDataAvailable
         } catch {
-            logger.warning("⚠️ Неизвестная ошибка синхронизации: \(error.localizedDescription), загрузка из кеша...")
+            logger.error("❌ Неизвестная ошибка первой загрузки: \(error.localizedDescription)")
             throw SignRepositoryError.noDataAvailable
         }
     }
@@ -206,19 +259,6 @@ final class SignRepository: SignRepositoryProtocol {
         cacheQueue.sync {
             syncedData = data
         }
-    }
-    
-    /// Загружает данные из локального кеша
-    private func loadFromLocalCache(cacheService: CacheService) throws -> SyncData {
-        if let cached = try? cacheService.load() {
-            saveToMemoryCache(cached)
-            logger.info("✅ Данные загружены из локального кеша (\(cached.signs.count) жестов, \(cached.categories.count) категорий)")
-            return cached
-        }
-        
-        // Если кеш тоже пуст, выбрасываем ошибку
-        logger.error("❌ Данные недоступны (нет кеша и нет интернета)")
-        throw SignRepositoryError.noDataAvailable
     }
     
     // MARK: - Private Methods (Обратная совместимость - Bundle)

@@ -1,9 +1,16 @@
 import Foundation
 import Combine
+import os.log
 
 /// Репозиторий для работы с избранными жестами через UserDefaults
+///
+/// Автоматически управляет кешем видео при добавлении/удалении из избранного:
+/// - При добавлении жеста в избранное - предзагружает все его видео в долгосрочный кеш
+/// - При удалении из избранного - очищает долгосрочный кеш для всех видео жеста
 final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     // MARK: - Properties
+    
+    private let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesRepository")
     
     /// Ключ для хранения избранного в UserDefaults
     private let favoritesKey = "com.rsl.favorites"
@@ -14,13 +21,40 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     /// Publisher для изменений избранного
     @Published private(set) var favoritesPublisher: [String] = []
     
+    /// Репозиторий жестов для получения данных о видео
+    /// 
+    /// Примечание: signRepository устанавливается отложенно через `setSignRepository(_:)`
+    /// из-за циклической зависимости при инициализации приложения.
+    /// FavoritesRepository создаётся в App, а SignRepository — в MainView.
+    private var signRepository: SignRepositoryProtocol?
+    
+    /// Сервис кеширования видео
+    private let videoCacheService: VideoCacheServiceProtocol
+    
     // MARK: - Initialization
     
     /// Инициализатор репозитория
-    /// - Parameter userDefaults: UserDefaults (по умолчанию .standard)
-    init(userDefaults: UserDefaults = .standard) {
+    /// - Parameters:
+    ///   - userDefaults: UserDefaults (по умолчанию .standard)
+    ///   - signRepository: Репозиторий жестов для получения данных о видео (опционально)
+    ///   - videoCacheService: Сервис кеширования видео
+    init(
+        userDefaults: UserDefaults = .standard,
+        signRepository: SignRepositoryProtocol? = nil,
+        videoCacheService: VideoCacheServiceProtocol = VideoCacheService.shared
+    ) {
         self.userDefaults = userDefaults
+        self.signRepository = signRepository
+        self.videoCacheService = videoCacheService
         self.favoritesPublisher = self.getFavorites()
+    }
+    
+    // MARK: - Configuration
+    
+    /// Устанавливает репозиторий жестов для синхронизации кеша видео
+    /// - Parameter repository: Репозиторий жестов
+    func setSignRepository(_ repository: SignRepositoryProtocol) {
+        self.signRepository = repository
     }
     
     // MARK: - FavoritesRepositoryProtocol
@@ -49,6 +83,11 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         userDefaults.set(favorites, forKey: favoritesKey)
         
         favoritesPublisher = favorites
+        
+        logger.info("⭐️ Жест \(signId) добавлен в избранное")
+        
+        // Предзагрузка видео в долгосрочный кеш
+        preloadVideosForFavorite(signId: signId)
     }
     
     func removeFavorite(signId: String) {
@@ -65,6 +104,11 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         userDefaults.set(favorites, forKey: favoritesKey)
         
         favoritesPublisher = favorites
+        
+        logger.info("💔 Жест \(signId) удалён из избранного")
+        
+        // Очистка долгосрочного кеша для видео жеста
+        clearVideoCacheForSign(signId: signId)
     }
     
     func isFavorite(signId: String) -> Bool {
@@ -83,6 +127,58 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         userDefaults.removeObject(forKey: favoritesKey)
         
         favoritesPublisher = []
+        
+        logger.info("🗑️ Все избранные жесты очищены")
+        
+        // Очистка всего долгосрочного кеша видео
+        videoCacheService.clearAllCache()
+    }
+    
+    // MARK: - Video Cache Management
+    
+    /// Предзагружает все видео жеста в долгосрочный кеш
+    /// - Parameter signId: ID жеста
+    private func preloadVideosForFavorite(signId: String) {
+        guard let signRepository = signRepository else {
+            logger.warning("⚠️ SignRepository не установлен, пропуск предзагрузки видео для \(signId)")
+            return
+        }
+        
+        Task {
+            do {
+                if let sign = try await signRepository.getSign(byId: signId),
+                   let videos = sign.videos {
+                    logger.info("📥 Предзагрузка \(videos.count) видео для избранного жеста \(signId)...")
+                    
+                    await videoCacheService.preloadVideos(videos)
+                    
+                    logger.info("✅ Предзагрузка видео для жеста \(signId) завершена")
+                }
+            } catch {
+                logger.error("❌ Ошибка предзагрузки видео для \(signId): \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Очищает долгосрочный кеш для всех видео жеста
+    /// - Parameter signId: ID жеста
+    private func clearVideoCacheForSign(signId: String) {
+        guard let signRepository = signRepository else {
+            logger.warning("⚠️ SignRepository не установлен, пропуск очистки кеша для \(signId)")
+            return
+        }
+        
+        Task {
+            do {
+                if let sign = try await signRepository.getSign(byId: signId),
+                   let videos = sign.videos {
+                    videoCacheService.clearCache(for: signId, videos: videos)
+                    logger.info("🗑️ Кеш видео для жеста \(signId) очищен (\(videos.count) видео)")
+                }
+            } catch {
+                logger.error("❌ Ошибка очистки кеша для \(signId): \(error.localizedDescription)")
+            }
+        }
     }
 }
 
