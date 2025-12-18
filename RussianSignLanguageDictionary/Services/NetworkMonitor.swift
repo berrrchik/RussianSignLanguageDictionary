@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 /// Сервис для проверки доступности сети
-final class NetworkMonitor {
+final class NetworkMonitor: NetworkMonitorProtocol {
     // MARK: - Properties
     
     private let monitor = NWPathMonitor()

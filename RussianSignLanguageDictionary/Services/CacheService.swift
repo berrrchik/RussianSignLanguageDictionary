@@ -15,24 +15,32 @@ final class CacheService {
     /// - Parameter data: Данные для сохранения
     /// - Throws: Ошибка при сохранении
     func save(_ data: SyncData) throws {
+        logger.info("💾 Сохранение в кеш: \(data.signs.count) жестов, \(data.categories.count) категорий")
+        
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        encoder.keyEncodingStrategy = .convertToSnakeCase
+        // НЕ используем convertToSnakeCase - модели уже имеют свои CodingKeys
         
         let jsonData = try encoder.encode(data)
+        logger.info("💾 Размер данных для сохранения: \(jsonData.count) байт")
         
         guard let documentsURL = fileManager.urls(
             for: .documentDirectory,
             in: .userDomainMask
         ).first else {
+            logger.error("❌ Не удалось получить Documents директорию для сохранения")
             throw CacheError.unableToAccessDocumentsDirectory
         }
         
         let fileURL = documentsURL.appendingPathComponent("\(cacheKey).json")
+        logger.info("💾 Путь для сохранения: \(fileURL.path)")
         
         do {
             try jsonData.write(to: fileURL, options: .atomic)
-            logger.info("✅ Данные сохранены в кеш (\(data.signs.count) жестов, \(data.categories.count) категорий)")
+            
+            // Проверяем, что файл действительно сохранился
+            let savedExists = fileManager.fileExists(atPath: fileURL.path)
+            logger.info("✅ Данные сохранены в кеш. Файл существует: \(savedExists)")
         } catch {
             logger.error("❌ Ошибка сохранения в кеш: \(error.localizedDescription)")
             throw CacheError.unableToSave(error)
@@ -47,25 +55,34 @@ final class CacheService {
             for: .documentDirectory,
             in: .userDomainMask
         ).first else {
+            logger.error("❌ Не удалось получить Documents директорию")
             return nil
         }
         
         let fileURL = documentsURL.appendingPathComponent("\(cacheKey).json")
         
+        logger.info("📁 Путь к кешу: \(fileURL.path)")
+        logger.info("📁 Файл существует: \(self.fileManager.fileExists(atPath: fileURL.path))")
+        
         guard fileManager.fileExists(atPath: fileURL.path) else {
-            logger.debug("ℹ️ Кеш не найден")
+            logger.info("ℹ️ Файл кеша не найден")
             return nil
         }
         
         do {
             let jsonData = try Data(contentsOf: fileURL)
+            logger.info("📄 Размер файла кеша: \(jsonData.count) байт")
+            
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            // НЕ используем convertFromSnakeCase - модели уже имеют свои CodingKeys
             
             let data = try decoder.decode(SyncData.self, from: jsonData)
             logger.info("✅ Данные загружены из кеша (\(data.signs.count) жестов, \(data.categories.count) категорий)")
             return data
+        } catch let decodingError as DecodingError {
+            logger.error("❌ Ошибка декодирования кеша: \(String(describing: decodingError))")
+            throw CacheError.unableToLoad(decodingError)
         } catch {
             logger.error("❌ Ошибка загрузки из кеша: \(error.localizedDescription)")
             throw CacheError.unableToLoad(error)
@@ -101,24 +118,6 @@ final class CacheService {
         if fileManager.fileExists(atPath: fileURL.path) {
             try fileManager.removeItem(at: fileURL)
             logger.info("✅ Кеш удалён")
-        }
-    }
-}
-
-/// Ошибки кеширования
-enum CacheError: LocalizedError {
-    case unableToAccessDocumentsDirectory
-    case unableToSave(Error)
-    case unableToLoad(Error)
-    
-    var errorDescription: String? {
-        switch self {
-        case .unableToAccessDocumentsDirectory:
-            return "Не удалось получить доступ к директории документов"
-        case .unableToSave(let error):
-            return "Ошибка сохранения кеша: \(error.localizedDescription)"
-        case .unableToLoad(let error):
-            return "Ошибка загрузки кеша: \(error.localizedDescription)"
         }
     }
 }
