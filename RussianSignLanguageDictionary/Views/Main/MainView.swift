@@ -65,6 +65,9 @@ struct MainView: View {
             }
         }
         .task {
+            // Связываем FavoritesRepository с SignRepository для синхронизации кеша видео избранного
+            favoritesRepository.setSignRepository(signRepository)
+            
             await CategoryService.loadCategories(from: signRepository)
             await syncViewModel.sync()
         }

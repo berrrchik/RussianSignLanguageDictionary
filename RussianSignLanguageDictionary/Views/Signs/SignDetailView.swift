@@ -44,6 +44,11 @@ struct SignDetailView: View {
         .onChange(of: viewModel.currentVideoIndex) { _ in
             Task { await viewModel.loadVideo() }
         }
+        .onDisappear {
+            // Очистка краткосрочного кеша AVPlayer при выходе из экрана
+            // Долгосрочный кеш для избранных жестов сохраняется
+            viewModel.cleanupVideo()
+        }
         .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
             SignDetailView(
                 sign: sign,
