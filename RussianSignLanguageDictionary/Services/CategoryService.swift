@@ -41,5 +41,11 @@ enum CategoryService {
     static func color(for categoryId: String) -> String? {
         return categoriesById[categoryId]?.color
     }
+    
+    /// Получает все категории в виде массива, отсортированного по order
+    static func allCategories() -> [Category] {
+        return Array(categoriesById.values)
+            .sorted { $0.order < $1.order }
+    }
 }
 
