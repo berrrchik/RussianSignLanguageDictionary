@@ -3,6 +3,7 @@ import SwiftUI
 struct CategoryDetailView: View {
     @ObservedObject private var viewModel: CategoryDetailViewModel
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
+    @State private var selectedSign: Sign?
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
@@ -44,6 +45,14 @@ struct CategoryDetailView: View {
         }
         .navigationTitle(viewModel.category.name)
         .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(item: $selectedSign) { sign in
+            SignDetailView(
+                sign: sign,
+                signRepository: signRepository,
+                videoRepository: videoRepository,
+                favoritesRepository: favoritesRepository
+            )
+        }
         .task {
             if viewModel.signs.isEmpty {
                 await viewModel.loadSigns()
@@ -54,25 +63,24 @@ struct CategoryDetailView: View {
     // MARK: - Subviews
     
     private var signsList: some View {
-        List {
-            Section {
-                ForEach(viewModel.signs) { sign in
-                    NavigationLink(destination: SignDetailView(
-                        sign: sign,
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: favoritesRepository
-                    )) {
-                        SignRowView(
-                            sign: sign,
-                            showFavoriteIndicator: true,
-                            isFavorite: favoritesRepository.isFavorite(signId: sign.id)
-                        )
-                    }
-                }
+        AlphabeticScrollbarTableView(
+            sections: groupedSigns,
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            favoritesRepository: favoritesRepository,
+            getCategoryName: { categoryId in
+                CategoryService.name(for: categoryId)
+            },
+            onSignSelected: { sign in
+                selectedSign = sign
             }
-        }
-        .listStyle(.plain)
+        )
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var groupedSigns: [SearchViewModel.SignSection] {
+        SignGroupingHelper.groupByFirstLetter(viewModel.signs)
     }
 }
 
