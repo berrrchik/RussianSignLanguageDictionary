@@ -49,7 +49,6 @@ final class SignDetailViewModel: ObservableObject {
         return currentVideoIndex > 0
     }
     
-    /// Следующее видео в списке (для предзагрузки)
     private var nextVideo: SignVideo? {
         guard let videos = sign.videos,
               currentVideoIndex >= 0,
@@ -83,18 +82,12 @@ final class SignDetailViewModel: ObservableObject {
     }
     
     // MARK: - Public Methods
-    
-    /// Загружает видео с автоматическим определением типа кеша
-    ///
-    /// Если жест в избранном - использует долгосрочный кеш (URLCache на диске),
-    /// иначе - краткосрочный кеш AVPlayer (в памяти).
+
     func loadVideo() async {
         guard let video = currentVideo else { return }
         
         isLoadingVideo = true
         videoErrorMessage = nil
-        
-        // Автоматическое определение типа кеша на основе статуса избранного
         let useFavoritesCache = favoritesRepository.isFavorite(signId: sign.id)
         
         do {
@@ -105,7 +98,6 @@ final class SignDetailViewModel: ObservableObject {
             videoURL = url
             isLoadingVideo = false
             
-            // Предзагрузка следующего видео для избранных жестов
             if useFavoritesCache {
                 preloadNextVideo()
             }
@@ -120,13 +112,11 @@ final class SignDetailViewModel: ObservableObject {
     func showNextVideo() {
         guard canGoNext else { return }
         currentVideoIndex += 1
-        // loadVideo() будет вызван автоматически через onChange в SignDetailView
     }
     
     func showPreviousVideo() {
         guard canGoBack else { return }
         currentVideoIndex -= 1
-        // loadVideo() будет вызван автоматически через onChange в SignDetailView
     }
     
     func toggleFavorite() {
@@ -142,10 +132,6 @@ final class SignDetailViewModel: ObservableObject {
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
     }
     
-    /// Очистка ресурсов видео при выходе из экрана
-    ///
-    /// Освобождает память от краткосрочного кеша AVPlayer.
-    /// Долгосрочный кеш для избранных жестов сохраняется.
     func cleanupVideo() {
         videoURL = nil
         logger.debug("🗑️ Видео ресурсы очищены для жеста \(self.sign.id)")
@@ -153,7 +139,6 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Synonym Navigation Methods
     
-    /// Навигация к жесту-синониму
     func navigateToSign(_ signId: String) {
         lastRequestedSynonymId = signId
         isLoadingSynonym = true
@@ -176,7 +161,6 @@ final class SignDetailViewModel: ObservableObject {
         }
     }
     
-    /// Повторная попытка загрузки последнего запрошенного синонима
     func retrySynonymLoad() {
         if let synonymId = lastRequestedSynonymId {
             navigateToSign(synonymId)
@@ -185,9 +169,6 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Private Methods
     
-    /// Предзагрузка следующего видео в фоне для избранных жестов
-    ///
-    /// Ускоряет переключение между видео за счёт предварительной загрузки.
     private func preloadNextVideo() {
         guard let nextVideo = nextVideo else { return }
         
