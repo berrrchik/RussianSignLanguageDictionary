@@ -3,6 +3,7 @@ import SwiftUI
 struct SearchView: View {
     @StateObject private var viewModel: SearchViewModel
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
+    @State private var selectedSign: Sign?
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
@@ -28,6 +29,14 @@ struct SearchView: View {
             .task {
                 await viewModel.loadAllSigns()
             }
+            .navigationDestination(item: $selectedSign) { sign in
+                SignDetailView(
+                    sign: sign,
+                    signRepository: signRepository,
+                    videoRepository: videoRepository,
+                    favoritesRepository: favoritesRepository
+                )
+            }
         }
     }
     
@@ -35,19 +44,34 @@ struct SearchView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        ZStack {
-            if viewModel.isLoading {
-                LoadingView(message: loadingMessage)
-            } else if let errorMessage = viewModel.errorMessage {
-                ErrorView(message: errorMessage, retryAction: retryLoading)
-            } else if viewModel.searchResults.isEmpty {
-                EmptyStateView(
-                    icon: "magnifyingglass",
-                    title: emptyStateTitle,
-                    message: emptyStateMessage
-                )
-            } else {
-                searchResultsList
+        VStack(spacing: 0) {
+            if !viewModel.isLoading && viewModel.errorMessage == nil {
+                HStack {
+                    categoryFilterButton
+                    
+                    Spacer()
+                    
+                    sortButton
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(.systemBackground))
+            }
+            
+            ZStack {
+                if viewModel.isLoading {
+                    LoadingView(message: loadingMessage)
+                } else if let errorMessage = viewModel.errorMessage {
+                    ErrorView(message: errorMessage, retryAction: retryLoading)
+                } else if viewModel.searchResults.isEmpty {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: emptyStateTitle,
+                        message: emptyStateMessage
+                    )
+                } else {
+                    searchResultsList
+                }
             }
         }
     }
@@ -77,25 +101,87 @@ struct SearchView: View {
     // MARK: - Subviews
     
     private var searchResultsList: some View {
-        List {
-            Section {
-                ForEach(viewModel.searchResults) { sign in
-                    NavigationLink(destination: SignDetailView(
-                        sign: sign,
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: favoritesRepository
-                    )) {
-                        SignRowView(
-                            sign: sign,
-                            showFavoriteIndicator: true,
-                            isFavorite: favoritesRepository.isFavorite(signId: sign.id)
-                        )
+        AlphabeticScrollbarTableView(
+            sections: viewModel.groupedResults,
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            favoritesRepository: favoritesRepository,
+            getCategoryName: { categoryId in
+                CategoryService.name(for: categoryId)
+            },
+            onSignSelected: { sign in
+                selectedSign = sign
+            }
+        )
+    }
+    
+    // MARK: - Filter and Sort Buttons
+    
+    private var categoryFilterButton: some View {
+        Menu {
+            Button(action: {
+                viewModel.selectedCategoryId = nil
+            }) {
+                HStack {
+                    Text("Все категории")
+                    if viewModel.selectedCategoryId == nil {
+                        Spacer()
+                        Image(systemName: "checkmark")
                     }
                 }
             }
+            
+            Divider()
+            
+            ForEach(viewModel.categories) { category in
+                Button(action: {
+                    viewModel.selectedCategoryId = category.id
+                }) {
+                    HStack {
+                        Text(category.name)
+                        if viewModel.selectedCategoryId == category.id {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Text(selectedCategoryName)
+                    .font(.system(size: 15, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.2))
+            .cornerRadius(8)
         }
-        .listStyle(.plain)
+    }
+    
+    private var selectedCategoryName: String {
+        guard let categoryId = viewModel.selectedCategoryId,
+              let category = viewModel.categories.first(where: { $0.id == categoryId }) else {
+            return "Все категории"
+        }
+        return category.name
+    }
+    
+    private var sortButton: some View {
+        Button(action: {
+            viewModel.sortOrder = viewModel.sortOrder == .ascending ? .descending : .ascending
+        }) {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.primary)
+                .frame(width: 36, height: 36)
+                .background(Color.secondary.opacity(0.2))
+                .cornerRadius(8)
+        }
+        .accessibilityLabel(viewModel.sortOrder == .ascending ? "Сортировка: А-Я" : "Сортировка: Я-А")
+        .accessibilityHint("Нажмите для изменения порядка сортировки")
     }
 }
 
