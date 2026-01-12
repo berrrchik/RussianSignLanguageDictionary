@@ -6,11 +6,7 @@ final class CategoriesViewModel: ObservableObject {
     
     @Published private(set) var categories: [Category] = []
     @Published private(set) var state: ViewState = .idle
-    
-    /// Индикатор офлайн-режима (данные загружены из кеша, интернет недоступен)
     @Published private(set) var isOfflineMode: Bool = false
-    
-    /// Сообщение о работе в офлайн-режиме
     @Published private(set) var offlineMessage: String?
     
     // MARK: - ViewState
@@ -49,7 +45,6 @@ final class CategoriesViewModel: ObservableObject {
             categories = loadedCategories.sorted { $0.order < $1.order }
             state = .loaded
             
-            // Проверка доступности интернета после загрузки данных
             let isConnected = await networkMonitor.checkConnection()
             if !isConnected {
                 isOfflineMode = true
