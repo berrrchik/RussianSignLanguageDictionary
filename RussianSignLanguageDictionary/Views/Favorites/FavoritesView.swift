@@ -3,6 +3,7 @@ import SwiftUI
 struct FavoritesView: View {
     @StateObject private var viewModel: FavoritesViewModel
     @State private var showClearAlert = false
+    @State private var selectedSign: Sign?
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
@@ -53,6 +54,14 @@ struct FavoritesView: View {
             } message: {
                 Text("Все избранные жесты будут удалены. Это действие нельзя отменить.")
             }
+            .navigationDestination(item: $selectedSign) { sign in
+                SignDetailView(
+                    sign: sign,
+                    signRepository: signRepository,
+                    videoRepository: videoRepository,
+                    favoritesRepository: viewModel.favoritesRepository
+                )
+            }
             .overlay(alignment: .bottom) {
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
@@ -74,28 +83,24 @@ struct FavoritesView: View {
     // MARK: - Subviews
     
     private var favoritesListView: some View {
-        List {
-            Section {
-                ForEach(viewModel.favoriteSigns) { sign in
-                    NavigationLink(destination: SignDetailView(
-                        sign: sign,
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: viewModel.favoritesRepository
-                    )) {
-                        SignRowView(sign: sign, showFavoriteIndicator: false)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            viewModel.removeFavorite(signId: sign.id)
-                        } label: {
-                            Label("Удалить", systemImage: "trash.fill")
-                        }
-                    }
-                }
+        AlphabeticScrollbarTableView(
+            sections: groupedFavorites,
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            favoritesRepository: viewModel.favoritesRepository,
+            getCategoryName: { categoryId in
+                CategoryService.name(for: categoryId)
+            },
+            onSignSelected: { sign in
+                selectedSign = sign
             }
-        }
-        .listStyle(.plain)
+        )
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var groupedFavorites: [SearchViewModel.SignSection] {
+        SignGroupingHelper.groupByFirstLetter(viewModel.favoriteSigns)
     }
     
     private var emptyStateView: some View {
