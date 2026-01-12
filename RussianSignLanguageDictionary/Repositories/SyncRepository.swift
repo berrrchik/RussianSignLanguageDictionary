@@ -2,241 +2,28 @@ import Foundation
 import os.log
 
 /// Репозиторий для синхронизации данных с сервером
+/// Использует Raw API endpoints для получения данных
 final class SyncRepository: SyncRepositoryProtocol {
     // MARK: - Properties
     
     private let baseURL: URL
     private let session: URLSession
+    private let etagManager: ETagManager
+    private let cacheService: CacheService
     private let logger = Logger(subsystem: "com.rsl.SyncRepository", category: "sync")
     
     // MARK: - Initialization
     
-    init(baseURL: URL = APIConfig.baseURL, session: URLSession? = nil) {
+    init(
+        baseURL: URL = APIConfig.baseURL,
+        session: URLSession? = nil,
+        cacheService: CacheService = CacheService(),
+        etagManager: ETagManager = ETagManager()
+    ) {
         self.baseURL = baseURL
-        
-        // Создаем URLSession с разумными таймаутами
-        if let providedSession = session {
-            self.session = providedSession
-        } else {
-            let config = URLSessionConfiguration.default
-            
-            // Разумные таймауты: не слишком долго ждать если сервер недоступен
-            config.timeoutIntervalForRequest = 15.0   // 15 секунд для установки соединения
-            config.timeoutIntervalForResource = 120.0 // 2 минуты для загрузки данных
-            
-            // Разрешаем использование мобильного интернета
-            config.allowsCellularAccess = true
-            
-            // НЕ ждем появления соединения - сразу возвращаем ошибку если нет связи
-            config.waitsForConnectivity = false
-            
-            self.session = URLSession(configuration: config)
-            logger.info("✅ SyncRepository: URLSession настроен (таймауты: запрос=15с, ресурс=120с)")
-        }
-    }
-    
-    // MARK: - Private Helpers
-    
-    /// Создает форматтер даты ISO8601 с дробными секундами
-    private static func createDateFormatter() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }
-    
-    /// Статический форматтер даты для переиспользования
-    private static let dateFormatter = createDateFormatter()
-    
-    /// Создает JSONDecoder с настройкой парсинга даты для бекенда
-    /// Бекенд гарантирует формат ISO 8601 с суффиксом 'Z' (UTC)
-    private func createDecoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateString = try container.decode(String.self)
-            
-            // Формат теперь стандартизирован: ISO8601 с 'Z' суффиксом
-            guard let date = Self.dateFormatter.date(from: dateString) else {
-                throw DecodingError.dataCorruptedError(
-                    in: container,
-                    debugDescription: "Invalid date format: \(dateString). Expected ISO8601 with 'Z' suffix."
-                )
-            }
-            return date
-        }
-        
-        // Автоматическая конвертация snake_case → camelCase для всех ключей
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
-        return decoder
-    }
-    
-    /// Создает URL для проверки обновлений
-    private func buildCheckUpdatesURL(lastUpdated: Date?) -> URL? {
-        let endpointURL = baseURL.appendingPathComponent("sync").appendingPathComponent("check")
-        
-        guard var urlComponents = URLComponents(
-            url: endpointURL,
-            resolvingAgainstBaseURL: false
-        ) else {
-            logger.error("❌ Не удалось создать URLComponents для \(endpointURL.absoluteString)")
-            return nil
-        }
-        
-        if let lastUpdated = lastUpdated {
-            urlComponents.queryItems = [
-                URLQueryItem(name: "last_updated", value: Self.dateFormatter.string(from: lastUpdated))
-            ]
-        }
-        
-        return urlComponents.url
-    }
-        
-    /// Выполняет сетевой запрос
-    private func performNetworkRequest(url: URL) async throws -> (Data, HTTPURLResponse) {
-        logger.info("🔄 Запрос к URL: \(url.absoluteString, privacy: .public)")
-        logger.debug("⏱️ Таймаут запроса: 15с, таймаут ресурса: 120с")
-        
-        // Проверяем, является ли URL локальным IP адресом
-        if isLocalIPAddress(url.absoluteString) {
-            logger.warning("⚠️ Локальный IP адрес обнаружен: \(url.host ?? "неизвестно")")
-            logger.warning("   💡 Локальный сервер может быть недоступен через мобильный интернет")
-            logger.warning("   💡 Используйте Wi-Fi или настройте публичный сервер")
-        }
-        
-        let startTime = Date()
-        
-        do {
-            let (data, response) = try await session.data(from: url)
-            
-            let duration = Date().timeIntervalSince(startTime)
-            logger.debug("⏱️ Запрос выполнен за \(String(format: "%.2f", duration))с")
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SyncError.invalidResponse
-            }
-            
-            guard httpResponse.statusCode == 200 else {
-                logger.error("❌ Ошибка сервера: \(httpResponse.statusCode)")
-                throw SyncError.serverError(httpResponse.statusCode)
-            }
-            
-            return (data, httpResponse)
-        } catch let error as URLError {
-            // Детальная обработка ошибок
-            if error.code == .cancelled {
-                logger.error("❌ Запрос отменен (cancelled)")
-                logger.error("   URL: \(url.absoluteString)")
-                
-                if isLocalIPAddress(url.absoluteString) {
-                    logger.error("   ⚠️ ЛОКАЛЬНЫЙ IP АДРЕС НЕДОСТУПЕН ЧЕРЕЗ МОБИЛЬНЫЙ ИНТЕРНЕТ!")
-                    logger.error("   💡 Решение 1: Используйте Wi-Fi для доступа к локальному серверу")
-                    logger.error("   💡 Решение 2: Настройте публичный сервер для мобильного интернета")
-                    logger.error("   💡 Решение 3: Используйте VPN или туннель для доступа к локальному серверу")
-                    throw SyncError.noInternet
-                } else {
-                    logger.error("   💡 Возможные причины:")
-                    logger.error("      - Множественные одновременные запросы")
-                    logger.error("      - Переключение между сетями во время запроса")
-                    logger.error("      - Таймаут соединения")
-                }
-            }
-            throw error
-        }
-    }
-    
-    /// Декодирует ответ в указанный тип
-    private func decodeResponse<T: Codable>(data: Data, type: T.Type) throws -> T {
-        let decoder = createDecoder()
-        
-        do {
-            return try decoder.decode(SyncResponse<T>.self, from: data).data
-        } catch let decodingError as DecodingError {
-            logDecodingError(decodingError, data: data)
-            throw SyncError.decodingError(decodingError)
-        }
-    }
-    
-    /// Логирует ошибку декодирования с детальной информацией
-    private func logDecodingError(_ error: DecodingError, data: Data) {
-        logger.error("❌ Ошибка декодирования: \(error.localizedDescription)")
-        
-        if case .keyNotFound(let key, let context) = error {
-            logger.error("   Отсутствует ключ: \(key.stringValue)")
-            logger.error("   Путь: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
-        }
-        
-        if case .dataCorrupted(let context) = error {
-            logger.error("   Проблема с данными: \(context.debugDescription)")
-        }
-        
-        // Попробуем декодировать как словарь для отладки
-        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let dataDict = dict["data"] as? [String: Any] {
-            logger.debug("   Ключи в data: \(dataDict.keys.joined(separator: ", "))")
-        }
-    }
-    
-    /// Обрабатывает сетевую ошибку и преобразует в SyncError
-    private func handleNetworkError(_ error: Error) throws -> SyncError {
-        if let urlError = error as? URLError {
-            // Сервер недоступен (Connection refused)
-            if urlError.code == .cannotConnectToHost {
-                logger.warning("⚠️ Сервер недоступен (Connection refused)")
-                return SyncError.serverUnavailable
-            }
-            
-            // Таймаут соединения
-            if urlError.code == .timedOut {
-                logger.warning("⚠️ Таймаут соединения с сервером")
-                return SyncError.serverUnavailable
-            }
-            
-            // Проверка на отмену запроса (cancelled)
-            if urlError.code == .cancelled {
-                logger.error("❌ Запрос отменен (cancelled)")
-                
-                // Проверяем, является ли URL локальным IP
-                if let url = urlError.failureURLString, isLocalIPAddress(url) {
-                    logger.warning("   ⚠️ Локальный IP адрес недоступен")
-                    return SyncError.serverUnavailable
-                }
-                
-                return SyncError.networkError(urlError)
-            }
-            
-            if urlError.code == .notConnectedToInternet || urlError.code == .networkConnectionLost {
-                logger.warning("⚠️ Нет подключения к интернету")
-                return SyncError.noInternet
-            }
-            
-            logger.error("❌ Ошибка сети: \(urlError.localizedDescription)")
-            return SyncError.networkError(urlError)
-        }
-        
-        if let syncError = error as? SyncError {
-            return syncError
-        }
-        
-        logger.error("❌ Неизвестная ошибка: \(error.localizedDescription)")
-        return SyncError.networkError(error)
-    }
-    
-    /// Проверяет, является ли URL локальным IP адресом
-    /// - Parameter urlString: URL строка для проверки
-    /// - Returns: true, если это локальный IP адрес
-    private func isLocalIPAddress(_ urlString: String) -> Bool {
-        // Проверяем паттерны локальных IP адресов
-        let localIPPatterns = [
-            "192.168.",
-            "10.",
-            "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
-            "127.0.0.1",
-            "localhost"
-        ]
-        
-        return localIPPatterns.contains { urlString.contains($0) }
+        self.cacheService = cacheService
+        self.etagManager = etagManager
+        self.session = session ?? Self.createDefaultSession()
     }
     
     // MARK: - SyncRepositoryProtocol
@@ -246,61 +33,320 @@ final class SyncRepository: SyncRepositoryProtocol {
             throw SyncError.invalidResponse
         }
         
-        var responseData: Data?
+        let cachedETag = etagManager.getETag(for: .syncCheck)
+        let request = buildRequest(url: url, etag: cachedETag)
+        logETagStatus(cachedETag: cachedETag, endpoint: "/sync/check")
         
-        do {
-            let (data, _) = try await performNetworkRequest(url: url)
-            responseData = data
-            
-            // Логируем сырой ответ для отладки
-            if let responseString = String(data: data, encoding: .utf8) {
-                logger.debug("📥 Ответ checkForUpdates: \(responseString.prefix(200), privacy: .public)")
+        return try await performRequest(
+            request: request,
+            etagKey: .syncCheck,
+            notModifiedHandler: {
+                SyncMetadata(lastUpdated: lastUpdated ?? Date(), hasUpdates: false)
             }
-            
-            let decoder = createDecoder()
-                let syncResponse = try decoder.decode(SyncResponse<SyncMetadata>.self, from: data)
-                
-                guard syncResponse.success else {
-                    throw SyncError.invalidResponse
-                }
-                
-                return syncResponse.data
-        } catch let error as DecodingError {
-            logDecodingError(error, data: responseData ?? Data())
-            throw SyncError.decodingError(error)
-        } catch {
-            throw try handleNetworkError(error)
-        }
+        )
     }
     
     func fetchAllData() async throws -> SyncData {
-        let url = baseURL.appendingPathComponent("sync").appendingPathComponent("data")
+        let url = buildFetchDataURL()
+        let cachedETag = etagManager.getETag(for: .syncData)
+        let request = buildRequest(url: url, etag: cachedETag)
+        logETagStatus(cachedETag: cachedETag, endpoint: "/sync/data")
         
+        return try await performRequest(
+            request: request,
+            etagKey: .syncData,
+            notModifiedHandler: { [cacheService, logger] in
+                guard let cached = try? cacheService.load() else {
+                    logger.error("❌ Кеш недоступен при 304 Not Modified")
+                    throw SyncError.networkError(
+                        NSError(domain: "SyncRepository", code: -1, userInfo: [
+                            NSLocalizedDescriptionKey: "Cache unavailable"
+                        ])
+                    )
+                }
+                return cached
+            }
+        )
+    }
+    
+    // MARK: - Generic Request Handler
+    
+    /// Выполняет HTTP-запрос с поддержкой ETag и обработкой 304 Not Modified
+    /// - Parameters:
+    ///   - request: Сконфигурированный URLRequest
+    ///   - etagKey: Ключ для сохранения ETag
+    ///   - notModifiedHandler: Обработчик для 304 Not Modified
+    /// - Returns: Декодированный ответ
+    private func performRequest<T: Decodable>(
+        request: URLRequest,
+        etagKey: ETagManager.StorageKey,
+        notModifiedHandler: () throws -> T
+    ) async throws -> T {
         var responseData: Data?
         
         do {
-            let (data, _) = try await performNetworkRequest(url: url)
-            responseData = data
+            let (data, response) = try await executeNetworkRequest(request: request)
             
-            // Логируем первые знаки ответа для отладки
-            if let responseString = String(data: data, encoding: .utf8) {
-                let preview = responseString.prefix(500)
-                logger.debug("📥 Начало ответа fetchAllData: \(preview, privacy: .public)...")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SyncError.invalidResponse
             }
             
-            let decoder = createDecoder()
-            let syncResponse = try decoder.decode(SyncResponse<SyncDataResponse>.self, from: data)
+            // 304 Not Modified — данные не изменились
+            if httpResponse.statusCode == 304 {
+                logger.info("✅ ETag match: 304 Not Modified для \(request.url?.path ?? "")")
+                return try notModifiedHandler()
+            }
             
-                return SyncData(
-                    categories: syncResponse.data.categories,
-                    signs: syncResponse.data.signs,
-                    lastUpdated: syncResponse.data.lastUpdated
-                )
+            // Проверка успешного ответа
+            guard httpResponse.statusCode == 200 else {
+                logger.error("❌ Ошибка сервера: \(httpResponse.statusCode)")
+                throw SyncError.serverError(httpResponse.statusCode)
+            }
+            
+            responseData = data
+            
+            // Сохраняем новый ETag
+            processResponseETag(response: httpResponse, request: request, key: etagKey)
+            
+            // Логируем ответ для отладки
+            logResponsePreview(data: data, endpoint: request.url?.path ?? "")
+            
+            // Декодируем ответ
+            return try createDecoder().decode(T.self, from: data)
+            
         } catch let error as DecodingError {
             logDecodingError(error, data: responseData ?? Data())
             throw SyncError.decodingError(error)
+        } catch let error as SyncError {
+            throw error
         } catch {
-            throw try handleNetworkError(error)
+            throw handleNetworkError(error)
         }
+    }
+    
+    // MARK: - Network Execution
+    
+    private func executeNetworkRequest(request: URLRequest) async throws -> (Data, URLResponse) {
+        let urlString = request.url?.absoluteString ?? "unknown"
+        logger.info("🔄 Запрос: \(urlString, privacy: .public)")
+        
+        warnIfLocalAddress(urlString)
+        
+        let startTime = Date()
+        
+        do {
+            let result = try await session.data(for: request)
+            let duration = Date().timeIntervalSince(startTime)
+            logger.debug("⏱️ Запрос выполнен за \(String(format: "%.2f", duration))с")
+            return result
+        } catch let error as URLError where error.code == .cancelled {
+            handleCancelledRequest(urlString: urlString)
+            throw error
+        }
+    }
+    
+    // MARK: - Error Handling
+    
+    private func handleNetworkError(_ error: Error) -> SyncError {
+        guard let urlError = error as? URLError else {
+            logger.error("❌ Неизвестная ошибка: \(error.localizedDescription)")
+            return .networkError(error)
+        }
+        
+        switch urlError.code {
+        case .cannotConnectToHost, .timedOut:
+            logger.warning("⚠️ Сервер недоступен: \(urlError.code.rawValue)")
+            return .serverUnavailable
+            
+        case .cancelled:
+            return handleCancelledError(urlError)
+            
+        case .notConnectedToInternet, .networkConnectionLost:
+            logger.warning("⚠️ Нет подключения к интернету")
+            return .noInternet
+            
+        default:
+            logger.error("❌ Ошибка сети: \(urlError.localizedDescription)")
+            return .networkError(urlError)
+        }
+    }
+    
+    private func handleCancelledError(_ error: URLError) -> SyncError {
+        logger.error("❌ Запрос отменён")
+        
+        if let url = error.failureURLString, NetworkAddressValidator.isLocalAddress(url) {
+            logger.warning("⚠️ Локальный IP недоступен")
+            return .serverUnavailable
+        }
+        
+        return .networkError(error)
+    }
+    
+    // MARK: - ETag Processing
+    
+    private func processResponseETag(
+        response: HTTPURLResponse,
+        request: URLRequest,
+        key: ETagManager.StorageKey
+    ) {
+        guard let newETagRaw = response.value(forHTTPHeaderField: "ETag") else {
+            logger.debug("⚠️ ETag отсутствует в ответе")
+            return
+        }
+        
+        let newETag = etagManager.normalizeETag(newETagRaw)
+        logETagComparison(request: request, newETag: newETag, newETagRaw: newETagRaw)
+        etagManager.saveETag(newETagRaw, for: key)
+    }
+    
+    private func logETagComparison(request: URLRequest, newETag: String, newETagRaw: String) {
+        guard let sentETagRaw = request.value(forHTTPHeaderField: "If-None-Match") else {
+            logger.debug("🔄 Новый ETag получен: \(newETag) (len=\(newETag.count))")
+            return
+        }
+        
+        let sentETag = etagManager.normalizeETag(sentETagRaw)
+        
+        if sentETag == newETag {
+            logger.debug("⚠️ ETag совпадает, но сервер вернул 200 OK")
+        } else {
+            logger.debug("🔄 ETag изменился: \(sentETag) → \(newETag)")
+        }
+    }
+    
+    // MARK: - Logging Helpers
+    
+    private func logETagStatus(cachedETag: String?, endpoint: String) {
+        if let etag = cachedETag {
+            logger.debug("🔄 Отправка If-None-Match для \(endpoint): \(etag)")
+        } else {
+            logger.debug("🔄 ETag для \(endpoint): первый запрос")
+        }
+    }
+    
+    private func logResponsePreview(data: Data, endpoint: String) {
+        guard let preview = String(data: data, encoding: .utf8)?.prefix(200) else { return }
+        logger.debug("📥 Ответ \(endpoint): \(preview, privacy: .public)...")
+    }
+    
+    private func warnIfLocalAddress(_ urlString: String) {
+        guard NetworkAddressValidator.isLocalAddress(urlString) else { return }
+        
+        logger.warning("⚠️ Локальный IP адрес обнаружен")
+        logger.warning("   💡 Может быть недоступен через мобильный интернет")
+    }
+    
+    private func handleCancelledRequest(urlString: String) {
+        logger.error("❌ Запрос отменён")
+        
+        if NetworkAddressValidator.isLocalAddress(urlString) {
+            logger.error("   ⚠️ ЛОКАЛЬНЫЙ IP НЕДОСТУПЕН!")
+            logger.error("   💡 Используйте Wi-Fi или настройте публичный сервер")
+        }
+    }
+    
+    // MARK: - Decoder
+    
+    /// Создаёт JSONDecoder для Raw API
+    /// Raw API использует Unix timestamp и snake_case ключи
+    private func createDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
+    
+    private func logDecodingError(_ error: DecodingError, data: Data) {
+        logger.error("❌ Ошибка декодирования: \(error.localizedDescription)")
+        
+        switch error {
+        case .keyNotFound(let key, let context):
+            logger.error("   Отсутствует ключ: \(key.stringValue)")
+            logger.error("   Путь: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+            
+        case .dataCorrupted(let context):
+            logger.error("   Проблема с данными: \(context.debugDescription)")
+            
+        case .typeMismatch(let type, let context):
+            logger.error("   Несоответствие типа: ожидался \(type)")
+            logger.error("   Путь: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+            
+        case .valueNotFound(let type, let context):
+            logger.error("   Значение не найдено: \(type)")
+            logger.error("   Путь: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+            
+        @unknown default:
+            break
+        }
+        
+        logResponseKeys(data: data)
+    }
+    
+    private func logResponseKeys(data: Data) {
+        guard let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        logger.debug("   Ключи в ответе: \(dict.keys.joined(separator: ", "))")
+    }
+    
+    // MARK: - URL Building
+    
+    /// Создаёт URL для проверки обновлений (Raw API: /sync/check/raw)
+    /// - Parameter lastUpdated: Дата последнего обновления (опционально)
+    /// - Returns: URL для запроса или nil при ошибке
+    private func buildCheckUpdatesURL(lastUpdated: Date?) -> URL? {
+        let endpointURL = baseURL
+            .appendingPathComponent("sync")
+            .appendingPathComponent("check")
+            .appendingPathComponent("raw")
+        
+        guard var urlComponents = URLComponents(
+            url: endpointURL,
+            resolvingAgainstBaseURL: false
+        ) else {
+            return nil
+        }
+        
+        if let lastUpdated = lastUpdated {
+            let timestamp = Int(lastUpdated.timeIntervalSince1970)
+            urlComponents.queryItems = [
+                URLQueryItem(name: "last_updated", value: String(timestamp))
+            ]
+        }
+        
+        return urlComponents.url
+    }
+    
+    /// Создаёт URL для загрузки всех данных (Raw API: /sync/data/raw)
+    /// - Returns: URL для запроса
+    private func buildFetchDataURL() -> URL {
+        baseURL
+            .appendingPathComponent("sync")
+            .appendingPathComponent("data")
+            .appendingPathComponent("raw")
+    }
+    
+    /// Создаёт URLRequest с условным заголовком If-None-Match
+    /// - Parameters:
+    ///   - url: URL для запроса
+    ///   - etag: ETag для условного запроса (опционально)
+    /// - Returns: Настроенный URLRequest
+    private func buildRequest(url: URL, etag: String?) -> URLRequest {
+        var request = URLRequest(url: url)
+        
+        if let etag = etag {
+            request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+        }
+        
+        return request
+    }
+    
+    // MARK: - Session Configuration
+    
+    private static func createDefaultSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15.0
+        config.timeoutIntervalForResource = 120.0
+        config.allowsCellularAccess = true
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
     }
 }
