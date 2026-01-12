@@ -18,8 +18,9 @@ final class CacheService {
         logger.info("💾 Сохранение в кеш: \(data.signs.count) жестов, \(data.categories.count) категорий")
         
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        // НЕ используем convertToSnakeCase - модели уже имеют свои CodingKeys
+        // Unix timestamp для совместимости с Raw API
+        encoder.dateEncodingStrategy = .secondsSince1970
+        encoder.keyEncodingStrategy = .convertToSnakeCase
         
         let jsonData = try encoder.encode(data)
         logger.info("💾 Размер данных для сохранения: \(jsonData.count) байт")
@@ -37,8 +38,6 @@ final class CacheService {
         
         do {
             try jsonData.write(to: fileURL, options: .atomic)
-            
-            // Проверяем, что файл действительно сохранился
             let savedExists = fileManager.fileExists(atPath: fileURL.path)
             logger.info("✅ Данные сохранены в кеш. Файл существует: \(savedExists)")
         } catch {
@@ -73,13 +72,31 @@ final class CacheService {
             let jsonData = try Data(contentsOf: fileURL)
             logger.info("📄 Размер файла кеша: \(jsonData.count) байт")
             
+            // Сначала пробуем новый формат (Unix timestamp)
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            // НЕ используем convertFromSnakeCase - модели уже имеют свои CodingKeys
+            decoder.dateDecodingStrategy = .secondsSince1970
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            let data = try decoder.decode(SyncData.self, from: jsonData)
-            logger.info("✅ Данные загружены из кеша (\(data.signs.count) жестов, \(data.categories.count) категорий)")
-            return data
+            do {
+                let data = try decoder.decode(SyncData.self, from: jsonData)
+                logger.info("✅ Данные загружены из кеша (новый формат, \(data.signs.count) жестов, \(data.categories.count) категорий)")
+                return data
+            } catch {
+                // Fallback: пробуем старый формат (ISO 8601) для обратной совместимости
+                logger.info("ℹ️ Попытка загрузки кеша в старом формате (ISO 8601)...")
+                let legacyDecoder = JSONDecoder()
+                legacyDecoder.dateDecodingStrategy = .iso8601
+                legacyDecoder.keyDecodingStrategy = .convertFromSnakeCase
+                
+                let data = try legacyDecoder.decode(SyncData.self, from: jsonData)
+                logger.info("✅ Данные загружены из кеша (legacy формат, \(data.signs.count) жестов, \(data.categories.count) категорий)")
+                
+                // Пересохраняем в новом формате для будущих загрузок
+                logger.info("🔄 Миграция кеша на новый формат...")
+                try? save(data)
+                
+                return data
+            }
         } catch let decodingError as DecodingError {
             logger.error("❌ Ошибка декодирования кеша: \(String(describing: decodingError))")
             throw CacheError.unableToLoad(decodingError)
