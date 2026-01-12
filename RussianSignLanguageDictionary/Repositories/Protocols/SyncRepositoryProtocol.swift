@@ -14,7 +14,8 @@ protocol SyncRepositoryProtocol {
     func fetchAllData() async throws -> SyncData
 }
 
-/// Данные синхронизации с сервера
+/// Данные синхронизации с сервера (Raw API)
+/// Raw API возвращает данные напрямую без обертки {success, data}
 struct SyncData: Codable {
     /// Массив категорий
     let categories: [Category]
@@ -22,20 +23,16 @@ struct SyncData: Codable {
     /// Массив жестов
     let signs: [Sign]
     
-    /// Дата последнего обновления
+    /// Дата последнего обновления (Unix timestamp)
     let lastUpdated: Date
 }
 
-/// Структура ответа API
+// MARK: - Legacy Support (для обратной совместимости с кешем)
+
+/// Структура ответа API (Legacy - deprecated)
+/// Используется только для чтения старого кеша, новые данные используют Raw API
 struct SyncResponse<T: Codable>: Codable {
     let success: Bool
     let data: T
     let message: String?
-}
-
-/// Структура ответа данных синхронизации из API
-struct SyncDataResponse: Codable {
-    let categories: [Category]
-    let signs: [Sign]
-    let lastUpdated: Date
 }
