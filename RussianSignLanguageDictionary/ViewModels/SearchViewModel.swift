@@ -6,7 +6,6 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Constants
     
     private enum Constants {
-        /// Задержка для debounce поиска в миллисекундах
         static let debounceMilliseconds: Int = 300
     }
     
@@ -16,12 +15,12 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var searchResults: [Sign] = []
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
-    
-    /// Индикатор офлайн-режима (данные загружены из кеша, интернет недоступен)
     @Published private(set) var isOfflineMode: Bool = false
-    
-    /// Сообщение о работе в офлайн-режиме
     @Published private(set) var offlineMessage: String?
+    
+    // Фильтрация и сортировка
+    @Published var selectedCategoryId: String? = nil
+    @Published var sortOrder: SortOrder = .ascending
     
     // MARK: - Dependencies
     
@@ -35,7 +34,20 @@ final class SearchViewModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Enums
+    
+    enum SortOrder {
+        case ascending 
+        case descending 
+    }
+    
     // MARK: - Helper Structures
+    
+    struct SignSection: Identifiable {
+        let id: String 
+        let letter: String
+        let signs: [Sign]
+    }
     
     private struct SearchableSign {
         let sign: Sign
@@ -82,8 +94,6 @@ final class SearchViewModel: ObservableObject {
             }
             
             isLoading = false
-            
-            // Проверка доступности интернета после загрузки данных
             let isConnected = await networkMonitor.checkConnection()
             if !isConnected {
                 isOfflineMode = true
@@ -131,6 +141,22 @@ final class SearchViewModel: ObservableObject {
         searchResults = allSigns
         errorMessage = nil
         searchTask?.cancel()
+    }
+    
+    // MARK: - Computed Properties
+    
+    var categories: [Category] {
+        CategoryService.allCategories()
+    }
+    
+    var groupedResults: [SignSection] {
+        var filtered = searchResults
+        
+        if let categoryId = selectedCategoryId {
+            filtered = filtered.filter { $0.categoryId == categoryId }
+        }
+        
+        return SignGroupingHelper.groupByFirstLetter(filtered, sortOrder: sortOrder)
     }
     
     // MARK: - Private Methods
