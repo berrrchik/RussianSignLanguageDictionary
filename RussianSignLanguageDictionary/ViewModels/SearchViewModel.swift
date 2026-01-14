@@ -26,6 +26,7 @@ final class SearchViewModel: ObservableObject {
     
     private let signRepository: SignRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
+    private var hybridSearchService: HybridSearchService?
     
     // MARK: - Private Properties
     
@@ -93,6 +94,13 @@ final class SearchViewModel: ObservableObject {
                 )
             }
             
+            // Инициализация гибридного сервиса поиска
+            hybridSearchService = HybridSearchService(
+                baseURL: APIConfig.baseURL,
+                signs: signs,
+                networkMonitor: networkMonitor
+            )
+            
             isLoading = false
             let isConnected = await networkMonitor.checkConnection()
             if !isConnected {
@@ -119,20 +127,63 @@ final class SearchViewModel: ObservableObject {
             isLoading = true
             errorMessage = nil
             
-            let lowercasedQuery = trimmedQuery.lowercased()
-            
-            let filtered = searchableSigns.filter { searchable in
-                searchable.lowercasedWord.contains(lowercasedQuery) ||
-                searchable.lowercasedKeywords.contains(where: { $0.contains(lowercasedQuery) })
-            }
-            
-            guard !Task.isCancelled else {
+            // Используем гибридный поиск, если доступен
+            if let hybridService = hybridSearchService {
+                do {
+                    let results = try await hybridService.performHybridSearch(
+                        query: trimmedQuery,
+                        limit: 50
+                    )
+                    
+                    guard !Task.isCancelled else {
+                        self.isLoading = false
+                        return
+                    }
+                    
+                    self.searchResults = results
+                    self.isLoading = false
+                } catch {
+                    // При ошибке SBERT поиска используем текстовый поиск как fallback
+                    guard !Task.isCancelled else {
+                        self.isLoading = false
+                        return
+                    }
+                    
+                    // Fallback на текстовый поиск
+                    let textResults = hybridService.performTextSearch(
+                        query: trimmedQuery,
+                        limit: 50
+                    )
+                    self.searchResults = textResults
+                    self.isLoading = false
+                    
+                    // Не показываем ошибку пользователю, так как fallback работает
+                    // Логируем для отладки
+                    if let sbertError = error as? SBERTSearchError {
+                        // Только для критических ошибок показываем сообщение
+                        if case .serverError(let code, _) = sbertError,
+                           code == "SEARCH_ERROR" {
+                            // Модель не загружена - это нормально, используем текстовый поиск
+                        }
+                    }
+                }
+            } else {
+                // Fallback на старый текстовый поиск, если гибридный сервис не инициализирован
+                let lowercasedQuery = trimmedQuery.lowercased()
+                
+                let filtered = searchableSigns.filter { searchable in
+                    searchable.lowercasedWord.contains(lowercasedQuery) ||
+                    searchable.lowercasedKeywords.contains(where: { $0.contains(lowercasedQuery) })
+                }
+                
+                guard !Task.isCancelled else {
+                    self.isLoading = false
+                    return
+                }
+                
+                self.searchResults = filtered.map { $0.sign }
                 self.isLoading = false
-                return
             }
-            
-            self.searchResults = filtered.map { $0.sign }
-            self.isLoading = false
         }
     }
     
@@ -156,7 +207,18 @@ final class SearchViewModel: ObservableObject {
             filtered = filtered.filter { $0.categoryId == categoryId }
         }
         
-        return SignGroupingHelper.groupByFirstLetter(filtered, sortOrder: sortOrder)
+        // Если есть активный поиск - показываем результаты по релевантности (без алфавитной группировки)
+        // Если поиска нет - показываем по алфавиту
+        let isSearchActive = !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        
+        if isSearchActive {
+            // При активном поиске: одна секция с результатами в порядке релевантности
+            // Порядок уже правильный: точные совпадения → SBERT (по similarity) → текстовые
+            return [SignSection(id: "search_results", letter: "", signs: filtered)]
+        } else {
+            // Без поиска: алфавитная группировка
+            return SignGroupingHelper.groupByFirstLetter(filtered, sortOrder: sortOrder)
+        }
     }
     
     // MARK: - Private Methods
