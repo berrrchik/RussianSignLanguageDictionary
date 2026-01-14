@@ -19,24 +19,56 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         tableView.sectionIndexColor = .systemBlue
         tableView.sectionIndexBackgroundColor = .clear
         tableView.sectionIndexTrackingBackgroundColor = .clear
+        
+        tableView.contentInsetAdjustmentBehavior = .never
+        
         return tableView
     }
     
     func updateUIView(_ uiView: UITableView, context: Context) {
         context.coordinator.sections = sections
+        context.coordinator.favoritesRepository = favoritesRepository
+        context.coordinator.getCategoryName = getCategoryName
+        
         uiView.reloadData()
     }
     
+    static func dismantleUIView(_ uiView: UITableView, coordinator: Coordinator) {
+        uiView.delegate = nil
+        uiView.dataSource = nil
+        coordinator.cleanup()
+    }
+    
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(
+            sections: sections,
+            favoritesRepository: favoritesRepository,
+            getCategoryName: getCategoryName,
+            onSignSelected: onSignSelected
+        )
     }
     
     class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
-        var parent: AlphabeticScrollbarTableView
-        var sections: [SearchViewModel.SignSection] = []
+        var sections: [SearchViewModel.SignSection]
+        var favoritesRepository: FavoritesRepositoryProtocol?
+        var getCategoryName: (String) -> String
+        let onSignSelected: (Sign) -> Void
         
-        init(_ parent: AlphabeticScrollbarTableView) {
-            self.parent = parent
+        init(
+            sections: [SearchViewModel.SignSection],
+            favoritesRepository: FavoritesRepositoryProtocol?,
+            getCategoryName: @escaping (String) -> String,
+            onSignSelected: @escaping (Sign) -> Void
+        ) {
+            self.sections = sections
+            self.favoritesRepository = favoritesRepository
+            self.getCategoryName = getCategoryName
+            self.onSignSelected = onSignSelected
+        }
+        
+        func cleanup() {
+            sections.removeAll()
+            favoritesRepository = nil
         }
         
         // MARK: - UITableViewDataSource
@@ -46,14 +78,20 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         }
         
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+            guard section < sections.count else { return 0 }
             return sections[section].signs.count
         }
         
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+            guard indexPath.section < sections.count,
+                  indexPath.row < sections[indexPath.section].signs.count else {
+                return UITableViewCell()
+            }
+            
             let cell = tableView.dequeueReusableCell(withIdentifier: "SignCell", for: indexPath) as! SignRowTableViewCell
             let sign = sections[indexPath.section].signs[indexPath.row]
-            let isFavorite = parent.favoritesRepository?.isFavorite(signId: sign.id) ?? false
-            let categoryName = parent.getCategoryName(sign.categoryId)
+            let isFavorite = favoritesRepository?.isFavorite(signId: sign.id) ?? false
+            let categoryName = getCategoryName(sign.categoryId)
             
             cell.configure(with: sign, categoryName: categoryName, isFavorite: isFavorite)
             
@@ -61,16 +99,20 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         }
         
         func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-            return sections[section].letter
+            guard section < sections.count else { return nil }
+            let letter = sections[section].letter
+            return letter.isEmpty ? nil : letter
         }
         
         func sectionIndexTitles(for tableView: UITableView) -> [String]? {
-            // Возвращаем массив букв для системного scrollbar
+            let hasSearchMode = sections.contains { $0.letter.isEmpty }
+            if hasSearchMode {
+                return nil
+            }
             return sections.map { $0.letter }
         }
         
         func tableView(_ tableView: UITableView, sectionForSectionIndexTitle title: String, at index: Int) -> Int {
-            // Находим индекс секции по букве
             return sections.firstIndex(where: { $0.letter == title }) ?? index
         }
         
@@ -78,8 +120,17 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         
         func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
             tableView.deselectRow(at: indexPath, animated: true)
+            
+            guard indexPath.section < sections.count,
+                  indexPath.row < sections[indexPath.section].signs.count else {
+                return
+            }
+            
             let sign = sections[indexPath.section].signs[indexPath.row]
-            parent.onSignSelected(sign)
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.onSignSelected(sign)
+            }
         }
         
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
@@ -110,8 +161,14 @@ class SignRowTableViewCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        signWordLabel.text = nil
+        categoryLabel.text = nil
+        favoriteIcon.isHidden = true
+    }
+    
     private func setupUI() {
-        // Настройка иконки
         iconView.backgroundColor = .systemGray5
         iconView.layer.cornerRadius = 8
         iconView.translatesAutoresizingMaskIntoConstraints = false
@@ -123,13 +180,11 @@ class SignRowTableViewCell: UITableViewCell {
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
         iconView.addSubview(iconImageView)
         
-        // Настройка текста слова
         signWordLabel.font = .systemFont(ofSize: 17, weight: .semibold)
         signWordLabel.textColor = .label
         signWordLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(signWordLabel)
         
-        // Настройка категории - оборачиваем в контейнер для padding
         categoryContainer.backgroundColor = .systemBlue.withAlphaComponent(0.1)
         categoryContainer.layer.cornerRadius = 8
         categoryContainer.clipsToBounds = true
@@ -143,7 +198,6 @@ class SignRowTableViewCell: UITableViewCell {
         categoryLabel.translatesAutoresizingMaskIntoConstraints = false
         categoryContainer.addSubview(categoryLabel)
         
-        // Настройка иконки избранного
         favoriteIcon.image = UIImage(systemName: "heart.fill")
         favoriteIcon.tintColor = .systemRed
         favoriteIcon.contentMode = .scaleAspectFit
@@ -151,10 +205,8 @@ class SignRowTableViewCell: UITableViewCell {
         favoriteIcon.isHidden = true
         contentView.addSubview(favoriteIcon)
         
-        // Убираем accessory (chevron)
         accessoryType = .none
         
-        // Constraints
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -171,7 +223,7 @@ class SignRowTableViewCell: UITableViewCell {
             signWordLabel.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
             
             categoryContainer.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
-            categoryContainer.topAnchor.constraint(equalTo: signWordLabel.bottomAnchor, constant: 8),
+            categoryContainer.topAnchor.constraint(equalTo: signWordLabel.bottomAnchor, constant: 4),
             categoryContainer.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -16),
             categoryContainer.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
             categoryContainer.heightAnchor.constraint(equalToConstant: 24),
