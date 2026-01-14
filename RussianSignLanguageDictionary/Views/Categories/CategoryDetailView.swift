@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CategoryDetailView: View {
-    @ObservedObject private var viewModel: CategoryDetailViewModel
+    @StateObject private var viewModel: CategoryDetailViewModel
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
     @State private var selectedSign: Sign?
     
@@ -9,16 +9,41 @@ struct CategoryDetailView: View {
     private let videoRepository: VideoRepositoryProtocol
     
     init(
-        viewModel: CategoryDetailViewModel,
+        category: Category,
         signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol
     ) {
-        self.viewModel = viewModel
         self.signRepository = signRepository
         self.videoRepository = videoRepository
+        _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(
+            category: category,
+            signRepository: signRepository
+        ))
     }
     
     var body: some View {
+        contentView
+            .navigationTitle(viewModel.category.name)
+            .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(item: $selectedSign) { sign in
+                SignDetailView(
+                    sign: sign,
+                    signRepository: signRepository,
+                    videoRepository: videoRepository,
+                    favoritesRepository: favoritesRepository
+                )
+            }
+            .task {
+                if viewModel.signs.isEmpty {
+                    await viewModel.loadSigns()
+                }
+            }
+    }
+    
+    // MARK: - Content View
+    
+    @ViewBuilder
+    private var contentView: some View {
         ZStack {
             switch viewModel.state {
             case .idle, .loading:
@@ -36,26 +61,11 @@ struct CategoryDetailView: View {
                 }
                 
             case .error(let message):
-                ErrorView(message: message) {
+                ErrorView(message: message, skipAction:  {
                     Task {
                         await viewModel.loadSigns()
                     }
-                }
-            }
-        }
-        .navigationTitle(viewModel.category.name)
-        .navigationBarTitleDisplayMode(.large)
-        .navigationDestination(item: $selectedSign) { sign in
-            SignDetailView(
-                sign: sign,
-                signRepository: signRepository,
-                videoRepository: videoRepository,
-                favoritesRepository: favoritesRepository
-            )
-        }
-        .task {
-            if viewModel.signs.isEmpty {
-                await viewModel.loadSigns()
+                })
             }
         }
     }
@@ -64,7 +74,7 @@ struct CategoryDetailView: View {
     
     private var signsList: some View {
         AlphabeticScrollbarTableView(
-            sections: groupedSigns,
+            sections: viewModel.groupedSigns,
             signRepository: signRepository,
             videoRepository: videoRepository,
             favoritesRepository: favoritesRepository,
@@ -76,12 +86,6 @@ struct CategoryDetailView: View {
             }
         )
     }
-    
-    // MARK: - Computed Properties
-    
-    private var groupedSigns: [SearchViewModel.SignSection] {
-        SignGroupingHelper.groupByFirstLetter(viewModel.signs)
-    }
 }
 
 // MARK: - Preview
@@ -89,14 +93,9 @@ struct CategoryDetailView: View {
 #if DEBUG
 struct CategoryDetailView_Previews: PreviewProvider {
     static var previews: some View {
-        let viewModel = CategoryDetailViewModel(
-            category: PreviewData.category,
-            signRepository: PreviewData.signRepository
-        )
-        
         NavigationStack {
             CategoryDetailView(
-                viewModel: viewModel,
+                category: PreviewData.category,
                 signRepository: PreviewData.signRepository,
                 videoRepository: PreviewData.videoRepository
             )
@@ -105,4 +104,3 @@ struct CategoryDetailView_Previews: PreviewProvider {
     }
 }
 #endif
-

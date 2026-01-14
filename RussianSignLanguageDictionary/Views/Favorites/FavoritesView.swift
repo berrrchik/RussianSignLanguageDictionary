@@ -23,60 +23,67 @@ struct FavoritesView: View {
     
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading {
-                    LoadingView(message: "Загрузка избранного...")
-                } else if viewModel.favoriteSigns.isEmpty {
-                    emptyStateView
-                } else {
-                    favoritesListView
-                }
-            }
-            .navigationTitle("Избранное")
-            .toolbar {
-                if !viewModel.favoriteSigns.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            showClearAlert = true
-                        } label: {
-                            Image(systemName: "trash.fill")
-                                .foregroundColor(.red)
+            contentView
+                .navigationTitle("Избранное")
+                .toolbar {
+                    if !viewModel.favoriteSigns.isEmpty {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button {
+                                showClearAlert = true
+                            } label: {
+                                Image(systemName: "trash.fill")
+                                    .foregroundColor(.red)
+                            }
+                            .accessibilityLabel("Очистить все избранное")
                         }
-                        .accessibilityLabel("Очистить все избранное")
                     }
                 }
-            }
-            .alert("Очистить избранное?", isPresented: $showClearAlert) {
-                Button("Отмена", role: .cancel) { }
-                Button("Очистить", role: .destructive) {
-                    viewModel.clearAllFavorites()
+                .alert("Очистить избранное?", isPresented: $showClearAlert) {
+                    Button("Отмена", role: .cancel) { }
+                    Button("Очистить", role: .destructive) {
+                        viewModel.clearAllFavorites()
+                    }
+                } message: {
+                    Text("Все избранные жесты будут удалены. Это действие нельзя отменить.")
                 }
-            } message: {
-                Text("Все избранные жесты будут удалены. Это действие нельзя отменить.")
-            }
-            .navigationDestination(item: $selectedSign) { sign in
-                SignDetailView(
-                    sign: sign,
-                    signRepository: signRepository,
-                    videoRepository: videoRepository,
-                    favoritesRepository: viewModel.favoritesRepository
-                )
-            }
-            .overlay(alignment: .bottom) {
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, LayoutConstants.Toast.horizontalPadding)
-                        .padding(.vertical, LayoutConstants.Toast.verticalPadding)
-                        .background(Color.orange)
-                        .cornerRadius(LayoutConstants.Toast.cornerRadius)
-                        .padding(.bottom, LayoutConstants.Toast.bottomPadding)
+                .navigationDestination(item: $selectedSign) { sign in
+                    SignDetailView(
+                        sign: sign,
+                        signRepository: signRepository,
+                        videoRepository: videoRepository,
+                        favoritesRepository: viewModel.favoritesRepository
+                    )
                 }
-            }
+                .overlay(alignment: .bottom) {
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, LayoutConstants.Toast.horizontalPadding)
+                            .padding(.vertical, LayoutConstants.Toast.verticalPadding)
+                            .background(Color.orange)
+                            .cornerRadius(LayoutConstants.Toast.cornerRadius)
+                            .padding(.bottom, LayoutConstants.Toast.bottomPadding)
+                    }
+                }
+                .task {
+                    await viewModel.loadFavorites()
+                }
         }
-        .task {
-            await viewModel.loadFavorites()
+    }
+    
+    // MARK: - Content View
+    
+    @ViewBuilder
+    private var contentView: some View {
+        ZStack {
+            if viewModel.isLoading && viewModel.favoriteSigns.isEmpty {
+                LoadingView(message: "Загрузка избранного...")
+            } else if viewModel.favoriteSigns.isEmpty {
+                emptyStateView
+            } else {
+                favoritesListView
+            }
         }
     }
     
@@ -84,7 +91,7 @@ struct FavoritesView: View {
     
     private var favoritesListView: some View {
         AlphabeticScrollbarTableView(
-            sections: groupedFavorites,
+            sections: viewModel.groupedFavorites,
             signRepository: signRepository,
             videoRepository: videoRepository,
             favoritesRepository: viewModel.favoritesRepository,
@@ -95,12 +102,6 @@ struct FavoritesView: View {
                 selectedSign = sign
             }
         )
-    }
-    
-    // MARK: - Computed Properties
-    
-    private var groupedFavorites: [SearchViewModel.SignSection] {
-        SignGroupingHelper.groupByFirstLetter(viewModel.favoriteSigns)
     }
     
     private var emptyStateView: some View {
@@ -118,14 +119,11 @@ struct FavoritesView: View {
 #if DEBUG
 struct FavoritesView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationStack {
-            FavoritesView(
-                signRepository: PreviewData.signRepository,
-                favoritesRepository: PreviewData.favoritesRepository,
-                videoRepository: PreviewData.videoRepository
-            )
-        }
+        FavoritesView(
+            signRepository: PreviewData.signRepository,
+            favoritesRepository: PreviewData.favoritesRepository,
+            videoRepository: PreviewData.videoRepository
+        )
     }
 }
 #endif
-

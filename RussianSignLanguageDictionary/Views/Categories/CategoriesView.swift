@@ -37,11 +37,11 @@ struct CategoriesView: View {
                     categoriesGrid
                     
                 case .error(let message):
-                    ErrorView(message: message) {
+                    ErrorView(message: message, skipAction:  {
                         Task {
                             await viewModel.loadCategories()
                         }
-                    }
+                    })
                 }
             }
             .navigationTitle("Категории")
@@ -63,10 +63,7 @@ struct CategoriesView: View {
             LazyVGrid(columns: columns, spacing: LayoutConstants.CategoryCard.gridSpacing) {
                 ForEach(viewModel.categories) { category in
                     NavigationLink(destination: CategoryDetailView(
-                        viewModel: CategoryDetailViewModel(
-                            category: category,
-                            signRepository: signRepository
-                        ),
+                        category: category,
                         signRepository: signRepository,
                         videoRepository: videoRepository
                     )) {
