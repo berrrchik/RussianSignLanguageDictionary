@@ -96,6 +96,12 @@ final class FavoritesViewModel: ObservableObject {
         return favoritesRepository.isFavorite(signId: signId)
     }
     
+    // MARK: - Computed Properties
+    
+    var groupedFavorites: [SearchViewModel.SignSection] {
+        SignGroupingHelper.groupByFirstLetter(favoriteSigns)
+    }
+    
     // MARK: - Private Methods
     
     private func sortFavorites() {

@@ -48,6 +48,12 @@ final class CategoryDetailViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Computed Properties
+    
+    var groupedSigns: [SearchViewModel.SignSection] {
+        SignGroupingHelper.groupByFirstLetter(signs)
+    }
+    
     // MARK: - Private Methods
     
     private func errorMessage(for error: SignRepositoryError) -> String {
