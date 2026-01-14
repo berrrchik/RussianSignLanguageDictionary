@@ -87,6 +87,26 @@ enum ErrorMessageMapper {
         }
     }
     
+    // MARK: - SBERTSearchError Mapping
+    
+    static func message(for error: SBERTSearchError) -> String {
+        switch error {
+        case .invalidResponse:
+            return "Неверный формат ответа от сервера поиска"
+        case .httpError(let statusCode):
+            return "Ошибка сети: \(statusCode). Попробуйте позже."
+        case .serverError(let code, let message):
+            if code == "VALIDATION_ERROR" {
+                return "Ошибка запроса: \(message)"
+            } else if code == "SEARCH_ERROR" {
+                return "Семантический поиск временно недоступен. Используется текстовый поиск."
+            }
+            return "Ошибка поиска: \(message)"
+        case .unknown:
+            return "Неизвестная ошибка при поиске"
+        }
+    }
+    
     // MARK: - Generic Error Mapping
     
     static func message(for error: Error) -> String {
@@ -108,6 +128,10 @@ enum ErrorMessageMapper {
         
         if let videoCacheError = error as? VideoCacheError {
             return message(for: videoCacheError)
+        }
+        
+        if let sbertError = error as? SBERTSearchError {
+            return message(for: sbertError)
         }
         
         return "Произошла ошибка: \(error.localizedDescription)"
