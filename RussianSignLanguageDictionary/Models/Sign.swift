@@ -20,9 +20,6 @@ struct Sign: Identifiable, Codable, Hashable {
     /// Массив синонимов жеста (опционально)
     let synonyms: [SignSynonym]?
     
-    /// Эмбеддинги для семантического поиска (RuBERT) - опционально
-    let embeddings: [Double]?
-    
     // MARK: - Обратная совместимость (для старых JSON данных)
     
     /// Идентификатор видео файла (устаревшее, используется для обратной совместимости)
@@ -56,5 +53,24 @@ struct Sign: Identifiable, Codable, Hashable {
     var videosArray: [SignVideo] {
         return videos ?? []
     }
+    
+    // MARK: - CodingKeys
+    
+    /// Ключи для кодирования/декодирования
+    /// Игнорируем поле embeddings, так как SBERT поиск генерирует embeddings на лету
+    // enum CodingKeys: String, CodingKey {
+    //     case id
+    //     case word
+    //     case description
+    //     case categoryId = "category_id"
+    //     case videos
+    //     case synonyms
+    //     case videoId = "video_id"
+    //     case supabaseStoragePath = "supabase_storage_path"
+    //     case supabaseUrl = "supabase_url"
+    //     case keywords
+    //     case metadata
+    //     // embeddings явно не включено - будет игнорироваться при декодировании
+    // }
 }
 

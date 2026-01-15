@@ -26,7 +26,6 @@ extension Sign {
             categoryId: categoryId,
             videos: nil,
             synonyms: synonyms,
-            embeddings: nil,
             videoId: "video_\(id)",
             supabaseStoragePath: "test/\(id).mp4",
             supabaseUrl: "https://example.com/\(id).mp4",

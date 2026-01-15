@@ -93,7 +93,6 @@ final class MockSyncRepository: SyncRepositoryProtocol {
                     )
                 ],
                 synonyms: nil,
-                embeddings: nil,
                 videoId: nil,
                 supabaseStoragePath: nil,
                 supabaseUrl: nil,

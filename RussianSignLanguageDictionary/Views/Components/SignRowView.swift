@@ -68,7 +68,6 @@ struct SignRowView_Previews: PreviewProvider {
             categoryId: "общение",
             videos: nil,
             synonyms: nil,
-            embeddings: nil,
             videoId: "video_001",
             supabaseStoragePath: "signs/hello.mp4",
             supabaseUrl: "https://example.com/video.mp4",
