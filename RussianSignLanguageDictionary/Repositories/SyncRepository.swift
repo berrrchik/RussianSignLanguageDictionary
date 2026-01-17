@@ -46,7 +46,9 @@ final class SyncRepository: SyncRepositoryProtocol {
         )
     }
     
-    func fetchAllData() async throws -> SyncData {
+    func fetchAllData(
+        cachedDataProvider: @escaping () throws -> SyncData
+    ) async throws -> SyncData {
         let url = buildFetchDataURL()
         let cachedETag = etagManager.getETag(for: .syncData)
         let request = buildRequest(url: url, etag: cachedETag)
@@ -55,28 +57,15 @@ final class SyncRepository: SyncRepositoryProtocol {
         return try await performRequest(
             request: request,
             etagKey: .syncData,
-            notModifiedHandler: { [cacheService, logger] in
-                guard let cached = try? cacheService.load() else {
-                    logger.error("❌ Кеш недоступен при 304 Not Modified")
-                    throw SyncError.networkError(
-                        NSError(domain: "SyncRepository", code: -1, userInfo: [
-                            NSLocalizedDescriptionKey: "Cache unavailable"
-                        ])
-                    )
-                }
-                return cached
+            notModifiedHandler: { [logger] in
+                logger.info("📦 304: Используем кеш памяти")
+                return try cachedDataProvider()
             }
         )
     }
     
     // MARK: - Generic Request Handler
     
-    /// Выполняет HTTP-запрос с поддержкой ETag и обработкой 304 Not Modified
-    /// - Parameters:
-    ///   - request: Сконфигурированный URLRequest
-    ///   - etagKey: Ключ для сохранения ETag
-    ///   - notModifiedHandler: Обработчик для 304 Not Modified
-    /// - Returns: Декодированный ответ
     private func performRequest<T: Decodable>(
         request: URLRequest,
         etagKey: ETagManager.StorageKey,
@@ -91,13 +80,11 @@ final class SyncRepository: SyncRepositoryProtocol {
                 throw SyncError.invalidResponse
             }
             
-            // 304 Not Modified — данные не изменились
             if httpResponse.statusCode == 304 {
                 logger.info("✅ ETag match: 304 Not Modified для \(request.url?.path ?? "")")
                 return try notModifiedHandler()
             }
             
-            // Проверка успешного ответа
             guard httpResponse.statusCode == 200 else {
                 logger.error("❌ Ошибка сервера: \(httpResponse.statusCode)")
                 throw SyncError.serverError(httpResponse.statusCode)
@@ -105,13 +92,10 @@ final class SyncRepository: SyncRepositoryProtocol {
             
             responseData = data
             
-            // Сохраняем новый ETag
             processResponseETag(response: httpResponse, request: request, key: etagKey)
             
-            // Логируем ответ для отладки
             logResponsePreview(data: data, endpoint: request.url?.path ?? "")
             
-            // Декодируем ответ
             return try createDecoder().decode(T.self, from: data)
             
         } catch let error as DecodingError {
@@ -247,8 +231,6 @@ final class SyncRepository: SyncRepositoryProtocol {
     
     // MARK: - Decoder
     
-    /// Создаёт JSONDecoder для Raw API
-    /// Raw API использует Unix timestamp и snake_case ключи
     private func createDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
@@ -289,9 +271,6 @@ final class SyncRepository: SyncRepositoryProtocol {
     
     // MARK: - URL Building
     
-    /// Создаёт URL для проверки обновлений (Raw API: /sync/check/raw)
-    /// - Parameter lastUpdated: Дата последнего обновления (опционально)
-    /// - Returns: URL для запроса или nil при ошибке
     private func buildCheckUpdatesURL(lastUpdated: Date?) -> URL? {
         let endpointURL = baseURL
             .appendingPathComponent("sync")
@@ -315,8 +294,6 @@ final class SyncRepository: SyncRepositoryProtocol {
         return urlComponents.url
     }
     
-    /// Создаёт URL для загрузки всех данных (Raw API: /sync/data/raw)
-    /// - Returns: URL для запроса
     private func buildFetchDataURL() -> URL {
         baseURL
             .appendingPathComponent("sync")
@@ -324,11 +301,6 @@ final class SyncRepository: SyncRepositoryProtocol {
             .appendingPathComponent("raw")
     }
     
-    /// Создаёт URLRequest с условным заголовком If-None-Match
-    /// - Parameters:
-    ///   - url: URL для запроса
-    ///   - etag: ETag для условного запроса (опционально)
-    /// - Returns: Настроенный URLRequest
     private func buildRequest(url: URL, etag: String?) -> URLRequest {
         var request = URLRequest(url: url)
         
