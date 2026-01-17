@@ -49,29 +49,41 @@ final class SyncViewModel: ObservableObject {
         
         if !isConnected {
             print("⚠️ SyncViewModel: Нет подключения к интернету, синхронизация пропущена")
-            // НЕ показываем overlay и НЕ показываем ошибку
-            // Приложение будет работать на кешированных данных
             return
         }
         
-        // Есть интернет - показываем overlay и синхронизируем
         isSyncing = true
         syncError = nil
         
         do {
-            // Проверяем наличие обновлений
             let metadata = try await syncRepository.checkForUpdates(lastUpdated: lastSyncDate)
             
             if metadata.hasUpdates {
                 print("🔄 SyncViewModel: Обнаружены обновления, загрузка данных...")
                 
-                // Загружаем все данные
-                let data = try await syncRepository.fetchAllData()
+                let data = try await syncRepository.fetchAllData(
+                    cachedDataProvider: { [weak self] in
+                        guard let self = self else {
+                            throw SyncError.networkError(
+                                NSError(domain: "SyncViewModel", code: -1, userInfo: [
+                                    NSLocalizedDescriptionKey: "SyncViewModel deallocated"
+                                ])
+                            )
+                        }
+                        
+                        guard let cached = try self.cacheService.load() else {
+                            throw SyncError.networkError(
+                                NSError(domain: "SyncViewModel", code: -1, userInfo: [
+                                    NSLocalizedDescriptionKey: "Cache unavailable for 304"
+                                ])
+                            )
+                        }
+                        return cached
+                    }
+                )
                 
-                // Сохраняем в кеш
                 try cacheService.save(data)
                 
-                // Обновляем дату последней синхронизации
                 lastSyncDate = data.lastUpdated
                 saveLastSyncDate(data.lastUpdated)
                 
@@ -80,7 +92,6 @@ final class SyncViewModel: ObservableObject {
                 print("ℹ️ SyncViewModel: Обновлений нет")
             }
         } catch let error as SyncError {
-            // Обрабатываем ошибки синхронизации
             handleSyncError(error)
         } catch {
             print("❌ SyncViewModel: Неизвестная ошибка синхронизации: \(error)")
@@ -94,24 +105,18 @@ final class SyncViewModel: ObservableObject {
     private func handleSyncError(_ error: SyncError) {
         switch error {
         case .noInternet:
-            // При отсутствии интернета не показываем ошибку пользователю
-            // (приложение будет работать на кешированных данных)
             print("⚠️ SyncViewModel: Нет подключения к интернету, используются кешированные данные")
             syncError = nil
             
         case .serverUnavailable:
-            // Сервер недоступен - не показываем ошибку если есть кеш
-            // (приложение будет работать на кешированных данных)
             print("⚠️ SyncViewModel: Сервер недоступен, используются кешированные данные")
             syncError = nil
             
         case .networkError:
-            // Ошибка сети - не показываем ошибку если есть кеш
             print("⚠️ SyncViewModel: Ошибка сети, используются кешированные данные")
             syncError = nil
             
         default:
-            // Другие ошибки показываем пользователю
             syncError = ErrorMessageMapper.message(for: error)
         }
     }
