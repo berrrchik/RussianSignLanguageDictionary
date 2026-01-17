@@ -60,8 +60,8 @@ final class CacheService {
         
         let fileURL = documentsURL.appendingPathComponent("\(cacheKey).json")
         
-        logger.info("📁 Путь к кешу: \(fileURL.path)")
-        logger.info("📁 Файл существует: \(self.fileManager.fileExists(atPath: fileURL.path))")
+        logger.debug("📁 Путь к кешу: \(fileURL.path)")
+        logger.debug("📁 Файл существует: \(self.fileManager.fileExists(atPath: fileURL.path))")
         
         guard fileManager.fileExists(atPath: fileURL.path) else {
             logger.info("ℹ️ Файл кеша не найден")
@@ -70,33 +70,14 @@ final class CacheService {
         
         do {
             let jsonData = try Data(contentsOf: fileURL)
-            logger.info("📄 Размер файла кеша: \(jsonData.count) байт")
+            logger.debug("📄 Размер файла кеша: \(jsonData.count) байт")
             
-            // Сначала пробуем новый формат (Unix timestamp)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .secondsSince1970
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             
-            do {
-                let data = try decoder.decode(SyncData.self, from: jsonData)
-                logger.info("✅ Данные загружены из кеша (новый формат, \(data.signs.count) жестов, \(data.categories.count) категорий)")
-                return data
-            } catch {
-                // Fallback: пробуем старый формат (ISO 8601) для обратной совместимости
-                logger.info("ℹ️ Попытка загрузки кеша в старом формате (ISO 8601)...")
-                let legacyDecoder = JSONDecoder()
-                legacyDecoder.dateDecodingStrategy = .iso8601
-                legacyDecoder.keyDecodingStrategy = .convertFromSnakeCase
-                
-                let data = try legacyDecoder.decode(SyncData.self, from: jsonData)
-                logger.info("✅ Данные загружены из кеша (legacy формат, \(data.signs.count) жестов, \(data.categories.count) категорий)")
-                
-                // Пересохраняем в новом формате для будущих загрузок
-                logger.info("🔄 Миграция кеша на новый формат...")
-                try? save(data)
-                
-                return data
-            }
+            let data = try decoder.decode(SyncData.self, from: jsonData)
+            return data
         } catch let decodingError as DecodingError {
             logger.error("❌ Ошибка декодирования кеша: \(String(describing: decodingError))")
             throw CacheError.unableToLoad(decodingError)
