@@ -8,6 +8,7 @@ struct MainView: View {
     
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
     @StateObject private var syncViewModel: SyncViewModel
+    @State private var isInitialized = false
     
     // MARK: - Init
  
@@ -38,6 +39,35 @@ struct MainView: View {
     // MARK: - Body
     
     var body: some View {
+        ZStack {
+            if isInitialized {
+                tabView
+            } else {
+                LoadingView(message: "Загрузка данных...")
+            }
+        }
+        .task {
+            await initializeApp()
+        }
+        .overlay {
+            if syncViewModel.isSyncing {
+                syncOverlay
+            }
+        }
+        .alert("Ошибка синхронизации", isPresented: .constant(syncViewModel.syncError != nil)) {
+            Button("OK") {
+                syncViewModel.clearError()
+            }
+        } message: {
+            if let error = syncViewModel.syncError {
+                Text(error)
+            }
+        }
+    }
+    
+    // MARK: - Subviews
+    
+    private var tabView: some View {
         TabView {
             SearchView(
                 signRepository: signRepository,
@@ -64,40 +94,34 @@ struct MainView: View {
                 Label("Категории", systemImage: "square.grid.2x2")
             }
         }
-        .task {
-            favoritesRepository.setSignRepository(signRepository)
-            await CategoryService.loadCategories(from: signRepository)
-            await syncViewModel.sync()
-        }
-        .overlay {
-            if syncViewModel.isSyncing {
-                ZStack {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                        Text("Синхронизация...")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                    }
-                    .padding()
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                    .shadow(radius: 10)
-                }
+    }
+    
+    private var syncOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("Синхронизация...")
+                    .font(.headline)
+                    .foregroundColor(.primary)
             }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(radius: 10)
         }
-        .alert("Ошибка синхронизации", isPresented: .constant(syncViewModel.syncError != nil)) {
-            Button("OK") {
-                syncViewModel.clearError()
-            }
-        } message: {
-            if let error = syncViewModel.syncError {
-                Text(error)
-            }
-        }
+    }
+    
+    // MARK: - Initialization
+    
+    private func initializeApp() async {
+        guard !isInitialized else { return }
+        favoritesRepository.setSignRepository(signRepository)
+        await CategoryService.loadCategories(from: signRepository)
+        isInitialized = true
     }
 }
 
@@ -111,5 +135,3 @@ struct MainView_Previews: PreviewProvider {
     }
 }
 #endif
-
-
