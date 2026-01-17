@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 @MainActor
 final class CategoriesViewModel: ObservableObject {
@@ -22,6 +23,7 @@ final class CategoriesViewModel: ObservableObject {
     
     private let signRepository: SignRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Init
     
@@ -31,6 +33,13 @@ final class CategoriesViewModel: ObservableObject {
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
+        
+        NotificationCenter.default.publisher(for: .categoriesDidUpdate)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.reloadCategories()
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -61,10 +70,21 @@ final class CategoriesViewModel: ObservableObject {
         await loadCategories()
     }
     
+    private func reloadCategories() {
+        Task { @MainActor in
+            do {
+                let loadedCategories = try await signRepository.loadCategories()
+                categories = loadedCategories.sorted { $0.order < $1.order }
+                print("🔄 CategoriesViewModel: UI обновлён (\(categories.count) категорий)")
+            } catch {
+                print("⚠️ CategoriesViewModel: Не удалось обновить UI")
+            }
+        }
+    }
+    
     // MARK: - Private Methods
     
     private func errorMessage(for error: SignRepositoryError) -> String {
         return ErrorMessageMapper.message(for: error)
     }
 }
-
