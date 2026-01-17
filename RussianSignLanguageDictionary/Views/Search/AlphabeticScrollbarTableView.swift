@@ -21,6 +21,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         tableView.sectionIndexTrackingBackgroundColor = .clear
         
         tableView.contentInsetAdjustmentBehavior = .never
+        context.coordinator.tableView = tableView
         
         return tableView
     }
@@ -29,6 +30,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         context.coordinator.sections = sections
         context.coordinator.favoritesRepository = favoritesRepository
         context.coordinator.getCategoryName = getCategoryName
+        context.coordinator.tableView = uiView
         
         uiView.reloadData()
     }
@@ -53,6 +55,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         var favoritesRepository: FavoritesRepositoryProtocol?
         var getCategoryName: (String) -> String
         let onSignSelected: (Sign) -> Void
+        weak var tableView: UITableView?
+        private var notificationObserver: NSObjectProtocol?
         
         init(
             sections: [SearchViewModel.SignSection],
@@ -64,11 +68,31 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             self.favoritesRepository = favoritesRepository
             self.getCategoryName = getCategoryName
             self.onSignSelected = onSignSelected
+            super.init()
+            
+            notificationObserver = NotificationCenter.default.addObserver(
+                forName: .categoriesDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.reloadVisibleCells()
+            }
         }
         
         func cleanup() {
             sections.removeAll()
             favoritesRepository = nil
+            if let observer = notificationObserver {
+                NotificationCenter.default.removeObserver(observer)
+                notificationObserver = nil
+            }
+        }
+        
+        private func reloadVisibleCells() {
+            guard let tableView = tableView else { return }
+            if let visibleIndexPaths = tableView.indexPathsForVisibleRows {
+                tableView.reloadRows(at: visibleIndexPaths, with: .none)
+            }
         }
         
         // MARK: - UITableViewDataSource
