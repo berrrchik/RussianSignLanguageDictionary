@@ -1,9 +1,13 @@
 import Foundation
 import SwiftUI
+import os.log
 
 /// ViewModel для управления синхронизацией данных
 @MainActor
 final class SyncViewModel: ObservableObject {
+    // MARK: - Logger
+    
+    private let logger = Logger(subsystem: "com.rsl.sync", category: "SyncViewModel")
     // MARK: - Published Properties
     
     /// Флаг выполнения синхронизации
@@ -48,7 +52,7 @@ final class SyncViewModel: ObservableObject {
         let isConnected = await networkMonitor.checkConnection()
         
         if !isConnected {
-            print("⚠️ SyncViewModel: Нет подключения к интернету, синхронизация пропущена")
+            logger.info("⚠️ Нет подключения к интернету, синхронизация пропущена")
             return
         }
         
@@ -59,7 +63,7 @@ final class SyncViewModel: ObservableObject {
             let metadata = try await syncRepository.checkForUpdates(lastUpdated: lastSyncDate)
             
             if metadata.hasUpdates {
-                print("🔄 SyncViewModel: Обнаружены обновления, загрузка данных...")
+                logger.info("🔄 Обнаружены обновления, загрузка данных...")
                 
                 let data = try await syncRepository.fetchAllData(
                     cachedDataProvider: { [weak self] in
@@ -87,14 +91,14 @@ final class SyncViewModel: ObservableObject {
                 lastSyncDate = data.lastUpdated
                 saveLastSyncDate(data.lastUpdated)
                 
-                print("✅ SyncViewModel: Синхронизация завершена успешно")
+                logger.info("✅ Синхронизация завершена успешно")
             } else {
-                print("ℹ️ SyncViewModel: Обновлений нет")
+                logger.info("ℹ️ Обновлений нет")
             }
         } catch let error as SyncError {
             handleSyncError(error)
         } catch {
-            print("❌ SyncViewModel: Неизвестная ошибка синхронизации: \(error)")
+            logger.error("❌ Неизвестная ошибка синхронизации: \(error.localizedDescription)")
             syncError = "Ошибка синхронизации: \(error.localizedDescription)"
         }
         
@@ -105,15 +109,15 @@ final class SyncViewModel: ObservableObject {
     private func handleSyncError(_ error: SyncError) {
         switch error {
         case .noInternet:
-            print("⚠️ SyncViewModel: Нет подключения к интернету, используются кешированные данные")
+            logger.info("⚠️ Нет подключения к интернету, используются кешированные данные")
             syncError = nil
             
         case .serverUnavailable:
-            print("⚠️ SyncViewModel: Сервер недоступен, используются кешированные данные")
+            logger.info("⚠️ Сервер недоступен, используются кешированные данные")
             syncError = nil
             
         case .networkError:
-            print("⚠️ SyncViewModel: Ошибка сети, используются кешированные данные")
+            logger.info("⚠️ Ошибка сети, используются кешированные данные")
             syncError = nil
             
         default:
