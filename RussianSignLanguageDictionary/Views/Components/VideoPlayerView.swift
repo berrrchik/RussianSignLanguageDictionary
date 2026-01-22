@@ -1,20 +1,30 @@
 import SwiftUI
 import AVKit
 
+/// Ориентация видео
+enum VideoOrientation {
+    case vertical
+    case horizontal 
+}
+
 struct VideoPlayerView: View {
     let videoURL: URL
+    let orientation: VideoOrientation
+    
     @State private var player: AVPlayer?
     @State private var loopObserver: NSObjectProtocol?
+    @State private var isReadyToPlay = false
     
-    init(videoURL: URL) {
+    init(videoURL: URL, orientation: VideoOrientation = .vertical) {
         self.videoURL = videoURL
+        self.orientation = orientation
     }
     
     var body: some View {
         ZStack {
-            if let player = player {
+            if let player = player, isReadyToPlay {
                 VideoPlayer(player: player)
-                    .aspectRatio(LayoutConstants.VideoPlayer.verticalAspectRatio, contentMode: .fit)
+                    .aspectRatio(aspectRatio, contentMode: .fit)
                     .cornerRadius(LayoutConstants.VideoPlayer.cornerRadius)
                     .onAppear {
                         player.play()
@@ -34,26 +44,54 @@ struct VideoPlayerView: View {
         }
     }
     
+    // MARK: - Computed Properties
+    
+    private var aspectRatio: CGFloat {
+        switch orientation {
+        case .vertical:
+            return LayoutConstants.VideoPlayer.verticalAspectRatio
+        case .horizontal:
+            return LayoutConstants.VideoPlayer.horizontalAspectRatio
+        }
+    }
+    
     // MARK: - Private Methods
     
     private func setupPlayer() {
         cleanupPlayer()
+        isReadyToPlay = false
         
-        let playerItem = AVPlayerItem(url: videoURL)
-        let newPlayer = AVPlayer(playerItem: playerItem)
-        newPlayer.actionAtItemEnd = .none
+        // Используем AVURLAsset для асинхронной загрузки метаданных
+        let asset = AVURLAsset(url: videoURL)
         
-        loopObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: playerItem,
-            queue: .main
-        ) { _ in
-            newPlayer.seek(to: .zero)
-            newPlayer.play()
+        Task {
+            // Асинхронно загружаем необходимые свойства перед воспроизведением
+            do {
+                let isPlayable = try await asset.load(.isPlayable)
+                guard isPlayable else { return }
+                
+                await MainActor.run {
+                    let playerItem = AVPlayerItem(asset: asset)
+                    let newPlayer = AVPlayer(playerItem: playerItem)
+                    newPlayer.actionAtItemEnd = .none
+                    
+                    loopObserver = NotificationCenter.default.addObserver(
+                        forName: .AVPlayerItemDidPlayToEndTime,
+                        object: playerItem,
+                        queue: .main
+                    ) { _ in
+                        newPlayer.seek(to: .zero)
+                        newPlayer.play()
+                    }
+                    
+                    self.player = newPlayer
+                    self.isReadyToPlay = true
+                    newPlayer.play()
+                }
+            } catch {
+                // Ошибка загрузки ассета — показываем LoadingView
+            }
         }
-        
-        self.player = newPlayer
-        newPlayer.play()
     }
     
     private func cleanupPlayer() {
@@ -65,6 +103,7 @@ struct VideoPlayerView: View {
         }
         
         player = nil
+        isReadyToPlay = false
     }
 }
 
