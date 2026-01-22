@@ -11,8 +11,9 @@ protocol SyncRepositoryProtocol {
 }
 
 /// Данные синхронизации с сервера
-struct SyncData: Codable {
-    let categories: [Category]
-    let signs: [Sign]
-    let lastUpdated: Date
-}
+//struct SyncData: Codable {
+//    let categories: [Category]
+//    let signs: [Sign]
+//    let lessons: [Lesson]
+//    let lastUpdated: Date
+//}
