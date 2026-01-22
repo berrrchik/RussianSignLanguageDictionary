@@ -19,6 +19,24 @@ enum VideoRepositoryError: Error {
     /// Краткосрочный кеш AVPlayer не сохраняется между запусками приложения,
     /// поэтому для просмотра видео не избранных жестов требуется интернет
     case noInternetConnection
+    
+    // MARK: - Factory Methods
+    
+    /// Создаёт VideoRepositoryError из VideoCacheError
+    /// - Parameter error: Ошибка кеширования видео
+    /// - Returns: Соответствующий VideoRepositoryError
+    static func from(_ error: VideoCacheError) -> VideoRepositoryError {
+        switch error {
+        case .invalidURL:
+            return .invalidURL
+        case .downloadFailed:
+            return .downloadFailed
+        case .fileNotFound:
+            return .videoNotCached
+        case .cacheDirectoryNotAvailable, .sessionNotConfigured:
+            return .downloadFailed
+        }
+    }
 }
 
 // MARK: - Equatable
@@ -41,4 +59,3 @@ extension VideoRepositoryError: Equatable {
         }
     }
 }
-

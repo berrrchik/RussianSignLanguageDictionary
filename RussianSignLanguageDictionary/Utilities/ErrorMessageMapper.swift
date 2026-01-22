@@ -107,6 +107,19 @@ enum ErrorMessageMapper {
         }
     }
     
+    static func message(for error: LessonRepositoryError) -> String {
+        switch error {
+        case .noDataAvailable:
+            return "Данные уроков недоступны. Попробуйте сначала выполнить синхронизацию."
+        case .invalidURL:
+            return "Неверный адрес видео урока"
+        case .noInternetConnection:
+            return "Нет подключения к интернету. Видео уроков доступно только при наличии интернета."
+        case .downloadFailed:
+            return "Не удалось загрузить видео урока. Попробуйте позже."
+        }
+    }
+    
     // MARK: - Generic Error Mapping
     
     static func message(for error: Error) -> String {
@@ -132,6 +145,10 @@ enum ErrorMessageMapper {
         
         if let sbertError = error as? SBERTSearchError {
             return message(for: sbertError)
+        }
+        
+        if let lessonError = error as? LessonRepositoryError {
+            return message(for: lessonError)
         }
         
         return "Произошла ошибка: \(error.localizedDescription)"

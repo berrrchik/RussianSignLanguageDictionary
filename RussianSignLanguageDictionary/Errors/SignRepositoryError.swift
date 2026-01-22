@@ -17,6 +17,37 @@ enum SignRepositoryError: Error {
     
     /// Данные недоступны (нет кеша и нет интернета)
     case noDataAvailable
+    
+    // MARK: - Factory Methods
+    
+    /// Создаёт SignRepositoryError из SyncError
+    /// - Parameter error: Ошибка синхронизации
+    /// - Returns: Соответствующий SignRepositoryError
+    static func from(_ error: Error) -> SignRepositoryError {
+        if let syncError = error as? SyncError {
+            switch syncError {
+            case .noInternet:
+                return .noDataAvailable
+            case .serverUnavailable, .serverError, .invalidResponse:
+                return .noDataAvailable
+            case .decodingError(let underlying):
+                return .decodingError(underlying)
+            case .networkError:
+                return .noDataAvailable
+            }
+        }
+        
+        if let cacheError = error as? CacheError {
+            switch cacheError {
+            case .unableToLoad:
+                return .noDataAvailable
+            case .unableToAccessDocumentsDirectory, .unableToSave:
+                return .noDataAvailable
+            }
+        }
+        
+        return .noDataAvailable
+    }
 }
 
 // MARK: - Equatable
@@ -40,4 +71,3 @@ extension SignRepositoryError: Equatable {
         }
     }
 }
-
