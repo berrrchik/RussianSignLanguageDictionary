@@ -15,6 +15,8 @@ protocol VideoRepositoryProtocol {
     /// - Throws: VideoRepositoryError в случае ошибки
     func getVideoURL(for sign: Sign) async throws -> URL
     
+    func getVideoURL(for lesson: Lesson) async throws -> URL
+    
     /// Получает URL видео для указанного видео объекта
     /// - Parameters:
     ///   - video: Модель видео

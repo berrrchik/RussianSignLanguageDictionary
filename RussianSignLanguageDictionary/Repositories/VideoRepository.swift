@@ -93,6 +93,21 @@ final class VideoRepository: VideoRepositoryProtocol {
         }
     }
     
+    func getVideoURL(for lesson: Lesson) async throws -> URL {
+        guard let url = URL(string: lesson.videoUrl) else {
+            logger.error("❌ Lesson video: невалидный URL для урока \(lesson.id) (\(lesson.videoUrl))")
+            throw VideoRepositoryError.invalidURL
+        }
+        
+        let isConnected = await networkMonitor.checkConnection()
+        if !isConnected {
+            logger.warning("⚠️ Lesson video: нет интернета для загрузки видео урока \(lesson.id)")
+            throw VideoRepositoryError.noInternetConnection
+        }
+        
+        return url
+    }
+    
     func preloadVideo(for sign: Sign) async throws {
         // Загрузка URL в кэш
         _ = try await getVideoURL(for: sign)
@@ -147,6 +162,8 @@ final class VideoRepository: VideoRepositoryProtocol {
             let cachedFileURL = try await videoCacheService.downloadAndCache(video: video)
             logger.info("✅ Видео \(videoId) сохранено в файловый кеш")
             return cachedFileURL
+        } catch let error as VideoCacheError {
+            throw VideoRepositoryError.from(error)
         } catch {
             logger.error("❌ Ошибка загрузки видео \(videoId): \(error.localizedDescription)")
             throw VideoRepositoryError.downloadFailed
