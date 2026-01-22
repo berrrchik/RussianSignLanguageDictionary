@@ -25,6 +25,7 @@ final class MockSyncRepository: SyncRepositoryProtocol {
     var checkForUpdatesCalled = false
     var fetchAllDataCalled = false
     var lastUpdatedParameter: Date?
+    var cachedDataProviderCalled = false
     
     // MARK: - SyncRepositoryProtocol
     
@@ -39,13 +40,19 @@ final class MockSyncRepository: SyncRepositoryProtocol {
         }
     }
     
-    func fetchAllData() async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
         fetchAllDataCalled = true
         
         if shouldSucceed {
             return dataToReturn ?? createMockSyncData()
         } else {
-            throw errorToThrow
+            // При ошибке можно попробовать использовать кеш
+            do {
+                cachedDataProviderCalled = true
+                return try cachedDataProvider()
+            } catch {
+                throw errorToThrow
+            }
         }
     }
     
@@ -101,9 +108,31 @@ final class MockSyncRepository: SyncRepositoryProtocol {
             )
         }
         
+        let lessons = [
+            Lesson(
+                id: "lesson_1",
+                title: "Тестовый урок 1",
+                description: "Описание тестового урока 1",
+                videoUrl: "https://example.com/lesson1.mp4",
+                order: 1,
+                createdAt: Date(),
+                updatedAt: Date()
+            ),
+            Lesson(
+                id: "lesson_2",
+                title: "Тестовый урок 2",
+                description: "Описание тестового урока 2",
+                videoUrl: "https://example.com/lesson2.mp4",
+                order: 2,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        ]
+        
         return SyncData(
             categories: categories,
             signs: signs,
+            lessons: lessons,
             lastUpdated: Date()
         )
     }
@@ -115,6 +144,7 @@ final class MockSyncRepository: SyncRepositoryProtocol {
         errorToThrow = .serverUnavailable
         checkForUpdatesCalled = false
         fetchAllDataCalled = false
+        cachedDataProviderCalled = false
         lastUpdatedParameter = nil
         dataToReturn = nil
     }

@@ -34,6 +34,22 @@ final class MockVideoRepository: VideoRepositoryProtocol {
         return mockURL
     }
     
+    func getVideoURL(for lesson: Lesson) async throws -> URL {
+        if shouldFail {
+            throw errorToThrow
+        }
+        
+        // Имитация небольшой задержки
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунда
+        
+        // Используем URL из урока или fallback на mockURL
+        if let url = URL(string: lesson.videoUrl) {
+            return url
+        }
+        
+        return mockURL
+    }
+    
     func getVideoURL(for video: SignVideo, useFavoritesCache: Bool) async throws -> URL {
         if shouldFail {
             throw errorToThrow
