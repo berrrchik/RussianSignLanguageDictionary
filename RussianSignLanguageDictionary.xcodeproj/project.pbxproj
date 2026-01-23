@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5739AE6A2F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll in Frameworks */ = {isa = PBXBuildFile; productRef = 5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */; };
 		57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668A2EC78C50007D9784 /* PostgREST */; };
 		57D3668D2EC78C50007D9784 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668C2EC78C50007D9784 /* Storage */; };
 		57D366982ECA4C6C007D9784 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 57D366972ECA4C6C007D9784 /* Supabase */; };
@@ -48,6 +49,7 @@
 			files = (
 				57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */,
 				57D3668D2EC78C50007D9784 /* Storage in Frameworks */,
+				5739AE6A2F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll in Frameworks */,
 				57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */,
 				57D366982ECA4C6C007D9784 /* Supabase in Frameworks */,
 			);
@@ -113,6 +115,7 @@
 				57D3668C2EC78C50007D9784 /* Storage */,
 				57D366972ECA4C6C007D9784 /* Supabase */,
 				57D3669A2ECA5716007D9784 /* SimilaritySearchKit */,
+				5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */,
 			);
 			productName = RussianSignLanguageDictionary;
 			productReference = 57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */;
@@ -492,6 +495,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */;
+			productName = SimilaritySearchKitMiniLMAll;
+		};
 		57D3668A2EC78C50007D9784 /* PostgREST */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
