@@ -4,15 +4,23 @@ import XCTest
 final class VideoRepositoryTests: XCTestCase {
     
     var sut: VideoRepository!
+    var mockNetworkMonitor: MockNetworkMonitor!
     
     override func setUp() {
         super.setUp()
-        sut = VideoRepository()
+        mockNetworkMonitor = MockNetworkMonitor()
+        mockNetworkMonitor.setConnected(true)
+        sut = VideoRepository(
+            videoCacheService: VideoCacheService.shared,
+            networkMonitor: mockNetworkMonitor
+        )
     }
     
     override func tearDown() {
         sut?.clearCache()
+        VideoCacheService.shared.clearAllCache()
         sut = nil
+        mockNetworkMonitor = nil
         super.tearDown()
     }
     
@@ -32,16 +40,29 @@ final class VideoRepositoryTests: XCTestCase {
             word: "Привет",
             description: "Приветствие",
             category: "emotions",
+            videos: nil,
+            synonyms: nil,
+            embeddings: nil,
             videoId: "video_001",
             supabaseStoragePath: "signs/emotions/video_001.mp4",
             supabaseUrl: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
             keywords: ["привет", "здравствуй"],
-            embeddings: [0.123, 0.456],
             metadata: metadata
         )
     }
     
-    // MARK: - Tests
+    private func createMockVideo(id: Int = 1) -> SignVideo {
+        return SignVideo(
+            id: id,
+            url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/test/video_\(id).mp4",
+            contextDescription: "Test video \(id)",
+            order: 1,
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+    
+    // MARK: - Basic Tests
     
     func testGetVideoURL() async throws {
         let sign = createMockSign()
@@ -88,11 +109,13 @@ final class VideoRepositoryTests: XCTestCase {
             word: "Test",
             description: "Test",
             category: "test",
+            videos: nil,
+            synonyms: nil,
+            embeddings: nil,
             videoId: "video_invalid",
             supabaseStoragePath: "invalid/path",
             supabaseUrl: "ht!tp://invalid url with spaces",
             keywords: [],
-            embeddings: [],
             metadata: metadata
         )
         
@@ -102,6 +125,93 @@ final class VideoRepositoryTests: XCTestCase {
         } catch {
             XCTAssertTrue(error is VideoRepositoryError)
         }
+    }
+    
+    // MARK: - Two-Level Caching Tests
+    
+    func testGetVideoURLForVideoWithShortTermCache() async throws {
+        // Given
+        let video = createMockVideo()
+        mockNetworkMonitor.setConnected(true)
+        
+        // When
+        let url = try await sut.getVideoURL(for: video, useFavoritesCache: false)
+        
+        // Then
+        XCTAssertNotNil(url)
+        XCTAssertEqual(url.absoluteString, video.url)
+    }
+    
+    func testGetVideoURLForVideoWithNoInternetThrowsError() async {
+        // Given
+        let video = createMockVideo()
+        mockNetworkMonitor.setConnected(false)
+        
+        // When/Then
+        do {
+            _ = try await sut.getVideoURL(for: video, useFavoritesCache: false)
+            XCTFail("Должна быть выброшена ошибка noInternetConnection")
+        } catch let error as VideoRepositoryError {
+            XCTAssertEqual(error, VideoRepositoryError.noInternetConnection)
+        } catch {
+            XCTFail("Неожиданный тип ошибки: \(error)")
+        }
+    }
+    
+    func testGetVideoURLWithFavoritesCacheNoInternetThrowsVideoNotCached() async {
+        // Given
+        let video = createMockVideo()
+        mockNetworkMonitor.setConnected(false)
+        VideoCacheService.shared.clearAllCache()
+        
+        // When/Then
+        do {
+            _ = try await sut.getVideoURL(for: video, useFavoritesCache: true)
+            XCTFail("Должна быть выброшена ошибка videoNotCached")
+        } catch let error as VideoRepositoryError {
+            XCTAssertEqual(error, VideoRepositoryError.videoNotCached)
+        } catch {
+            XCTFail("Неожиданный тип ошибки: \(error)")
+        }
+    }
+    
+    func testGetVideoURLWithInvalidVideoURL() async throws {
+        // Given
+        let videoWithInvalidURL = SignVideo(
+            id: 999,
+            url: "not a valid url",
+            contextDescription: "Invalid",
+            order: 1,
+            createdAt: nil,
+            updatedAt: nil
+        )
+        
+        // When/Then
+        // Для краткосрочного кеша невалидный URL всё равно возвращается
+        // (AVPlayer сам обработает ошибку при загрузке)
+        let url = try await sut.getVideoURL(for: videoWithInvalidURL, useFavoritesCache: false)
+        XCTAssertNotNil(url)
+        
+        // Для favorites cache должна быть ошибка invalidURL
+        do {
+            _ = try await sut.getVideoURL(for: videoWithInvalidURL, useFavoritesCache: true)
+            XCTFail("Должна быть выброшена ошибка invalidURL для favorites cache")
+        } catch let error as VideoRepositoryError {
+            XCTAssertEqual(error, VideoRepositoryError.invalidURL)
+        } catch {
+            XCTFail("Неожиданный тип ошибки: \(error)")
+        }
+    }
+    
+    func testPreloadVideoWithFavoritesCache() async throws {
+        // Given
+        let video = createMockVideo()
+        mockNetworkMonitor.setConnected(true)
+        
+        // When/Then - не должен крашиться
+        // Примечание: реальная предзагрузка требует сетевого запроса,
+        // что выходит за рамки unit-теста
+        try await sut.preloadVideo(video: video, useFavoritesCache: true)
     }
 }
 

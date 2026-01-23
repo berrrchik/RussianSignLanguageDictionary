@@ -19,11 +19,13 @@ final class SignsDataTests: XCTestCase {
             word: "Привет",
             description: "Приветствие",
             category: "emotions",
+            videos: nil,
+            synonyms: nil,
+            embeddings: nil,
             videoId: "video_001",
             supabaseStoragePath: "signs/emotions/video_001.mp4",
             supabaseUrl: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
             keywords: ["привет", "здравствуй"],
-            embeddings: [0.123, 0.456],
             metadata: metadata
         )
         
@@ -33,7 +35,9 @@ final class SignsDataTests: XCTestCase {
             order: 1,
             signCount: 1,
             icon: "face.smiling",
-            color: "#FF9500"
+            color: "#FF9500",
+            createdAt: nil,
+            updatedAt: nil
         )
         
         return SignsData(

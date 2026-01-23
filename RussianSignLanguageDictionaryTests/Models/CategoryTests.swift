@@ -12,7 +12,9 @@ final class CategoryTests: XCTestCase {
             order: 1,
             signCount: 50,
             icon: "face.smiling",
-            color: "#FF9500"
+            color: "#FF9500",
+            createdAt: nil,
+            updatedAt: nil
         )
     }
     

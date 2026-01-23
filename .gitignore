@@ -94,7 +94,8 @@ iOSInjectionProject/
 
 
 # Supabase Config (contains sensitive keys)
-RussianSignLanguageDictionary/SupabaseConfig.swift
+RussianSignLanguageDictionary/Config/
+Config/
 
 # Environment variables
 .env
@@ -106,6 +107,14 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+*.py
+*.py
+
+# Documentation files (markdown)
+*.md
+
+# Documentation files (markdown)
+*.md
 
 # Backup files
 *.backup_*

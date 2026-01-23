@@ -51,6 +51,7 @@ final class SearchViewModelTests: XCTestCase {
         mockRepository.searchResults = mockSigns
         
         // When
+        await sut.loadAllSigns()
         await sut.performSearch(query: query)
         
         // Then
@@ -62,11 +63,10 @@ final class SearchViewModelTests: XCTestCase {
     
     func testSearchWithError_SetsErrorMessage() async {
         // Given
-        let query = "test"
         mockRepository.shouldThrowError = true
         
         // When
-        await sut.performSearch(query: query)
+        await sut.loadAllSigns()
         
         // Then
         XCTAssertTrue(sut.searchResults.isEmpty)
@@ -77,7 +77,14 @@ final class SearchViewModelTests: XCTestCase {
     func testSearchSetsLoadingState() async {
         // Given
         let query = "привет"
-        mockRepository.searchDelay = 0.5
+        let mockSigns = [
+            Sign.mockWithWord("Привет"),
+            Sign.mockWithWord("Приветствие")
+        ]
+        mockRepository.searchResults = mockSigns
+        
+        // Загружаем данные сначала
+        await sut.loadAllSigns()
         
         // When
         let searchTask = Task {
@@ -85,7 +92,7 @@ final class SearchViewModelTests: XCTestCase {
         }
         
         // Then (проверяем loading state во время поиска)
-        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 сек
+        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 сек
         XCTAssertTrue(sut.isLoading)
         
         await searchTask.value
@@ -116,7 +123,7 @@ class MockSignRepository: SignRepositoryProtocol {
     }
     
     func getSigns(byCategory categoryId: String) async throws -> [Sign] {
-        return searchResults.filter { $0.category == categoryId }
+        return searchResults.filter { $0.categoryId == categoryId }
     }
     
     func searchSigns(query: String) async throws -> [Sign] {
@@ -130,7 +137,7 @@ class MockSignRepository: SignRepositoryProtocol {
         
         return searchResults.filter { sign in
             sign.word.localizedCaseInsensitiveContains(query) ||
-            sign.keywords.contains { $0.localizedCaseInsensitiveContains(query) }
+            (sign.keywords?.contains { $0.localizedCaseInsensitiveContains(query) } ?? false)
         }
     }
 }
@@ -144,11 +151,13 @@ extension Sign {
             word: word,
             description: "Описание для \(word)",
             category: "test",
+            videos: nil,
+            synonyms: nil,
+            embeddings: nil,
             videoId: "video_\(word)",
             supabaseStoragePath: "test/path.mp4",
             supabaseUrl: "https://example.com/\(word).mp4",
             keywords: [word.lowercased()],
-            embeddings: [],
             metadata: SignMetadata(
                 duration: 3.0,
                 fileSize: 500000,

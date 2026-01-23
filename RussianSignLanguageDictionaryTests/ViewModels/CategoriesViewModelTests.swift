@@ -144,7 +144,9 @@ extension RussianSignLanguageDictionary.Category {
             order: order,
             signCount: 10,
             icon: nil,
-            color: nil
+            color: nil,
+            createdAt: nil,
+            updatedAt: nil
         )
     }
 }

@@ -18,12 +18,13 @@ final class SignTests: XCTestCase {
             id: "sign_001",
             word: "Привет",
             description: "Приветствие",
-            category: "emotions",
+            categoryId: "emotions",
+            videos: nil,
+            synonyms: nil,
             videoId: "video_001",
             supabaseStoragePath: "signs/emotions/video_001.mp4",
             supabaseUrl: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
             keywords: ["привет", "здравствуй", "приветствие"],
-            embeddings: [0.123, 0.456, 0.789],
             metadata: metadata
         )
     }
@@ -36,10 +37,9 @@ final class SignTests: XCTestCase {
         XCTAssertEqual(sign.id, "sign_001")
         XCTAssertEqual(sign.word, "Привет")
         XCTAssertEqual(sign.description, "Приветствие")
-        XCTAssertEqual(sign.category, "emotions")
+        XCTAssertEqual(sign.categoryId, "emotions")
         XCTAssertEqual(sign.videoId, "video_001")
-        XCTAssertEqual(sign.keywords.count, 3)
-        XCTAssertEqual(sign.embeddings.count, 3)
+        XCTAssertEqual(sign.keywords?.count, 3)
     }
     
     func testSignIdentifiable() {
@@ -68,23 +68,22 @@ final class SignTests: XCTestCase {
         
         XCTAssertEqual(sign.id, decodedSign.id)
         XCTAssertEqual(sign.word, decodedSign.word)
-        XCTAssertEqual(sign.category, decodedSign.category)
+        XCTAssertEqual(sign.categoryId, decodedSign.categoryId)
         XCTAssertEqual(sign.supabaseUrl, decodedSign.supabaseUrl)
     }
     
     func testSignDecodingFromSnakeCase() throws {
-        // JSON в snake_case формате (как в Bundle)
+        // JSON в snake_case формате (как приходит с сервера)
         let json = """
         {
             "id": "sign_001",
             "word": "Привет",
             "description": "Приветствие",
-            "category": "emotions",
+            "category_id": "emotions",
             "video_id": "video_001",
             "supabase_storage_path": "signs/emotions/video_001.mp4",
             "supabase_url": "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
             "keywords": ["привет", "здравствуй"],
-            "embeddings": [0.123, 0.456],
             "metadata": {
                 "duration": 3.5,
                 "file_size": 512000,
@@ -95,7 +94,7 @@ final class SignTests: XCTestCase {
         }
         """.data(using: .utf8)!
         
-        // Декодирование с convertFromSnakeCase (как в SignRepository)
+        // Декодирование с convertFromSnakeCase (автоматическая конвертация snake_case -> camelCase)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let sign = try decoder.decode(Sign.self, from: json)
