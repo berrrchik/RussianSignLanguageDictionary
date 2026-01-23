@@ -1,7 +1,11 @@
 import Foundation
+import os.log
 
 @MainActor
 final class FavoritesViewModel: ObservableObject {
+    // MARK: - Logger
+    
+    private let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesViewModel")
     // MARK: - Published Properties
     
     @Published private(set) var favoriteSigns: [Sign] = []
@@ -67,16 +71,12 @@ final class FavoritesViewModel: ObservableObject {
             let failedCount = favoriteIds.count - loadedSigns.count
             if failedCount > 0 {
                 errorMessage = "Не удалось загрузить \(failedCount) жестов"
-                #if DEBUG
                 let missingIds = Set(favoriteIds).subtracting(loadedSigns.map { $0.id })
-                print("⚠️ FavoritesViewModel: Missing signs: \(missingIds)")
-                #endif
+                logger.warning("⚠️ Missing signs: \(missingIds)")
             }
         } catch {
             errorMessage = ErrorMessageMapper.message(for: error)
-            #if DEBUG
-            print("❌ FavoritesViewModel: Failed to load all signs: \(error)")
-            #endif
+            logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
         }
         
         isLoading = false

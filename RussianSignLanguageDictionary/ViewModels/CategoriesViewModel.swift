@@ -1,8 +1,12 @@
 import Foundation
 import Combine
+import os.log
 
 @MainActor
 final class CategoriesViewModel: ObservableObject {
+    // MARK: - Logger
+    
+    private let logger = Logger(subsystem: "com.rsl.categories", category: "CategoriesViewModel")
     // MARK: - Published Properties
     
     @Published private(set) var categories: [Category] = []
@@ -75,9 +79,9 @@ final class CategoriesViewModel: ObservableObject {
             do {
                 let loadedCategories = try await signRepository.loadCategories()
                 categories = loadedCategories.sorted { $0.order < $1.order }
-                print("🔄 CategoriesViewModel: UI обновлён (\(categories.count) категорий)")
+                logger.info("🔄 UI обновлён (\(self.categories.count) категорий)")
             } catch {
-                print("⚠️ CategoriesViewModel: Не удалось обновить UI")
+                logger.warning("⚠️ Не удалось обновить UI: \(error.localizedDescription)")
             }
         }
     }

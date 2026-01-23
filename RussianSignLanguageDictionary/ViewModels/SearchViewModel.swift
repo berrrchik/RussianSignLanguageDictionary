@@ -1,8 +1,12 @@
 import Foundation
 import Combine
+import os.log
 
 @MainActor
 final class SearchViewModel: ObservableObject {
+    // MARK: - Logger
+    
+    private let logger = Logger(subsystem: "com.rsl.search", category: "SearchViewModel")
     // MARK: - Constants
     
     private enum Constants {
@@ -87,22 +91,8 @@ final class SearchViewModel: ObservableObject {
         
         do {
             let signs = try await signRepository.loadAllSigns()
-            allSigns = signs
+            updateSearchData(with: signs)
             searchResults = signs
-            
-            searchableSigns = signs.map { sign in
-                SearchableSign(
-                    sign: sign,
-                    lowercasedWord: sign.word.lowercased(),
-                    lowercasedKeywords: (sign.keywords ?? []).map { $0.lowercased() }
-                )
-            }
-            
-            hybridSearchService = HybridSearchService(
-                baseURL: APIConfig.baseURL,
-                signs: signs,
-                networkMonitor: networkMonitor
-            )
             
             isLoading = false
             let isConnected = await networkMonitor.checkConnection()
@@ -120,21 +110,7 @@ final class SearchViewModel: ObservableObject {
         Task { @MainActor in
             do {
                 let signs = try await signRepository.loadAllSigns()
-                allSigns = signs
-                
-                searchableSigns = signs.map { sign in
-                    SearchableSign(
-                        sign: sign,
-                        lowercasedWord: sign.word.lowercased(),
-                        lowercasedKeywords: (sign.keywords ?? []).map { $0.lowercased() }
-                    )
-                }
-                
-                hybridSearchService = HybridSearchService(
-                    baseURL: APIConfig.baseURL,
-                    signs: signs,
-                    networkMonitor: networkMonitor
-                )
+                updateSearchData(with: signs)
                 
                 if !searchQuery.isEmpty {
                     await performSearch(query: searchQuery)
@@ -142,9 +118,9 @@ final class SearchViewModel: ObservableObject {
                     searchResults = signs
                 }
                 
-                print("🔄 SearchViewModel: UI обновлён (\(signs.count) жестов)")
+                logger.info("🔄 UI обновлён (\(signs.count) жестов)")
             } catch {
-                print("⚠️ SearchViewModel: Не удалось обновить UI")
+                logger.warning("⚠️ Не удалось обновить UI: \(error.localizedDescription)")
             }
         }
     }
@@ -255,5 +231,25 @@ final class SearchViewModel: ObservableObject {
     
     private func errorMessage(for error: Error) -> String {
         return ErrorMessageMapper.message(for: error)
+    }
+    
+    /// Обновляет данные поиска при загрузке/перезагрузке жестов
+    /// - Parameter signs: Массив жестов для индексации
+    private func updateSearchData(with signs: [Sign]) {
+        allSigns = signs
+        
+        searchableSigns = signs.map { sign in
+            SearchableSign(
+                sign: sign,
+                lowercasedWord: sign.word.lowercased(),
+                lowercasedKeywords: (sign.keywords ?? []).map { $0.lowercased() }
+            )
+        }
+        
+        hybridSearchService = HybridSearchService(
+            baseURL: APIConfig.baseURL,
+            signs: signs,
+            networkMonitor: networkMonitor
+        )
     }
 }
