@@ -10,6 +10,9 @@ enum LayoutConstants {
         /// Aspect ratio для вертикального видео (9:16)
         static let verticalAspectRatio: CGFloat = 9.0 / 16.0
         
+        /// Aspect ratio для горизонтального видео (16:9)
+        static let horizontalAspectRatio: CGFloat = 16.0 / 9.0
+        
         /// Высота видео плеера по умолчанию
         static let defaultHeight: CGFloat = 400
         
