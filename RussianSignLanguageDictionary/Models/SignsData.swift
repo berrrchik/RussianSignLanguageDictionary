@@ -8,6 +8,8 @@ struct SignsData: Codable {
     /// Массив всех категорий
     let categories: [Category]
     
+    let lessons: [Lesson]
+    
     /// Общее количество жестов
     let totalSigns: Int
     
