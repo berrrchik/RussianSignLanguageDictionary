@@ -5,6 +5,7 @@ struct MainView: View {
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
+    private let lessonRepository: LessonRepositoryProtocol
     
     @EnvironmentObject private var favoritesRepository: FavoritesRepository
     @StateObject private var syncViewModel: SyncViewModel
@@ -15,6 +16,7 @@ struct MainView: View {
     init(
         signRepository: SignRepositoryProtocol? = nil,
         videoRepository: VideoRepositoryProtocol = VideoRepository(),
+        lessonRepository: LessonRepositoryProtocol? = nil,
         syncRepository: SyncRepositoryProtocol? = nil,
         cacheService: CacheService? = nil
     ) {
@@ -25,9 +27,12 @@ struct MainView: View {
             syncRepository: syncRepo,
             cacheService: cache
         )
+
+        let lessonRepo = lessonRepository ?? LessonRepository(cacheService: cache)
         
         self.signRepository = signRepo
         self.videoRepository = videoRepository
+        self.lessonRepository = lessonRepo
         self._syncViewModel = StateObject(
             wrappedValue: SyncViewModel(
                 syncRepository: syncRepo,
@@ -93,6 +98,14 @@ struct MainView: View {
             .tabItem {
                 Label("Категории", systemImage: "square.grid.2x2")
             }
+            
+            LessonsView(
+                lessonRepository: lessonRepository,
+                videoRepository: videoRepository
+            )
+            .tabItem {
+                Label("Обучение", systemImage: "book.fill")
+            }
         }
     }
     
@@ -127,11 +140,11 @@ struct MainView: View {
 
 // MARK: - Preview
 
-#if DEBUG
-struct MainView_Previews: PreviewProvider {
-    static var previews: some View {
-        MainView()
-            .environmentObject(PreviewData.favoritesRepository)
-    }
-}
-#endif
+//#if DEBUG
+//struct MainView_Previews: PreviewProvider {
+//    static var previews: some View {
+//        MainView()
+//            .environmentObject(PreviewData.favoritesRepository)
+//    }
+//}
+//#endif
