@@ -1,8 +1,12 @@
 import Foundation
 import Combine
+import os.log
 
 @MainActor
 enum CategoryService {
+    // MARK: - Logger
+    
+    private static let logger = Logger(subsystem: "com.rsl.category", category: "CategoryService")
     // MARK: - Properties
     
     private static var categoriesById: [String: Category] = [:]
@@ -32,13 +36,9 @@ enum CategoryService {
                 
                 subscribeToUpdates(from: signRepository)
                 
-                #if DEBUG
-                print("✅ CategoryService: Загружено \(categories.count) категорий")
-                #endif
+                logger.info("✅ Загружено \(categories.count) категорий")
             } catch {
-                #if DEBUG
-                print("❌ CategoryService: Ошибка загрузки категорий: \(ErrorMessageMapper.message(for: error))")
-                #endif
+                logger.error("❌ Ошибка загрузки категорий: \(ErrorMessageMapper.message(for: error))")
             }
             
             isLoading = false
@@ -57,9 +57,7 @@ enum CategoryService {
                     let updatedCategories = updatedData.categories.sorted { $0.order < $1.order }
                     categoriesById = Dictionary(uniqueKeysWithValues: updatedCategories.map { ($0.id, $0) })
                     
-                    #if DEBUG
-                    print("🔄 CategoryService: Обновлено до \(updatedCategories.count) категорий")
-                    #endif
+                    logger.info("🔄 Обновлено до \(updatedCategories.count) категорий")
                     
                     // Уведомляем об обновлении через NotificationCenter
                     NotificationCenter.default.post(name: .categoriesDidUpdate, object: nil)
