@@ -2,19 +2,24 @@ import SwiftUI
 
 struct CategoryDetailView: View {
     @StateObject private var viewModel: CategoryDetailViewModel
-    @EnvironmentObject private var favoritesRepository: FavoritesRepository
     @State private var selectedSign: Sign?
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
+    private let categoryService: CategoryServiceProtocol
     
     init(
         category: Category,
         signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol
+        videoRepository: VideoRepositoryProtocol,
+        favoritesRepository: FavoritesRepositoryProtocol,
+        categoryService: CategoryServiceProtocol
     ) {
         self.signRepository = signRepository
         self.videoRepository = videoRepository
+        self.favoritesRepository = favoritesRepository
+        self.categoryService = categoryService
         _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(
             category: category,
             signRepository: signRepository
@@ -28,9 +33,12 @@ struct CategoryDetailView: View {
             .navigationDestination(item: $selectedSign) { sign in
                 SignDetailView(
                     sign: sign,
-                    signRepository: signRepository,
-                    videoRepository: videoRepository,
-                    favoritesRepository: favoritesRepository
+                    dependencies: .init(
+                        signRepository: signRepository,
+                        videoRepository: videoRepository,
+                        favoritesRepository: favoritesRepository,
+                        categoryService: categoryService
+                    )
                 )
             }
             .task {
@@ -78,8 +86,8 @@ struct CategoryDetailView: View {
             signRepository: signRepository,
             videoRepository: videoRepository,
             favoritesRepository: favoritesRepository,
-            getCategoryName: { categoryId in
-                CategoryService.name(for: categoryId)
+            getCategoryName: { [categoryService] categoryId in
+                categoryService.name(for: categoryId)
             },
             onSignSelected: { sign in
                 selectedSign = sign
@@ -97,9 +105,10 @@ struct CategoryDetailView_Previews: PreviewProvider {
             CategoryDetailView(
                 category: PreviewData.category,
                 signRepository: PreviewData.signRepository,
-                videoRepository: PreviewData.videoRepository
+                videoRepository: PreviewData.videoRepository,
+                favoritesRepository: PreviewData.favoritesRepository,
+                categoryService: PreviewData.categoryService
             )
-            .environmentObject(PreviewData.favoritesRepository)
         }
     }
 }

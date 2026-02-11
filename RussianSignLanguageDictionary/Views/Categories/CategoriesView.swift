@@ -2,10 +2,11 @@ import SwiftUI
 
 struct CategoriesView: View {
     @StateObject private var viewModel: CategoriesViewModel
-    @EnvironmentObject private var favoritesRepository: FavoritesRepository
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
+    private let categoryService: CategoryServiceProtocol
     
     private let columns: [GridItem] = [
         GridItem(
@@ -19,11 +20,19 @@ struct CategoriesView: View {
     
     init(
         signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol
+        videoRepository: VideoRepositoryProtocol,
+        favoritesRepository: FavoritesRepositoryProtocol,
+        networkMonitor: NetworkMonitorProtocol,
+        categoryService: CategoryServiceProtocol
     ) {
         self.signRepository = signRepository
         self.videoRepository = videoRepository
-        _viewModel = StateObject(wrappedValue: CategoriesViewModel(signRepository: signRepository))
+        self.favoritesRepository = favoritesRepository
+        self.categoryService = categoryService
+        _viewModel = StateObject(wrappedValue: CategoriesViewModel(
+            signRepository: signRepository,
+            networkMonitor: networkMonitor
+        ))
     }
     
     var body: some View {
@@ -65,7 +74,9 @@ struct CategoriesView: View {
                     NavigationLink(destination: CategoryDetailView(
                         category: category,
                         signRepository: signRepository,
-                        videoRepository: videoRepository
+                        videoRepository: videoRepository,
+                        favoritesRepository: favoritesRepository,
+                        categoryService: categoryService
                     )) {
                         CategoryCardView(category: category)
                     }
@@ -84,9 +95,11 @@ struct CategoriesView_Previews: PreviewProvider {
     static var previews: some View {
         CategoriesView(
             signRepository: PreviewData.signRepository,
-            videoRepository: PreviewData.videoRepository
+            videoRepository: PreviewData.videoRepository,
+            favoritesRepository: PreviewData.favoritesRepository,
+            networkMonitor: PreviewData.networkMonitor,
+            categoryService: PreviewData.categoryService
         )
-        .environmentObject(PreviewData.favoritesRepository)
     }
 }
 #endif
