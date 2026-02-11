@@ -2,23 +2,38 @@ import Foundation
 import Combine
 import os.log
 
+/// Сервис для работы с категориями жестов
+/// Реализует кеширование категорий и подписку на обновления
 @MainActor
-enum CategoryService {
+final class CategoryService: CategoryServiceProtocol {
     // MARK: - Logger
     
-    private static let logger = Logger(subsystem: "com.rsl.category", category: "CategoryService")
+    private let logger = Logger(subsystem: "com.rsl.category", category: "CategoryService")
+    
+    // MARK: - Dependencies
+    
+    private let signRepository: SignRepositoryProtocol
+    
     // MARK: - Properties
     
-    private static var categoriesById: [String: Category] = [:]
-    private static var isLoaded = false
-    private static var isLoading = false
-    private static var loadTask: Task<Void, Never>?
+    private var categoriesById: [String: Category] = [:]
+    private var isLoaded = false
+    private var isLoading = false
+    private var loadTask: Task<Void, Never>?
     
-    private static var dataSubscription: AnyCancellable?
+    private var dataSubscription: AnyCancellable?
     
-    // MARK: - Public Methods
+    // MARK: - Initialization
     
-    static func loadCategories(from signRepository: SignRepositoryProtocol) async {
+    /// Инициализатор с внедрением зависимостей
+    /// - Parameter signRepository: Репозиторий для загрузки категорий
+    init(signRepository: SignRepositoryProtocol) {
+        self.signRepository = signRepository
+    }
+    
+    // MARK: - CategoryServiceProtocol
+    
+    func loadCategories() async {
         guard !isLoaded else { return }
         
         if isLoading, let task = loadTask {
@@ -34,7 +49,7 @@ enum CategoryService {
                 categoriesById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
                 isLoaded = true
                 
-                subscribeToUpdates(from: signRepository)
+                subscribeToUpdates()
                 
                 logger.info("✅ Загружено \(categories.count) категорий")
             } catch {
@@ -48,16 +63,17 @@ enum CategoryService {
         await loadTask?.value
     }
     
-    private static func subscribeToUpdates(from signRepository: SignRepositoryProtocol) {
+    private func subscribeToUpdates() {
         guard let repo = signRepository as? SignRepository else { return }
         
         dataSubscription = repo.dataUpdatedPublisher
-            .sink { updatedData in
-                Task { @MainActor in
+            .sink { [weak self] updatedData in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
                     let updatedCategories = updatedData.categories.sorted { $0.order < $1.order }
-                    categoriesById = Dictionary(uniqueKeysWithValues: updatedCategories.map { ($0.id, $0) })
+                    self.categoriesById = Dictionary(uniqueKeysWithValues: updatedCategories.map { ($0.id, $0) })
                     
-                    logger.info("🔄 Обновлено до \(updatedCategories.count) категорий")
+                    self.logger.info("🔄 Обновлено до \(updatedCategories.count) категорий")
                     
                     // Уведомляем об обновлении через NotificationCenter
                     NotificationCenter.default.post(name: .categoriesDidUpdate, object: nil)
@@ -66,28 +82,28 @@ enum CategoryService {
             }
     }
     
-    static func name(for categoryId: String) -> String {
+    func name(for categoryId: String) -> String {
         return categoriesById[categoryId]?.name ?? categoryId.capitalized
     }
     
-    static func category(for categoryId: String) -> Category? {
+    func category(for categoryId: String) -> Category? {
         return categoriesById[categoryId]
     }
     
-    static func icon(for categoryId: String) -> String? {
+    func icon(for categoryId: String) -> String? {
         return categoriesById[categoryId]?.icon
     }
 
-    static func color(for categoryId: String) -> String? {
+    func color(for categoryId: String) -> String? {
         return categoriesById[categoryId]?.color
     }
     
-    static func allCategories() -> [Category] {
+    func allCategories() -> [Category] {
         return Array(categoriesById.values)
             .sorted { $0.order < $1.order }
     }
     
-    static func reset() {
+    func reset() {
         categoriesById = [:]
         isLoaded = false
         isLoading = false
