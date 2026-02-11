@@ -33,7 +33,7 @@ final class CategoriesViewModel: ObservableObject {
     
     init(
         signRepository: SignRepositoryProtocol,
-        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+        networkMonitor: NetworkMonitorProtocol
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
