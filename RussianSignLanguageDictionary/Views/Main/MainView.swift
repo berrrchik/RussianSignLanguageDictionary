@@ -6,37 +6,29 @@ struct MainView: View {
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     private let lessonRepository: LessonRepositoryProtocol
+    private let categoryService: CategoryServiceProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
+    private let networkMonitor: NetworkMonitorProtocol
     
-    @EnvironmentObject private var favoritesRepository: FavoritesRepository
     @StateObject private var syncViewModel: SyncViewModel
     @State private var isInitialized = false
-    
+    @State private var showSyncError = false
+        
     // MARK: - Init
- 
-    init(
-        signRepository: SignRepositoryProtocol? = nil,
-        videoRepository: VideoRepositoryProtocol = VideoRepository(),
-        lessonRepository: LessonRepositoryProtocol? = nil,
-        syncRepository: SyncRepositoryProtocol? = nil,
-        cacheService: CacheService? = nil
-    ) {
-        let syncRepo = syncRepository ?? SyncRepository()
-        let cache = cacheService ?? CacheService()
+    
+    init(container: DIContainer = .shared) {
+        self.signRepository = container.resolve(SignRepositoryProtocol.self)
+        self.videoRepository = container.resolve(VideoRepositoryProtocol.self)
+        self.lessonRepository = container.resolve(LessonRepositoryProtocol.self)
+        self.categoryService = container.resolve(CategoryServiceProtocol.self)
+        self.favoritesRepository = container.resolve(FavoritesRepositoryProtocol.self)
+        self.networkMonitor = container.resolve(NetworkMonitorProtocol.self)
         
-        let signRepo = signRepository ?? SignRepository(
-            syncRepository: syncRepo,
-            cacheService: cache
-        )
-
-        let lessonRepo = lessonRepository ?? LessonRepository(cacheService: cache)
-        
-        self.signRepository = signRepo
-        self.videoRepository = videoRepository
-        self.lessonRepository = lessonRepo
         self._syncViewModel = StateObject(
             wrappedValue: SyncViewModel(
-                syncRepository: syncRepo,
-                cacheService: cache
+                syncRepository: container.resolve(SyncRepositoryProtocol.self),
+                cacheService: container.resolve(CacheService.self),
+                networkMonitor: container.resolve(NetworkMonitorProtocol.self)
             )
         )
     }
@@ -59,7 +51,10 @@ struct MainView: View {
                 syncOverlay
             }
         }
-        .alert("Ошибка синхронизации", isPresented: .constant(syncViewModel.syncError != nil)) {
+        .onChange(of: syncViewModel.syncError) { _, newValue in
+            showSyncError = newValue != nil
+        }
+        .alert("Ошибка синхронизации", isPresented: $showSyncError) {
             Button("OK") {
                 syncViewModel.clearError()
             }
@@ -76,7 +71,10 @@ struct MainView: View {
         TabView {
             SearchView(
                 signRepository: signRepository,
-                videoRepository: videoRepository
+                videoRepository: videoRepository,
+                favoritesRepository: favoritesRepository,
+                networkMonitor: networkMonitor,
+                categoryService: categoryService
             )
             .tabItem {
                 Label("Поиск", systemImage: "magnifyingglass")
@@ -85,7 +83,8 @@ struct MainView: View {
             FavoritesView(
                 signRepository: signRepository,
                 favoritesRepository: favoritesRepository,
-                videoRepository: videoRepository
+                videoRepository: videoRepository,
+                categoryService: categoryService
             )
             .tabItem {
                 Label("Избранное", systemImage: "heart.fill")
@@ -93,7 +92,10 @@ struct MainView: View {
             
             CategoriesView(
                 signRepository: signRepository,
-                videoRepository: videoRepository
+                videoRepository: videoRepository,
+                favoritesRepository: favoritesRepository,
+                networkMonitor: networkMonitor,
+                categoryService: categoryService
             )
             .tabItem {
                 Label("Категории", systemImage: "square.grid.2x2")
@@ -132,19 +134,17 @@ struct MainView: View {
     
     private func initializeApp() async {
         guard !isInitialized else { return }
-        favoritesRepository.setSignRepository(signRepository)
-        await CategoryService.loadCategories(from: signRepository)
+        await categoryService.loadCategories()
         isInitialized = true
     }
 }
 
 // MARK: - Preview
 
-//#if DEBUG
-//struct MainView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        MainView()
-//            .environmentObject(PreviewData.favoritesRepository)
-//    }
-//}
-//#endif
+#if DEBUG
+struct MainView_Previews: PreviewProvider {
+    static var previews: some View {
+        MainView()
+    }
+}
+#endif
