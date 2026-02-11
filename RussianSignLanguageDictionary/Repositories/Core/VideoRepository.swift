@@ -39,8 +39,8 @@ final class VideoRepository: VideoRepositoryProtocol {
     // MARK: - Initialization
     
     init(
-        videoCacheService: VideoCacheServiceProtocol = VideoCacheService.shared,
-        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+        videoCacheService: VideoCacheServiceProtocol,
+        networkMonitor: NetworkMonitorProtocol
     ) {
         self.videoCacheService = videoCacheService
         self.networkMonitor = networkMonitor
