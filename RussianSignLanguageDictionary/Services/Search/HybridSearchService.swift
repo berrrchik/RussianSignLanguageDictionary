@@ -6,7 +6,7 @@ final class HybridSearchService {
     // MARK: - Properties
     
     private let baseURL: URL
-    private let sbertService: SBERTSearchService
+    private let sbertService: SBERTSearchServiceProtocol
     private let allSigns: [Sign]
     private let networkMonitor: NetworkMonitorProtocol
     private let logger = Logger(subsystem: "com.rsl.HybridSearchService", category: "search")
@@ -34,12 +34,13 @@ final class HybridSearchService {
     init(
         baseURL: URL = APIConfig.baseURL,
         signs: [Sign],
-        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+        networkMonitor: NetworkMonitorProtocol,
+        sbertService: SBERTSearchServiceProtocol
     ) {
         self.baseURL = baseURL
         self.allSigns = signs
         self.networkMonitor = networkMonitor
-        self.sbertService = SBERTSearchService(baseURL: baseURL)
+        self.sbertService = sbertService
     }
     
     // MARK: - Public Methods
@@ -60,99 +61,29 @@ final class HybridSearchService {
             return allSigns
         }
         
-        var results: [Sign] = []
-        let lowercasedQuery = trimmedQuery.lowercased()
-        
-        // 1. Точное совпадение (текстовый поиск)
-        let exactMatches = allSigns.filter { sign in
-            sign.word.lowercased() == lowercasedQuery
-        }
-        results.append(contentsOf: exactMatches.prefix(limit))
-        
-        logger.info("🔍 Точных совпадений: \(exactMatches.count)")
-        
-        // Если нашли достаточно точных совпадений, возвращаем их
-        if results.count >= limit {
+        // 1. Точное совпадение
+        var results = findExactMatches(query: trimmedQuery, limit: limit)
+        guard results.count < limit else {
             return Array(results.prefix(limit))
         }
         
-        // 2. SBERT семантический поиск (только если есть интернет)
-        let isConnected = await networkMonitor.checkConnection()
-        if isConnected {
-            do {
-                let minSimilarity = useHighQualityThreshold 
-                    ? Constants.highQualityMinSimilarity 
-                    : Constants.defaultMinSimilarity
-                
-                let sbertResults = try await sbertService.search(
-                    query: trimmedQuery,
-                    limit: limit - results.count,
-                    minSimilarity: minSimilarity
-                )
-                
-                logger.info("🔍 SBERT результатов: \(sbertResults.count)")
-                
-                // Маппинг результатов обратно к жестам
-                let sbertSigns = sbertResults.compactMap { result in
-                    allSigns.first { $0.id == result.id }
-                }
-                
-                // Исключаем уже найденные
-                let newResults = sbertSigns.filter { result in
-                    !results.contains { $0.id == result.id }
-                }
-                results.append(contentsOf: newResults)
-                
-            } catch {
-                logger.warning("⚠️ SBERT поиск не удался: \(error.localizedDescription)")
-                // Продолжаем с текстовым поиском как fallback
-            }
-        } else {
-            logger.info("📴 Нет интернета, пропускаем SBERT поиск")
-        }
+        // 2. SBERT семантический поиск
+        let sbertResults = await findSBERTMatches(
+            query: trimmedQuery,
+            limit: limit - results.count,
+            excludingIds: Set(results.map { $0.id }),
+            useHighQualityThreshold: useHighQualityThreshold
+        )
+        results.append(contentsOf: sbertResults)
         
-        // 3. Fallback: текстовый поиск по частичному совпадению
+        // 3. Текстовый поиск (fallback)
         if results.count < limit {
-            let textMatches = allSigns.filter { sign in
-                let wordMatch = sign.word.lowercased().contains(lowercasedQuery)
-                let keywordsMatch = (sign.keywords ?? []).contains { keyword in
-                    keyword.lowercased().contains(lowercasedQuery)
-                }
-                let isNotAlreadyFound = !results.contains { $0.id == sign.id }
-                
-                return (wordMatch || keywordsMatch) && isNotAlreadyFound
-            }
-            
-            // Сортировка текстовых результатов по релевантности:
-            // 1. Совпадения в начале слова (выше приоритет)
-            // 2. Совпадения в середине слова
-            // 3. Совпадения в keywords
-            let sortedTextMatches = textMatches.sorted { sign1, sign2 in
-                let word1 = sign1.word.lowercased()
-                let word2 = sign2.word.lowercased()
-                
-                // Проверяем, начинается ли слово с запроса
-                let startsWith1 = word1.hasPrefix(lowercasedQuery)
-                let startsWith2 = word2.hasPrefix(lowercasedQuery)
-                
-                if startsWith1 != startsWith2 {
-                    return startsWith1 // Начинающиеся с запроса идут первыми
-                }
-                
-                // Если оба начинаются или оба не начинаются, сортируем по позиции вхождения
-                let position1 = word1.range(of: lowercasedQuery)?.lowerBound.utf16Offset(in: word1) ?? Int.max
-                let position2 = word2.range(of: lowercasedQuery)?.lowerBound.utf16Offset(in: word2) ?? Int.max
-                
-                if position1 != position2 {
-                    return position1 < position2 // Раньше в слове = выше приоритет
-                }
-                
-                // Если позиции одинаковые, сортируем по алфавиту
-                return word1 < word2
-            }
-            
-            logger.info("🔍 Текстовых совпадений: \(sortedTextMatches.count)")
-            results.append(contentsOf: sortedTextMatches.prefix(limit - results.count))
+            let textResults = findTextMatches(
+                query: trimmedQuery,
+                limit: limit - results.count,
+                excludingIds: Set(results.map { $0.id })
+            )
+            results.append(contentsOf: textResults)
         }
         
         return Array(results.prefix(limit))
@@ -169,16 +100,63 @@ final class HybridSearchService {
             return allSigns
         }
         
-        let lowercasedQuery = trimmedQuery.lowercased()
-        
-        return allSigns.filter { sign in
-            let wordMatch = sign.word.lowercased().contains(lowercasedQuery)
-            let keywordsMatch = (sign.keywords ?? []).contains { keyword in
-                keyword.lowercased().contains(lowercasedQuery)
-            }
-            return wordMatch || keywordsMatch
+        return Array(SignTextSearchHelper.filterSigns(allSigns, query: trimmedQuery).prefix(limit))
+    }
+    
+    // MARK: - Private Search Steps
+    
+    /// Шаг 1: Поиск точных совпадений по слову
+    private func findExactMatches(query: String, limit: Int) -> [Sign] {
+        let lowercasedQuery = query.lowercased()
+        let matches = allSigns.filter { $0.word.lowercased() == lowercasedQuery }
+        logger.info("🔍 Точных совпадений: \(matches.count)")
+        return Array(matches.prefix(limit))
+    }
+    
+    /// Шаг 2: SBERT семантический поиск (только при наличии интернета)
+    private func findSBERTMatches(
+        query: String,
+        limit: Int,
+        excludingIds: Set<String>,
+        useHighQualityThreshold: Bool
+    ) async -> [Sign] {
+        guard await networkMonitor.checkConnection() else {
+            logger.info("📴 Нет интернета, пропускаем SBERT поиск")
+            return []
         }
-        .prefix(limit)
-        .map { $0 }
+        
+        do {
+            let minSimilarity = useHighQualityThreshold
+                ? Constants.highQualityMinSimilarity
+                : Constants.defaultMinSimilarity
+            
+            let sbertResults = try await sbertService.search(
+                query: query,
+                limit: limit,
+                minSimilarity: minSimilarity
+            )
+            
+            logger.info("🔍 SBERT результатов: \(sbertResults.count)")
+            
+            return sbertResults.compactMap { result in
+                guard !excludingIds.contains(result.id) else { return nil }
+                return allSigns.first { $0.id == result.id }
+            }
+        } catch {
+            logger.warning("⚠️ SBERT поиск не удался: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
+    /// Шаг 3: Текстовый поиск по частичному совпадению с сортировкой по релевантности
+    private func findTextMatches(
+        query: String,
+        limit: Int,
+        excludingIds: Set<String>
+    ) -> [Sign] {
+        let textMatches = SignTextSearchHelper.filterSigns(allSigns, query: query, excludingIds: excludingIds)
+        let sorted = SignTextSearchHelper.sortByRelevance(textMatches, query: query)
+        logger.info("🔍 Текстовых совпадений: \(sorted.count)")
+        return Array(sorted.prefix(limit))
     }
 }
