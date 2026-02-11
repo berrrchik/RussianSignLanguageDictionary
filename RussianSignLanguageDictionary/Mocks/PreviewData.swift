@@ -13,7 +13,16 @@ enum PreviewData {
     static let videoRepository = MockVideoRepository.shared
     
     /// Mock репозиторий для избранного
-    static let favoritesRepository = FavoritesRepository.preview
+    static let favoritesRepository = MockFavoritesRepository.shared
+    
+    /// Mock репозиторий для уроков
+    static let lessonRepository = MockLessonRepository()
+    
+    /// Mock монитор сети
+    static let networkMonitor = MockNetworkMonitor()
+    
+    /// Mock сервис категорий
+    static let categoryService = MockCategoryService.shared
     
     // MARK: - Models - Single Objects
     
@@ -23,8 +32,8 @@ enum PreviewData {
     /// Тестовая категория с дефолтными значениями
     static let category = Category.mock()
     
-    /// Тестовый метаданные жеста
-    static let metadata = SignMetadata.mock()
+    /// Тестовый урок с дефолтными значениями
+    static let lesson = Lesson.mock()
     
     // MARK: - Models - Collections
     
@@ -34,6 +43,9 @@ enum PreviewData {
     /// Массив тестовых категорий
     static let categories = Category.mockArray()
     
+    /// Массив тестовых уроков
+    static let lessons = Lesson.mockLessons()
+    
     // MARK: - Complex Scenarios
     
     /// Жест с длинным описанием для тестирования переноса текста
@@ -42,21 +54,8 @@ enum PreviewData {
         description: "Это очень длинное описание жеста для тестирования переноса текста и адаптивной верстки в различных размерах экрана. Текст должен корректно отображаться на iPhone SE, iPhone 14 Pro Max и iPad."
     )
     
-    /// Жест с множеством ключевых слов для тестирования FlowLayout
-    static let signWithManyKeywords = Sign.mock(
-        word: "Ключевые слова",
-        keywords: [
-            "слово1", "слово2", "слово3", "слово4", 
-            "слово5", "слово6", "слово7", "слово8",
-            "длинноеключевоеслово", "еще одно слово"
-        ]
-    )
-    
-    /// Жест без ключевых слов для тестирования Empty State
-    static let signWithoutKeywords = Sign.mock(
-        word: "Без ключевых слов",
-        keywords: []
-    )
+    /// Жест с множеством видео для тестирования навигации
+    static let signWithMultipleVideos = Sign.mockWithMultipleVideos()
     
     /// Жест с синонимами для тестирования SynonymListView
     static let signWithSynonyms = Sign.mock(
@@ -64,7 +63,6 @@ enum PreviewData {
         word: "Привет",
         categoryId: "greetings",
         description: "Жест приветствия",
-        keywords: ["привет", "здравствуй", "приветствие"],
         synonyms: [
             SignSynonym(id: "sign_002", word: "Здравствуй"),
             SignSynonym(id: "sign_003", word: "Добро пожаловать"),
@@ -80,6 +78,17 @@ enum PreviewData {
         signCount: 150,
         icon: "figure.run"
     )
+    
+    // MARK: - Dependencies
+    
+    /// Группа зависимостей для SignDetailView
+    static var signDetailDependencies: SignDetailView.Dependencies {
+        .init(
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            favoritesRepository: favoritesRepository,
+            categoryService: categoryService
+        )
+    }
 }
 #endif
-

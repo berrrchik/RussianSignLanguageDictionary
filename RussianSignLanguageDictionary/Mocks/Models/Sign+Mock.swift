@@ -8,6 +8,7 @@ extension Sign {
     ///   - word: Слово на русском языке
     ///   - categoryId: Идентификатор категории жеста
     ///   - description: Описание жеста
+    ///   - videos: Массив видео для жеста
     ///   - keywords: Ключевые слова для поиска
     ///   - synonyms: Массив синонимов жеста
     /// - Returns: Тестовый объект Sign
@@ -16,6 +17,7 @@ extension Sign {
         word: String = "Привет",
         categoryId: String = "greetings",
         description: String = "Жест для тестирования",
+        videos: [SignVideo]? = nil,
         keywords: [String]? = nil,
         synonyms: [SignSynonym]? = nil
     ) -> Sign {
@@ -24,7 +26,16 @@ extension Sign {
             word: word,
             description: description,
             categoryId: categoryId,
-            videos: nil,
+            videos: videos ?? [
+                SignVideo(
+                    id: 1,
+                    url: "https://example.com/\(id).mp4",
+                    contextDescription: "Основное видео для жеста",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ],
             synonyms: synonyms,
             videoId: "video_\(id)",
             supabaseStoragePath: "test/\(id).mp4",
@@ -41,6 +52,45 @@ extension Sign {
             .mock(id: "sign_002", word: "Спасибо", categoryId: "greetings"),
             .mock(id: "sign_003", word: "До свидания", categoryId: "greetings")
         ]
+    }
+    
+    /// Жест с множеством видео для тестирования навигации
+    static func mockWithMultipleVideos(
+        id: String = "sign_multiple",
+        word: String = "Жест с несколькими видео",
+        categoryId: String = "greetings"
+    ) -> Sign {
+        .mock(
+            id: id,
+            word: word,
+            categoryId: categoryId,
+            videos: [
+                SignVideo(
+                    id: 1,
+                    url: "https://example.com/\(id)_1.mp4",
+                    contextDescription: "Первое видео",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                ),
+                SignVideo(
+                    id: 2,
+                    url: "https://example.com/\(id)_2.mp4",
+                    contextDescription: "Второе видео",
+                    order: 1,
+                    createdAt: nil,
+                    updatedAt: nil
+                ),
+                SignVideo(
+                    id: 3,
+                    url: "https://example.com/\(id)_3.mp4",
+                    contextDescription: "Третье видео",
+                    order: 2,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ]
+        )
     }
 }
 
