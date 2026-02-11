@@ -7,14 +7,17 @@ struct FavoritesView: View {
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
+    private let categoryService: CategoryServiceProtocol
     
     init(
         signRepository: SignRepositoryProtocol,
         favoritesRepository: FavoritesRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol
+        videoRepository: VideoRepositoryProtocol,
+        categoryService: CategoryServiceProtocol
     ) {
         self.signRepository = signRepository
         self.videoRepository = videoRepository
+        self.categoryService = categoryService
         _viewModel = StateObject(wrappedValue: FavoritesViewModel(
             favoritesRepository: favoritesRepository,
             signRepository: signRepository
@@ -49,9 +52,12 @@ struct FavoritesView: View {
                 .navigationDestination(item: $selectedSign) { sign in
                     SignDetailView(
                         sign: sign,
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: viewModel.favoritesRepository
+                        dependencies: .init(
+                            signRepository: signRepository,
+                            videoRepository: videoRepository,
+                            favoritesRepository: viewModel.favoritesRepository,
+                            categoryService: categoryService
+                        )
                     )
                 }
                 .overlay(alignment: .bottom) {
@@ -95,8 +101,8 @@ struct FavoritesView: View {
             signRepository: signRepository,
             videoRepository: videoRepository,
             favoritesRepository: viewModel.favoritesRepository,
-            getCategoryName: { categoryId in
-                CategoryService.name(for: categoryId)
+            getCategoryName: { [categoryService] categoryId in
+                categoryService.name(for: categoryId)
             },
             onSignSelected: { sign in
                 selectedSign = sign
@@ -122,7 +128,8 @@ struct FavoritesView_Previews: PreviewProvider {
         FavoritesView(
             signRepository: PreviewData.signRepository,
             favoritesRepository: PreviewData.favoritesRepository,
-            videoRepository: PreviewData.videoRepository
+            videoRepository: PreviewData.videoRepository,
+            categoryService: PreviewData.categoryService
         )
     }
 }
