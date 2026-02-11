@@ -67,13 +67,7 @@ final class SignRepository: SignRepositoryProtocol {
         guard !query.isEmpty else { return [] }
         
         let signs = try await loadAllSigns()
-        let lowercasedQuery = query.lowercased()
-        
-        return signs.filter { sign in
-            sign.word.lowercased().contains(lowercasedQuery) ||
-            sign.keywords?.contains { $0.lowercased().contains(lowercasedQuery) } == true ||
-            sign.description.lowercased().contains(lowercasedQuery)
-        }
+        return SignTextSearchHelper.filterSigns(signs, query: query, includeDescription: true)
     }
     
     // MARK: - Data Loading
