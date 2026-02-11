@@ -16,12 +16,6 @@ import os.log
 /// - `VideoCacheDirectoryManager` — работа с файловой системой
 /// - `VideoCacheDownloader` — загрузка видео с сервера
 final class VideoCacheService: VideoCacheServiceProtocol {
-    // MARK: - Shared Instance
-    
-    /// Общий экземпляр для обратной совместимости
-    /// Предпочтительнее использовать Dependency Injection
-    static let shared = VideoCacheService()
-    
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.videoCache", category: "VideoCacheService")
