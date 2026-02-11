@@ -30,7 +30,7 @@ final class SyncViewModel: ObservableObject {
     init(
         syncRepository: SyncRepositoryProtocol,
         cacheService: CacheService,
-        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+        networkMonitor: NetworkMonitorProtocol
     ) {
         self.syncRepository = syncRepository
         self.cacheService = cacheService
