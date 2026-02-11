@@ -112,7 +112,9 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
                 return UITableViewCell()
             }
             
-            let cell = tableView.dequeueReusableCell(withIdentifier: "SignCell", for: indexPath) as! SignRowTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: "SignCell", for: indexPath) as? SignRowTableViewCell else {
+                return UITableViewCell()
+            }
             let sign = sections[indexPath.section].signs[indexPath.row]
             let isFavorite = favoritesRepository?.isFavorite(signId: sign.id) ?? false
             let categoryName = getCategoryName(sign.categoryId)
