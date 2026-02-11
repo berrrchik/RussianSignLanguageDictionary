@@ -5,25 +5,30 @@ struct SignDetailView: View {
     
     // MARK: - Dependencies
     
-    private let videoRepository: VideoRepositoryProtocol
-    private let favoritesRepository: FavoritesRepositoryProtocol
+    /// Группа зависимостей для SignDetailView
+    /// Уменьшает количество параметров в init и упрощает передачу зависимостей по цепочке
+    struct Dependencies {
+        let signRepository: SignRepositoryProtocol
+        let videoRepository: VideoRepositoryProtocol
+        let favoritesRepository: FavoritesRepositoryProtocol
+        let categoryService: CategoryServiceProtocol
+    }
+    
+    private let dependencies: Dependencies
     
     // MARK: - Init
     
     init(
         sign: Sign,
-        signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol,
+        dependencies: Dependencies,
         visitedSignIds: Set<String> = []
     ) {
-        self.videoRepository = videoRepository
-        self.favoritesRepository = favoritesRepository
+        self.dependencies = dependencies
         _viewModel = StateObject(wrappedValue: SignDetailViewModel(
             sign: sign,
-            signRepository: signRepository,
-            videoRepository: videoRepository,
-            favoritesRepository: favoritesRepository,
+            signRepository: dependencies.signRepository,
+            videoRepository: dependencies.videoRepository,
+            favoritesRepository: dependencies.favoritesRepository,
             visitedSignIds: visitedSignIds
         ))
     }
@@ -50,9 +55,7 @@ struct SignDetailView: View {
         .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
             SignDetailView(
                 sign: sign,
-                signRepository: viewModel.signRepository,
-                videoRepository: videoRepository,
-                favoritesRepository: favoritesRepository,
+                dependencies: dependencies,
                 visitedSignIds: viewModel.visitedSignIds
             )
         }
@@ -155,7 +158,7 @@ struct SignDetailView: View {
         HStack {
             Image(systemName: "folder.fill")
                 .font(.caption)
-            Text(CategoryService.name(for: viewModel.sign.categoryId))
+            Text(dependencies.categoryService.name(for: viewModel.sign.categoryId))
                 .font(.subheadline)
         }
         .padding(.horizontal, LayoutConstants.SignDetail.categoryBadgeHorizontalPadding)
@@ -194,9 +197,7 @@ struct SignDetailView_Previews: PreviewProvider {
             NavigationStack {
                 SignDetailView(
                     sign: PreviewData.signWithSynonyms,
-                    signRepository: PreviewData.signRepository,
-                    videoRepository: PreviewData.videoRepository,
-                    favoritesRepository: PreviewData.favoritesRepository
+                    dependencies: PreviewData.signDetailDependencies
                 )
             }
             .previewDisplayName("С синонимами")
@@ -205,12 +206,28 @@ struct SignDetailView_Previews: PreviewProvider {
             NavigationStack {
                 SignDetailView(
                     sign: PreviewData.sign,
-                    signRepository: PreviewData.signRepository,
-                    videoRepository: PreviewData.videoRepository,
-                    favoritesRepository: PreviewData.favoritesRepository
+                    dependencies: PreviewData.signDetailDependencies
                 )
             }
             .previewDisplayName("Без синонимов")
+            
+            // Превью с множеством видео
+            NavigationStack {
+                SignDetailView(
+                    sign: PreviewData.signWithMultipleVideos,
+                    dependencies: PreviewData.signDetailDependencies
+                )
+            }
+            .previewDisplayName("С несколькими видео")
+            
+            // Превью с длинным описанием
+            NavigationStack {
+                SignDetailView(
+                    sign: PreviewData.signWithLongDescription,
+                    dependencies: PreviewData.signDetailDependencies
+                )
+            }
+            .previewDisplayName("Длинное описание")
         }
     }
 }
