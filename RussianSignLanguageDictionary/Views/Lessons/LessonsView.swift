@@ -83,3 +83,16 @@ struct LessonsView: View {
         .background(Color(.systemBackground))
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+struct LessonsView_Previews: PreviewProvider {
+    static var previews: some View {
+        LessonsView(
+            lessonRepository: PreviewData.lessonRepository,
+            videoRepository: PreviewData.videoRepository
+        )
+    }
+}
+#endif

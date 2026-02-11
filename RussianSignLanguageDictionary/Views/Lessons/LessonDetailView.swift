@@ -112,3 +112,19 @@ struct LessonDetailView: View {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+struct LessonDetailView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            LessonDetailView(
+                lesson: PreviewData.lesson,
+                allLessons: PreviewData.lessons,
+                videoRepository: PreviewData.videoRepository
+            )
+        }
+    }
+}
+#endif
