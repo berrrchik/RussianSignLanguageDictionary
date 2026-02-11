@@ -1,0 +1,239 @@
+import Foundation
+
+/// Простой DI-контейнер для управления зависимостями
+///
+/// Управляет жизненным циклом объектов: singleton (один экземпляр) и transient (новый каждый раз).
+/// Использует `NSRecursiveLock` для thread-safety и поддержки вложенного resolve
+/// (когда зависимость A зависит от B, которая зависит от C).
+///
+/// Использование:
+/// ```swift
+/// // Регистрация
+/// container.register(SignRepositoryProtocol.self) {
+///     SignRepository(...)
+/// }
+///
+/// // Разрешение
+/// let repository = container.resolve(SignRepositoryProtocol.self)
+/// ```
+final class DIContainer {
+    // MARK: - Singleton
+    
+    /// Общий экземпляр контейнера для всего приложения
+    static let shared = DIContainer()
+    
+    // MARK: - Properties
+    
+    /// Фабрики для создания зависимостей
+    private var factories: [String: () -> Any] = [:]
+    
+    /// Singleton-экземпляры (кэш)
+    private var singletons: [String: Any] = [:]
+    
+    /// Рекурсивный lock для thread-safe операций
+    /// Рекурсивный — потому что resolve() может вызывать resolve() вложенно
+    private let lock = NSRecursiveLock()
+    
+    // MARK: - Initialization
+    
+    private init() {
+        // Приватный инициализатор для singleton
+    }
+    
+    // MARK: - Registration
+    
+    /// Регистрирует фабрику для создания зависимости (transient — новый экземпляр каждый раз)
+    ///
+    /// - Parameters:
+    ///   - type: Тип зависимости (протокол или класс)
+    ///   - factory: Фабрика для создания экземпляра
+    func register<T>(_ type: T.Type, factory: @escaping () -> T) {
+        let key = String(describing: type)
+        lock.lock()
+        defer { lock.unlock() }
+        factories[key] = factory
+    }
+    
+    /// Регистрирует singleton (один экземпляр на всё приложение)
+    ///
+    /// Экземпляр создаётся лениво при первом вызове `resolve()`.
+    ///
+    /// - Parameters:
+    ///   - type: Тип зависимости
+    ///   - factory: Фабрика для создания экземпляра (вызовется один раз)
+    func registerSingleton<T>(_ type: T.Type, factory: @escaping () -> T) {
+        let key = String(describing: type)
+        lock.lock()
+        defer { lock.unlock() }
+        
+        // unowned безопасен: DIContainer.shared — static singleton, никогда не деаллоцируется
+        factories[key] = { [unowned self] in
+            // Проверяем кэш — если уже создан, возвращаем
+            if let existing = self.singletons[key] as? T {
+                return existing
+            }
+            
+            // Создаём и кэшируем
+            let instance = factory()
+            self.singletons[key] = instance
+            return instance
+        }
+    }
+    
+    // MARK: - Resolution
+    
+    /// Разрешает зависимость (создаёт или возвращает существующий экземпляр)
+    ///
+    /// - Parameter type: Тип зависимости
+    /// - Returns: Экземпляр зависимости
+    ///
+    /// - Warning: Вызовет `fatalError`, если зависимость не зарегистрирована
+    func resolve<T>(_ type: T.Type) -> T {
+        let key = String(describing: type)
+        
+        lock.lock()
+        defer { lock.unlock() }
+        
+        // Проверяем singleton кэш (быстрый путь)
+        if let singleton = singletons[key] as? T {
+            return singleton
+        }
+        
+        // Получаем фабрику
+        guard let factory = factories[key] else {
+            fatalError("""
+            ❌ Зависимость '\(key)' не зарегистрирована в DI-контейнере.
+            
+            Добавьте регистрацию в configureAppDependencies():
+            container.register(\(key).self) {
+                YourImplementation()
+            }
+            """)
+        }
+        
+        // Создаём экземпляр
+        guard let instance = factory() as? T else {
+            fatalError("""
+            ❌ Не удалось создать зависимость '\(key)'.
+            Фабрика вернула неверный тип.
+            """)
+        }
+        
+        return instance
+    }
+    
+    /// Безопасное разрешение зависимости (возвращает nil, если не зарегистрирована)
+    ///
+    /// - Parameter type: Тип зависимости
+    /// - Returns: Экземпляр зависимости или nil
+    func resolveOptional<T>(_ type: T.Type) -> T? {
+        let key = String(describing: type)
+        
+        lock.lock()
+        defer { lock.unlock() }
+        
+        // Проверяем singleton кэш
+        if let singleton = singletons[key] as? T {
+            return singleton
+        }
+        
+        // Получаем фабрику
+        guard let factory = factories[key] else {
+            return nil
+        }
+        
+        // Создаём экземпляр
+        return factory() as? T
+    }
+    
+    // MARK: - Cleanup
+    
+    /// Очищает все зависимости (полезно для тестов)
+    ///
+    /// - Warning: Используйте только в тестах!
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        factories.removeAll()
+        singletons.removeAll()
+    }
+    
+    /// Проверяет, зарегистрирована ли зависимость
+    ///
+    /// - Parameter type: Тип зависимости
+    /// - Returns: true, если зависимость зарегистрирована
+    func isRegistered<T>(_ type: T.Type) -> Bool {
+        let key = String(describing: type)
+        lock.lock()
+        defer { lock.unlock() }
+        return factories[key] != nil
+    }
+}
+
+// MARK: - App Configuration
+
+extension DIContainer {
+    /// Настраивает все зависимости приложения
+    ///
+    /// Вызывается один раз при запуске приложения в `App.swift`.
+    /// Порядок регистрации важен: базовые сервисы → репозитории → высокоуровневые компоненты.
+    ///
+    /// **Примечание:** `SyncViewModel` не регистрируется в контейнере,
+    /// т.к. он помечен `@MainActor` и должен создаваться на main thread.
+    func configureAppDependencies() {
+        // 1. Базовые сервисы (singleton)
+        registerSingleton(NetworkMonitorProtocol.self) {
+            NetworkMonitor()
+        }
+        
+        registerSingleton(CacheService.self) {
+            CacheService()
+        }
+        
+        registerSingleton(VideoCacheServiceProtocol.self) {
+            VideoCacheService()
+        }
+        
+        // unowned безопасен: DIContainer.shared — static singleton, никогда не деаллоцируется
+        registerSingleton(CategoryServiceProtocol.self) { [unowned self] in
+            // CategoryService помечен @MainActor, поэтому создаём его на main actor.
+            // Это безопасно, т.к. configureAppDependencies() вызывается в App.init() на main thread.
+            return MainActor.assumeIsolated {
+                CategoryService(signRepository: self.resolve(SignRepositoryProtocol.self))
+            }
+        }
+        
+        // 2. Репозитории (singleton)
+        registerSingleton(SyncRepositoryProtocol.self) {
+            SyncRepository()
+        }
+        
+        registerSingleton(SignRepositoryProtocol.self) { [unowned self] in
+            SignRepository(
+                syncRepository: self.resolve(SyncRepositoryProtocol.self),
+                cacheService: self.resolve(CacheService.self),
+                networkMonitor: self.resolve(NetworkMonitorProtocol.self)
+            )
+        }
+        
+        registerSingleton(VideoRepositoryProtocol.self) { [unowned self] in
+            VideoRepository(
+                videoCacheService: self.resolve(VideoCacheServiceProtocol.self),
+                networkMonitor: self.resolve(NetworkMonitorProtocol.self)
+            )
+        }
+        
+        registerSingleton(LessonRepositoryProtocol.self) { [unowned self] in
+            LessonRepository(
+                cacheService: self.resolve(CacheService.self)
+            )
+        }
+        
+        registerSingleton(FavoritesRepositoryProtocol.self) { [unowned self] in
+            FavoritesRepository(
+                signRepository: self.resolve(SignRepositoryProtocol.self),
+                videoCacheService: self.resolve(VideoCacheServiceProtocol.self)
+            )
+        }
+    }
+}
