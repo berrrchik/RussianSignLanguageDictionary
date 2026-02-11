@@ -4,11 +4,18 @@ struct SignRowView: View {
     let sign: Sign
     let showFavoriteIndicator: Bool
     let isFavorite: Bool
+    let categoryService: CategoryServiceProtocol
     
-    init(sign: Sign, showFavoriteIndicator: Bool = false, isFavorite: Bool = false) {
+    init(
+        sign: Sign,
+        showFavoriteIndicator: Bool = false,
+        isFavorite: Bool = false,
+        categoryService: CategoryServiceProtocol
+    ) {
         self.sign = sign
         self.showFavoriteIndicator = showFavoriteIndicator
         self.isFavorite = isFavorite
+        self.categoryService = categoryService
     }
     
     var body: some View {
@@ -21,7 +28,7 @@ struct SignRowView: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 
-                Text(CategoryService.name(for: sign.categoryId))
+                Text(categoryService.name(for: sign.categoryId))
                     .font(.caption)
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, LayoutConstants.SignRow.badgeHorizontalPadding)
@@ -42,7 +49,7 @@ struct SignRowView: View {
         .padding(.vertical, LayoutConstants.SignRow.verticalPadding)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(sign.word), \(CategoryService.name(for: sign.categoryId))")
+        .accessibilityLabel("\(sign.word), \(categoryService.name(for: sign.categoryId))")
         .accessibilityHint("Нажмите для просмотра деталей")
     }
     
@@ -59,7 +66,18 @@ struct SignRowView: View {
 }
 
 // MARK: - Preview
+#if DEBUG
 struct SignRowView_Previews: PreviewProvider {
+    // Мок-сервис для Preview
+    private class MockCategoryService: CategoryServiceProtocol {
+        func loadCategories() async {}
+        func name(for categoryId: String) -> String { categoryId.capitalized }
+        func category(for categoryId: String) -> Category? { nil }
+        func icon(for categoryId: String) -> String? { nil }
+        func color(for categoryId: String) -> String? { nil }
+        func allCategories() -> [Category] { [] }
+    }
+    
     static var previews: some View {
         let sampleSign = Sign(
             id: "sign_001",
@@ -81,14 +99,17 @@ struct SignRowView_Previews: PreviewProvider {
             )
         )
         
+        let mockCategoryService = MockCategoryService()
+        
         return Group {
             List {
-                SignRowView(sign: sampleSign)
-                SignRowView(sign: sampleSign, showFavoriteIndicator: true, isFavorite: true)
-                SignRowView(sign: sampleSign, showFavoriteIndicator: true, isFavorite: false)
+                SignRowView(sign: sampleSign, categoryService: mockCategoryService)
+                SignRowView(sign: sampleSign, showFavoriteIndicator: true, isFavorite: true, categoryService: mockCategoryService)
+                SignRowView(sign: sampleSign, showFavoriteIndicator: true, isFavorite: false, categoryService: mockCategoryService)
             }
             .previewDisplayName("Варианты отображения")
         }
     }
 }
+#endif
 
