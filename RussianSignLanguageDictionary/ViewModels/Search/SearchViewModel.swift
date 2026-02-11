@@ -28,6 +28,7 @@ final class SearchViewModel: ObservableObject {
     
     private let signRepository: SignRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
+    private let categoryService: CategoryServiceProtocol
     private var hybridSearchService: HybridSearchService?
     
     // MARK: - Private Properties
@@ -62,10 +63,12 @@ final class SearchViewModel: ObservableObject {
     
     init(
         signRepository: SignRepositoryProtocol,
-        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
+        networkMonitor: NetworkMonitorProtocol,
+        categoryService: CategoryServiceProtocol
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
+        self.categoryService = categoryService
         setupDebouncing()
         
         NotificationCenter.default.publisher(for: .signsDidUpdate)
@@ -195,7 +198,7 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Computed Properties
     
     var categories: [Category] {
-        CategoryService.allCategories()
+        categoryService.allCategories()
     }
     
     var groupedResults: [SignSection] {
@@ -249,7 +252,8 @@ final class SearchViewModel: ObservableObject {
         hybridSearchService = HybridSearchService(
             baseURL: APIConfig.baseURL,
             signs: signs,
-            networkMonitor: networkMonitor
+            networkMonitor: networkMonitor,
+            sbertService: SBERTSearchService(baseURL: APIConfig.baseURL)
         )
     }
 }
