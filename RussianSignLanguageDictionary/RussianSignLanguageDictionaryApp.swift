@@ -2,17 +2,16 @@ import SwiftUI
 
 @main
 struct RussianSignLanguageDictionaryApp: App {
-    
-    // MARK: - Properties
-    
-    @StateObject private var favoritesRepository = FavoritesRepository()
+        
+    init() {
+        DIContainer.shared.configureAppDependencies()
+    }
     
     // MARK: - Body
     
     var body: some Scene {
         WindowGroup {
             MainView()
-                .environmentObject(favoritesRepository)
                 .preferredColorScheme(.light)
         }
     }
