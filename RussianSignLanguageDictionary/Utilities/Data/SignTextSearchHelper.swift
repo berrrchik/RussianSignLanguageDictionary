@@ -6,7 +6,7 @@ import Foundation
 /// Используется в `SignRepository.searchSigns()` и `HybridSearchService.performTextSearch()`.
 enum SignTextSearchHelper {
     
-    /// Фильтрует жесты по текстовому запросу (поиск по слову и ключевым словам)
+    /// Фильтрует жесты по текстовому запросу (поиск по слову и описанию)
     /// - Parameters:
     ///   - signs: Массив жестов для поиска
     ///   - query: Поисковый запрос (непустой, уже trimmed)
@@ -21,7 +21,6 @@ enum SignTextSearchHelper {
         
         return signs.filter { sign in
             sign.word.lowercased().contains(lowercasedQuery) ||
-            (sign.keywords ?? []).contains { $0.lowercased().contains(lowercasedQuery) } ||
             (includeDescription && sign.description.lowercased().contains(lowercasedQuery))
         }
     }
@@ -42,15 +41,13 @@ enum SignTextSearchHelper {
         return signs.filter { sign in
             guard !excludingIds.contains(sign.id) else { return false }
             
-            return sign.word.lowercased().contains(lowercasedQuery) ||
-                (sign.keywords ?? []).contains { $0.lowercased().contains(lowercasedQuery) }
+            return sign.word.lowercased().contains(lowercasedQuery)
         }
     }
     
     /// Сортирует текстовые результаты по релевантности:
     /// 1. Совпадения в начале слова (выше приоритет)
     /// 2. Совпадения в середине слова
-    /// 3. Совпадения в keywords
     /// - Parameters:
     ///   - signs: Массив жестов для сортировки
     ///   - query: Поисковый запрос
