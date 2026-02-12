@@ -20,33 +20,16 @@ struct Sign: Identifiable, Codable, Hashable {
     /// Массив синонимов жеста (опционально)
     let synonyms: [SignSynonym]?
     
-    // MARK: - Обратная совместимость (для старых JSON данных)
-    
-    /// Идентификатор видео файла (устаревшее, используется для обратной совместимости)
-    let videoId: String?
-    
-    /// Путь к видео в Supabase Storage (устаревшее)
-    let supabaseStoragePath: String?
-    
-    /// Публичный URL видео в Supabase Storage (устаревшее)
-    let supabaseUrl: String?
-    
-    /// Ключевые слова для поиска (устаревшее, может быть пустым)
-    let keywords: [String]?
-    
-    /// Метаданные видео файла (устаревшее)
-    let metadata: SignMetadata?
-    
-    // MARK: - Computed Properties (для обратной совместимости)
+    // MARK: - Computed Properties
     
     /// Получает первое видео из массива или nil
     var firstVideo: SignVideo? {
         return videos?.first
     }
     
-    /// Получает URL первого видео для обратной совместимости
+    /// Получает URL первого видео
     var primaryVideoURL: String? {
-        return videos?.first?.url ?? supabaseUrl
+        return videos?.first?.url
     }
     
     /// Получает массив видео или пустой массив
