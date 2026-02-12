@@ -5,36 +5,48 @@ import os.log
 ///
 /// Поддерживает двухуровневое кеширование:
 /// - **Долгосрочный кеш**: файлы на диске для избранных жестов (до 500MB)
-/// - **Краткосрочный кеш**: AVPlayer автоматически кеширует в памяти
+/// - **Краткосрочный кеш**: видео скачиваются в `Caches/video_short_term_cache/`,
+///   управляются по стратегии LRU (Least Recently Used) с лимитом размера
 ///
-/// ⚠️ **Важно**: Краткосрочный кеш AVPlayer хранится только в оперативной памяти
-/// и не сохраняется между запусками приложения. После перезапуска приложения
-/// для просмотра видео не избранных жестов требуется активное интернет-соединение.
+/// Краткосрочный кеш хранится в `cachesDirectory` — штатное место для кешей iOS.
+/// Система может очистить его при нехватке места, но между обычными сессиями
+/// кеш сохраняется, обеспечивая мгновенный доступ к ранее просмотренным видео.
+/// При превышении лимита (150MB) автоматически удаляются самые старые файлы.
 final class VideoRepository: VideoRepositoryProtocol {
     // MARK: - Constants
     
     private enum Constants {
-        /// Максимальное количество URL в кеше
+        /// Максимальное количество записей в NSCache
         static let cacheCountLimit: Int = 100
-        /// Максимальный размер кеша в байтах (10 МБ)
-        static let cacheTotalCostLimit: Int = 10 * 1024 * 1024
+        /// Название директории для краткосрочного кеша
+        static let shortTermCacheDirectoryName = "video_short_term_cache"
+        /// Максимальный размер краткосрочного кеша на диске (150 MB)
+        static let maxShortTermCacheSize: Int = 150 * 1024 * 1024
+        /// Целевой размер после очистки LRU (80% от лимита = 120 MB)
+        static let targetSizePercent: Int = 80
     }
     
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.videoRepository", category: "VideoRepository")
     
-    /// Кэш для URL видео (краткосрочный, в памяти)
+    /// Кэш для локальных URL видео (in-memory, быстрый lookup)
+    /// Маппинг: video_id → file URL в Caches/
+    /// NSCache потокобезопасен — дополнительная синхронизация не требуется
     private let cache = NSCache<NSString, NSURL>()
     
-    /// Очередь для thread-safe операций
-    private let cacheQueue = DispatchQueue(label: "com.rsl.videoRepository.cache")
-    
-    /// Сервис кеширования видео
+    /// Сервис кеширования видео (для долгосрочного кеша избранных)
     private let videoCacheService: VideoCacheServiceProtocol
     
     /// Монитор сети для проверки доступности интернета
     private let networkMonitor: NetworkMonitorProtocol
+    
+    /// Директория для файлов краткосрочного кеша (Caches/)
+    private let shortTermCacheDirectory: URL
+    
+    /// Координатор активных загрузок для дедупликации параллельных запросов
+    /// Использует Swift actor для потокобезопасности без блокировки потоков
+    private let downloadCoordinator = VideoDownloadCoordinator()
     
     // MARK: - Initialization
     
@@ -45,36 +57,74 @@ final class VideoRepository: VideoRepositoryProtocol {
         self.videoCacheService = videoCacheService
         self.networkMonitor = networkMonitor
         
-        // Настройка кэша
+        // Настройка NSCache (хранит маппинг video_id → локальный file URL)
         cache.countLimit = Constants.cacheCountLimit
-        cache.totalCostLimit = Constants.cacheTotalCostLimit
+        
+        // Создание директории для краткосрочного кеша в Caches/
+        // cachesDirectory — штатное место для кешей в iOS:
+        // - Сохраняется между обычными сессиями приложения
+        // - Может быть очищена системой при нехватке места (что допустимо для кеша)
+        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent(Constants.shortTermCacheDirectoryName, isDirectory: true)
+        self.shortTermCacheDirectory = cacheDir
+        
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        
+        // LRU-очистка в фоне (не блокируем main thread при холодном старте)
+        DispatchQueue.global(qos: .utility).async {
+            let removedCount = FileCacheLRU.enforceSizeLimit(
+                at: cacheDir,
+                maxSize: Constants.maxShortTermCacheSize,
+                targetPercent: Constants.targetSizePercent
+            )
+            if removedCount > 0 {
+                Logger(subsystem: "com.rsl.videoRepository", category: "VideoRepository")
+                    .info("🗑️ LRU-очистка при старте: удалено \(removedCount) файлов")
+            }
+        }
+        
+        logger.info("✅ VideoRepository инициализирован, cache: \(cacheDir.path)")
     }
     
     // MARK: - VideoRepositoryProtocol
     
-    func getVideoURL(for sign: Sign) async throws -> URL {
-        // Используем первое видео из массива (новый формат)
-        if let firstVideo = sign.videos?.first {
-            return try await getVideoURL(for: firstVideo, useFavoritesCache: false)
-        }
+    func cachedVideoURL(for video: SignVideo) -> URL? {
+        let cacheKey = "video_\(video.id)" as NSString
         
-        // Fallback на старый формат (обратная совместимость)
-        let cacheKey = sign.id as NSString
-        if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
+        // 1. Проверяем NSCache (быстрый путь, O(1))
+        // NSCache потокобезопасен — дополнительная синхронизация не нужна
+        if let cachedURL = cache.object(forKey: cacheKey) as URL?,
+           FileManager.default.fileExists(atPath: cachedURL.path) {
+            // Обновляем дату модификации для корректной работы LRU-алгоритма:
+            // без этого файлы, к которым обращаются часто, могут быть удалены
+            // раньше реально «старых» файлов
+            touchFile(at: cachedURL)
             return cachedURL
         }
         
-        // Используем публичный URL из модели Sign (старый формат)
-        guard let supabaseUrl = sign.supabaseUrl, let url = URL(string: supabaseUrl) else {
+        // 2. NSCache мог evict запись — проверяем файл на диске по имени
+        let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
+        if FileManager.default.fileExists(atPath: cachedFileURL.path) {
+            // Восстанавливаем запись в NSCache и обновляем дату для LRU
+            cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
+            touchFile(at: cachedFileURL)
+            return cachedFileURL
+        }
+        
+        // 3. Проверяем долгосрочный кеш (избранное, файлы на диске)
+        if let favoritesURL = videoCacheService.getCachedVideoURL(video) {
+            return favoritesURL
+        }
+        
+        return nil
+    }
+    
+    func getVideoURL(for sign: Sign) async throws -> URL {
+        guard let firstVideo = sign.videos?.first else {
             throw VideoRepositoryError.invalidURL
         }
         
-        // Сохранение в кэш
-        cacheQueue.sync {
-            cache.setObject(url as NSURL, forKey: cacheKey)
-        }
-        
-        return url
+        return try await getVideoURL(for: firstVideo, useFavoritesCache: false)
     }
     
     func getVideoURL(for video: SignVideo, useFavoritesCache: Bool = false) async throws -> URL {
@@ -88,7 +138,7 @@ final class VideoRepository: VideoRepositoryProtocol {
             // Долгосрочный кеш для избранных жестов (файлы на диске)
             return try await getVideoURLFromFavoritesCache(url: url, videoId: videoId, video: video)
         } else {
-            // Краткосрочный кеш (AVPlayer в памяти)
+            // Краткосрочный кеш (файлы в Caches/)
             return try await getVideoURLWithShortTermCache(url: url, video: video)
         }
     }
@@ -109,7 +159,7 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     func preloadVideo(for sign: Sign) async throws {
-        // Загрузка URL в кэш
+        // Загрузка видео в кэш
         _ = try await getVideoURL(for: sign)
     }
     
@@ -118,16 +168,15 @@ final class VideoRepository: VideoRepositoryProtocol {
             logger.info("📥 Предзагрузка видео \(video.id) в долгосрочный кеш")
             await videoCacheService.preloadVideo(video)
         } else {
-            // Для краткосрочного кеша просто получаем URL
+            // Для краткосрочного кеша — скачиваем в temp
             _ = try await getVideoURL(for: video, useFavoritesCache: false)
         }
     }
     
     func clearCache() {
-        cacheQueue.sync {
-            cache.removeAllObjects()
-        }
-        logger.info("🗑️ Краткосрочный кеш URL очищен")
+        cache.removeAllObjects()
+        clearShortTermCacheDirectory()
+        logger.info("🗑️ Краткосрочный кеш очищен (NSCache + файлы)")
     }
     
     // MARK: - Private Methods
@@ -170,38 +219,117 @@ final class VideoRepository: VideoRepositoryProtocol {
         }
     }
     
-    /// Получает URL видео с краткосрочным кешированием (AVPlayer в памяти)
+    /// Получает URL видео с краткосрочным кешированием (файлы в Caches/)
+    ///
+    /// При первом запросе скачивает видео в локальный файл.
+    /// При повторном запросе возвращает локальный URL мгновенно.
+    /// Параллельные запросы для одного video.id дедуплицируются:
+    /// второй вызов ждёт завершения первого, а не запускает повторную загрузку.
     /// - Parameters:
-    ///   - url: URL видео
+    ///   - url: URL видео на сервере
     ///   - video: Модель видео
-    /// - Returns: URL видео
+    /// - Returns: URL локального файла
     /// - Throws: VideoRepositoryError
     private func getVideoURLWithShortTermCache(url: URL, video: SignVideo) async throws -> URL {
-        let cacheKey = "video_\(video.id)" as NSString
-        
-        // Проверка кэша URL
-        if let cachedURL = cacheQueue.sync(execute: { cache.object(forKey: cacheKey) as URL? }) {
-            logger.debug("✅ URL видео \(video.id) из краткосрочного кеша")
-            return cachedURL
+        // 1. Проверяем кеш (синхронно)
+        if let localURL = cachedVideoURL(for: video) {
+            logger.debug("✅ Видео \(video.id) из краткосрочного кеша (локальный файл)")
+            return localURL
         }
         
-        // Для не избранных жестов проверяем интернет обязательно
-        // Краткосрочный кеш AVPlayer не сохраняется между запусками приложения
+        // 2. Получаем или создаём задачу загрузки через actor (не блокирует поток!)
+        let (task, isExisting) = await downloadCoordinator.getOrCreateTask(videoId: video.id) { [weak self] in
+            guard let self = self else { throw VideoRepositoryError.downloadFailed }
+            return try await self.downloadAndCacheVideo(url: url, video: video)
+        }
+        
+        // 3. Если это существующая задача, логируем
+        if isExisting {
+            logger.debug("⏳ Видео \(video.id) уже загружается, ожидаем...")
+        }
+        
+        return try await task.value
+    }
+    
+    /// Выполняет загрузку видео и сохранение в краткосрочный кеш
+    /// - Parameters:
+    ///   - url: URL видео на сервере
+    ///   - video: Модель видео
+    /// - Returns: URL локального файла
+    /// - Throws: VideoRepositoryError
+    private func downloadAndCacheVideo(url: URL, video: SignVideo) async throws -> URL {
+        // 1. Проверяем интернет
         let isConnected = await networkMonitor.checkConnection()
         if !isConnected {
             logger.warning("⚠️ Нет интернета для загрузки видео \(video.id) (не в избранном)")
             throw VideoRepositoryError.noInternetConnection
         }
         
-        // Сохранение URL в краткосрочный кэш
-        cacheQueue.sync {
-            cache.setObject(url as NSURL, forKey: cacheKey)
+        // 2. Скачиваем видео
+        logger.debug("📥 Загрузка видео \(video.id) в краткосрочный кеш...")
+        
+        do {
+            let (tempDownloadURL, _) = try await URLSession.shared.download(from: url)
+            
+            // 3. Перемещаем в управляемую директорию
+            let localFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
+            
+            // Удаляем старый файл если есть
+            try? FileManager.default.removeItem(at: localFileURL)
+            try FileManager.default.moveItem(at: tempDownloadURL, to: localFileURL)
+            
+            // 4. Сохраняем в NSCache (потокобезопасен, синхронизация не нужна)
+            let cacheKey = "video_\(video.id)" as NSString
+            cache.setObject(localFileURL as NSURL, forKey: cacheKey)
+            
+            logger.debug("✅ Видео \(video.id) сохранено в краткосрочный кеш")
+            
+            // 5. Проверяем лимит кеша (LRU-очистка в фоне)
+            ensureShortTermCacheLimit()
+            
+            return localFileURL
+        } catch {
+            logger.error("❌ Ошибка загрузки видео \(video.id) с \(url): \(error.localizedDescription)")
+            throw VideoRepositoryError.downloadFailed
         }
+    }
+    
+    // MARK: - Cache Maintenance
+    
+    /// Очищает все файлы краткосрочного кеша
+    private func clearShortTermCacheDirectory() {
+        let fileManager = FileManager.default
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: shortTermCacheDirectory,
+            includingPropertiesForKeys: nil
+        ) else { return }
         
-        logger.debug("📥 URL видео \(video.id) готов для AVPlayer (краткосрочный кеш)")
-        
-        // AVPlayer автоматически кеширует видео в памяти при воспроизведении
-        // cachePolicy .useProtocolCachePolicy позволяет AVPlayer использовать свой встроенный кеш
-        return url
+        for fileURL in contents {
+            try? fileManager.removeItem(at: fileURL)
+        }
+        logger.debug("🗑️ Краткосрочный кеш очищен (\(contents.count) файлов)")
+    }
+    
+    /// Проверяет лимит краткосрочного кеша и запускает LRU-очистку в фоне
+    private func ensureShortTermCacheLimit() {
+        DispatchQueue.global(qos: .utility).async { [shortTermCacheDirectory] in
+            FileCacheLRU.enforceSizeLimit(
+                at: shortTermCacheDirectory,
+                maxSize: Constants.maxShortTermCacheSize,
+                targetPercent: Constants.targetSizePercent
+            )
+        }
+    }
+    
+    /// Обновляет дату модификации файла для корректной работы LRU
+    ///
+    /// LRU-алгоритм сортирует файлы по `contentModificationDate`.
+    /// Без обновления даты при чтении часто используемые файлы могут быть
+    /// удалены раньше реально «забытых».
+    private func touchFile(at url: URL) {
+        try? FileManager.default.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: url.path
+        )
     }
 }
