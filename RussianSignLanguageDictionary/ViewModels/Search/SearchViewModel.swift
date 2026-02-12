@@ -57,7 +57,6 @@ final class SearchViewModel: ObservableObject {
     private struct SearchableSign {
         let sign: Sign
         let lowercasedWord: String
-        let lowercasedKeywords: [String]
     }
     
     // MARK: - Init
@@ -185,8 +184,7 @@ final class SearchViewModel: ObservableObject {
                 let lowercasedQuery = trimmedQuery.lowercased()
                 
                 let filtered = searchableSigns.filter { searchable in
-                    searchable.lowercasedWord.contains(lowercasedQuery) ||
-                    searchable.lowercasedKeywords.contains(where: { $0.contains(lowercasedQuery) })
+                    searchable.lowercasedWord.contains(lowercasedQuery)
                 }
                 
                 guard !Task.isCancelled else {
@@ -256,8 +254,7 @@ final class SearchViewModel: ObservableObject {
         searchableSigns = signs.map { sign in
             SearchableSign(
                 sign: sign,
-                lowercasedWord: sign.word.lowercased(),
-                lowercasedKeywords: (sign.keywords ?? []).map { $0.lowercased() }
+                lowercasedWord: sign.word.lowercased()
             )
         }
         
