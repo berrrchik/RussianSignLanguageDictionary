@@ -86,8 +86,19 @@ final class SignDetailViewModel: ObservableObject {
     func loadVideo() async {
         guard let video = currentVideo else { return }
         
-        isLoadingVideo = true
         videoErrorMessage = nil
+        
+        if let cachedURL = videoRepository.cachedVideoURL(for: video) {
+            videoURL = cachedURL
+            logger.debug("⚡ Видео \(video.id) загружено из кеша (без loading)")
+            
+            if favoritesRepository.isFavorite(signId: sign.id) {
+                preloadNextVideo()
+            }
+            return
+        }
+        
+        isLoadingVideo = true
         let useFavoritesCache = favoritesRepository.isFavorite(signId: sign.id)
         
         do {
