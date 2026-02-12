@@ -150,47 +150,21 @@ final class VideoCacheDirectoryManager {
     }
     
     /// Проверяет и поддерживает лимит размера кеша
-    /// Удаляет старые файлы если размер превышает лимит
+    /// Удаляет старые файлы если размер превышает лимит (LRU-стратегия)
     func ensureCacheLimit() {
         cacheQueue.async { [weak self] in
             guard let self = self,
                   let cacheDir = self.cacheDirectory else { return }
             
-            let currentSize = self._getCacheSizeUnsafe()
+            let removedCount = FileCacheLRU.enforceSizeLimit(
+                at: cacheDir,
+                maxSize: Constants.maxDiskCapacity,
+                targetPercent: Constants.targetSizePercent
+            )
             
-            guard currentSize > Constants.maxDiskCapacity else { return }
-            
-            self.logger.warning("⚠️ Размер кеша (\(currentSize / 1024 / 1024)MB) превышает лимит, очистка...")
-            
-            do {
-                let files = try self.fileManager.contentsOfDirectory(
-                    at: cacheDir,
-                    includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
-                    options: .skipsHiddenFiles
-                ).sorted { file1, file2 in
-                    let date1 = (try? file1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
-                    let date2 = (try? file2.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
-                    return date1 < date2
-                }
-                
-                var freedSize = 0
-                let targetSize = Constants.maxDiskCapacity * Constants.targetSizePercent / 100
-                
-                for file in files {
-                    if currentSize - freedSize <= targetSize {
-                        break
-                    }
-                    
-                    let fileSize = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                    try self.fileManager.removeItem(at: file)
-                    freedSize += fileSize
-                    self.logger.info("🗑️ Удалён старый файл: \(file.lastPathComponent)")
-                }
-                
+            if removedCount > 0 {
                 let newSize = self._getCacheSizeUnsafe()
-                self.logger.info("✅ Очищено \(freedSize / 1024 / 1024)MB, новый размер: \(newSize / 1024 / 1024)MB")
-            } catch {
-                self.logger.error("❌ Ошибка очистки кеша: \(error.localizedDescription)")
+                self.logger.info("✅ LRU-очистка: удалено \(removedCount) файлов, новый размер: \(newSize / 1024 / 1024)MB")
             }
         }
     }
