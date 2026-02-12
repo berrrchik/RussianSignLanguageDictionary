@@ -37,6 +37,7 @@ final class SearchViewModel: ObservableObject {
     private var searchableSigns: [SearchableSign] = []
     private var searchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+    private var hasLoadedInitialData = false
     
     // MARK: - Enums
     
@@ -82,7 +83,12 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Public Methods
     
     func loadAllSigns() async {
-        guard allSigns.isEmpty else {
+        let hasActiveSearch = !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        
+        guard !hasLoadedInitialData || allSigns.isEmpty else {
+            if hasActiveSearch {
+                return
+            }
             searchResults = allSigns
             return
         }
@@ -95,7 +101,13 @@ final class SearchViewModel: ObservableObject {
         do {
             let signs = try await signRepository.loadAllSigns()
             updateSearchData(with: signs)
-            searchResults = signs
+            hasLoadedInitialData = true
+            
+            if hasActiveSearch {
+                await performSearch(query: searchQuery)
+            } else {
+                searchResults = signs
+            }
             
             isLoading = false
             let isConnected = await networkMonitor.checkConnection()
