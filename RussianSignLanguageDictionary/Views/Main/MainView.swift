@@ -11,6 +11,7 @@ struct MainView: View {
     private let networkMonitor: NetworkMonitorProtocol
     
     @StateObject private var syncViewModel: SyncViewModel
+    @StateObject private var searchViewModel: SearchViewModel
     @State private var isInitialized = false
     @State private var showSyncError = false
         
@@ -29,6 +30,14 @@ struct MainView: View {
                 syncRepository: container.resolve(SyncRepositoryProtocol.self),
                 cacheService: container.resolve(CacheService.self),
                 networkMonitor: container.resolve(NetworkMonitorProtocol.self)
+            )
+        )
+        
+        self._searchViewModel = StateObject(
+            wrappedValue: SearchViewModel(
+                signRepository: container.resolve(SignRepositoryProtocol.self),
+                networkMonitor: container.resolve(NetworkMonitorProtocol.self),
+                categoryService: container.resolve(CategoryServiceProtocol.self)
             )
         )
     }
@@ -70,6 +79,7 @@ struct MainView: View {
     private var tabView: some View {
         TabView {
             SearchView(
+                viewModel: searchViewModel,
                 signRepository: signRepository,
                 videoRepository: videoRepository,
                 favoritesRepository: favoritesRepository,

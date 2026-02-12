@@ -1,30 +1,29 @@
 import SwiftUI
 
 struct SearchView: View {
-    @StateObject private var viewModel: SearchViewModel
+    @ObservedObject var viewModel: SearchViewModel
     @State private var selectedSign: Sign?
     
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     private let favoritesRepository: FavoritesRepositoryProtocol
     private let categoryService: CategoryServiceProtocol
+    private let networkMonitor: NetworkMonitorProtocol
     
     init(
+        viewModel: SearchViewModel,
         signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol,
         favoritesRepository: FavoritesRepositoryProtocol,
         networkMonitor: NetworkMonitorProtocol,
         categoryService: CategoryServiceProtocol
     ) {
+        self.viewModel = viewModel
         self.signRepository = signRepository
         self.videoRepository = videoRepository
         self.favoritesRepository = favoritesRepository
+        self.networkMonitor = networkMonitor
         self.categoryService = categoryService
-        _viewModel = StateObject(wrappedValue: SearchViewModel(
-            signRepository: signRepository,
-            networkMonitor: networkMonitor,
-            categoryService: categoryService
-        ))
     }
     
     var body: some View {
@@ -36,7 +35,7 @@ struct SearchView: View {
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "Введите слово для поиска"
             )
-            .task {
+            .task(id: "initialLoad") {
                 await viewModel.loadAllSigns()
             }
             .navigationDestination(item: $selectedSign) { sign in
@@ -204,6 +203,11 @@ struct SearchView: View {
 struct SearchView_Previews: PreviewProvider {
     static var previews: some View {
         SearchView(
+            viewModel: SearchViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor,
+                categoryService: PreviewData.categoryService
+            ),
             signRepository: PreviewData.signRepository,
             videoRepository: PreviewData.videoRepository,
             favoritesRepository: PreviewData.favoritesRepository,
