@@ -84,19 +84,17 @@ struct SignRowView_Previews: PreviewProvider {
             word: "Привет",
             description: "Жест приветствия",
             categoryId: "общение",
-            videos: nil,
-            synonyms: nil,
-            videoId: "video_001",
-            supabaseStoragePath: "signs/hello.mp4",
-            supabaseUrl: "https://example.com/video.mp4",
-            keywords: ["привет", "здравствуй"],
-            metadata: SignMetadata(
-                duration: 3.5,
-                fileSize: 512000,
-                resolution: "1080x1920",
-                format: "mp4",
-                fps: 30
-            )
+            videos: [
+                SignVideo(
+                    id: 1,
+                    url: "https://example.com/video.mp4",
+                    contextDescription: "Основное видео",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ],
+            synonyms: nil
         )
         
         let mockCategoryService = MockCategoryService()
