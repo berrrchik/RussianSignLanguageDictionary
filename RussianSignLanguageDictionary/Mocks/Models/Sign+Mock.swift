@@ -9,7 +9,6 @@ extension Sign {
     ///   - categoryId: Идентификатор категории жеста
     ///   - description: Описание жеста
     ///   - videos: Массив видео для жеста
-    ///   - keywords: Ключевые слова для поиска
     ///   - synonyms: Массив синонимов жеста
     /// - Returns: Тестовый объект Sign
     static func mock(
@@ -18,7 +17,6 @@ extension Sign {
         categoryId: String = "greetings",
         description: String = "Жест для тестирования",
         videos: [SignVideo]? = nil,
-        keywords: [String]? = nil,
         synonyms: [SignSynonym]? = nil
     ) -> Sign {
         Sign(
@@ -36,12 +34,7 @@ extension Sign {
                     updatedAt: nil
                 )
             ],
-            synonyms: synonyms,
-            videoId: "video_\(id)",
-            supabaseStoragePath: "test/\(id).mp4",
-            supabaseUrl: "https://example.com/\(id).mp4",
-            keywords: keywords ?? [word.lowercased()],
-            metadata: .mock()
+            synonyms: synonyms
         )
     }
     

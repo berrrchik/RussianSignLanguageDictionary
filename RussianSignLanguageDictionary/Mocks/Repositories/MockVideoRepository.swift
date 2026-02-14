@@ -23,6 +23,11 @@ final class MockVideoRepository: VideoRepositoryProtocol {
     
     // MARK: - VideoRepositoryProtocol
     
+    func cachedVideoURL(for video: SignVideo) -> URL? {
+        // В mock всегда возвращаем nil (нет кеша)
+        return nil
+    }
+    
     func getVideoURL(for sign: Sign) async throws -> URL {
         if shouldFail {
             throw errorToThrow

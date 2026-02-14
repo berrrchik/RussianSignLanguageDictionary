@@ -99,12 +99,7 @@ final class MockSyncRepository: SyncRepositoryProtocol {
                         updatedAt: Date()
                     )
                 ],
-                synonyms: nil,
-                videoId: nil,
-                supabaseStoragePath: nil,
-                supabaseUrl: nil,
-                keywords: nil,
-                metadata: nil
+                synonyms: nil
             )
         }
         

@@ -64,8 +64,7 @@ final class MockSignRepository: SignRepositoryProtocol {
         
         let lowercasedQuery = query.lowercased()
         return mockSigns.filter { sign in
-            sign.word.lowercased().contains(lowercasedQuery) ||
-            (sign.keywords?.contains { $0.lowercased().contains(lowercasedQuery) } ?? false)
+            sign.word.lowercased().contains(lowercasedQuery)
         }
     }
 }
