@@ -27,6 +27,17 @@ final class SyncViewModel: ObservableObject {
     
     // MARK: - Initialization
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init() {
+        let container = DIContainer.shared
+        self.init(
+            syncRepository: container.resolve(SyncRepositoryProtocol.self),
+            cacheService: container.resolve(CacheService.self),
+            networkMonitor: container.resolve(NetworkMonitorProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(
         syncRepository: SyncRepositoryProtocol,
         cacheService: CacheService,

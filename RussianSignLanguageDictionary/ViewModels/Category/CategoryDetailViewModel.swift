@@ -26,6 +26,15 @@ final class CategoryDetailViewModel: ObservableObject {
     
     // MARK: - Init
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init(category: Category) {
+        self.init(
+            category: category,
+            signRepository: DIContainer.shared.resolve(SignRepositoryProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(category: Category, signRepository: SignRepositoryProtocol) {
         self.category = category
         self.signRepository = signRepository

@@ -31,6 +31,16 @@ final class LessonDetailViewModel: ObservableObject {
     
     // MARK: - Initialization
 
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init(lesson: Lesson, allLessons: [Lesson]) {
+        self.init(
+            lesson: lesson,
+            allLessons: allLessons,
+            videoRepository: DIContainer.shared.resolve(VideoRepositoryProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(lesson: Lesson, allLessons: [Lesson], videoRepository: VideoRepositoryProtocol) {
         self.lesson = lesson
         self.allLessons = allLessons

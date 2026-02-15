@@ -33,6 +33,16 @@ final class FavoritesViewModel: ObservableObject {
     
     // MARK: - Init
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init() {
+        let container = DIContainer.shared
+        self.init(
+            favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
+            signRepository: container.resolve(SignRepositoryProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(
         favoritesRepository: FavoritesRepositoryProtocol,
         signRepository: SignRepositoryProtocol

@@ -61,6 +61,17 @@ final class SearchViewModel: ObservableObject {
     
     // MARK: - Init
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init() {
+        let container = DIContainer.shared
+        self.init(
+            signRepository: container.resolve(SignRepositoryProtocol.self),
+            networkMonitor: container.resolve(NetworkMonitorProtocol.self),
+            categoryService: container.resolve(CategoryServiceProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(
         signRepository: SignRepositoryProtocol,
         networkMonitor: NetworkMonitorProtocol,

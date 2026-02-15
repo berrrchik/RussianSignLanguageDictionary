@@ -19,6 +19,14 @@ final class LessonsViewModel: ObservableObject {
     
     private let lessonRepository: LessonRepositoryProtocol
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init() {
+        self.init(
+            lessonRepository: DIContainer.shared.resolve(LessonRepositoryProtocol.self)
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(lessonRepository: LessonRepositoryProtocol) {
         self.lessonRepository = lessonRepository
     }

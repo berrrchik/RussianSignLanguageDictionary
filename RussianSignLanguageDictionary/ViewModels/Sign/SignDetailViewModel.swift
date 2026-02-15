@@ -66,6 +66,19 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Init
     
+    /// Convenience init для production — резолвит зависимости из DIContainer
+    convenience init(sign: Sign, visitedSignIds: Set<String> = []) {
+        let container = DIContainer.shared
+        self.init(
+            sign: sign,
+            signRepository: container.resolve(SignRepositoryProtocol.self),
+            videoRepository: container.resolve(VideoRepositoryProtocol.self),
+            favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
+            visitedSignIds: visitedSignIds
+        )
+    }
+    
+    /// Полный init для тестов и preview (constructor injection)
     init(
         sign: Sign,
         signRepository: SignRepositoryProtocol,
