@@ -4,18 +4,13 @@ struct LessonDetailView: View {
     @StateObject private var viewModel: LessonDetailViewModel
     @State private var selectedLesson: Lesson?
     
-    let lesson: Lesson
-    let allLessons: [Lesson]
-    let videoRepository: VideoRepositoryProtocol
+    private let allLessons: [Lesson]
 
-    init(lesson: Lesson, allLessons: [Lesson], videoRepository: VideoRepositoryProtocol) {
-        self.lesson = lesson
+    init(lesson: Lesson, allLessons: [Lesson]) {
         self.allLessons = allLessons
-        self.videoRepository = videoRepository
         _viewModel = StateObject(wrappedValue: LessonDetailViewModel(
             lesson: lesson,
-            allLessons: allLessons,
-            videoRepository: videoRepository
+            allLessons: allLessons
         ))
     }
     
@@ -36,8 +31,7 @@ struct LessonDetailView: View {
         .navigationDestination(item: $selectedLesson) { lesson in
             LessonDetailView(
                 lesson: lesson,
-                allLessons: allLessons,
-                videoRepository: videoRepository
+                allLessons: allLessons
             )
         }
     }
@@ -121,10 +115,10 @@ struct LessonDetailView_Previews: PreviewProvider {
         NavigationStack {
             LessonDetailView(
                 lesson: PreviewData.lesson,
-                allLessons: PreviewData.lessons,
-                videoRepository: PreviewData.videoRepository
+                allLessons: PreviewData.lessons
             )
         }
+        .environment(\.dependencies, .preview)
     }
 }
 #endif

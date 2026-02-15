@@ -3,44 +3,10 @@ import SwiftUI
 struct MainView: View {
     // MARK: - Properties
     
-    private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    private let lessonRepository: LessonRepositoryProtocol
-    private let categoryService: CategoryServiceProtocol
-    private let favoritesRepository: FavoritesRepositoryProtocol
-    private let networkMonitor: NetworkMonitorProtocol
-    
-    @StateObject private var syncViewModel: SyncViewModel
-    @StateObject private var searchViewModel: SearchViewModel
+    @Environment(\.dependencies) private var deps
+    @StateObject private var syncViewModel = SyncViewModel()
     @State private var isInitialized = false
     @State private var showSyncError = false
-        
-    // MARK: - Init
-    
-    init(container: DIContainer = .shared) {
-        self.signRepository = container.resolve(SignRepositoryProtocol.self)
-        self.videoRepository = container.resolve(VideoRepositoryProtocol.self)
-        self.lessonRepository = container.resolve(LessonRepositoryProtocol.self)
-        self.categoryService = container.resolve(CategoryServiceProtocol.self)
-        self.favoritesRepository = container.resolve(FavoritesRepositoryProtocol.self)
-        self.networkMonitor = container.resolve(NetworkMonitorProtocol.self)
-        
-        self._syncViewModel = StateObject(
-            wrappedValue: SyncViewModel(
-                syncRepository: container.resolve(SyncRepositoryProtocol.self),
-                cacheService: container.resolve(CacheService.self),
-                networkMonitor: container.resolve(NetworkMonitorProtocol.self)
-            )
-        )
-        
-        self._searchViewModel = StateObject(
-            wrappedValue: SearchViewModel(
-                signRepository: container.resolve(SignRepositoryProtocol.self),
-                networkMonitor: container.resolve(NetworkMonitorProtocol.self),
-                categoryService: container.resolve(CategoryServiceProtocol.self)
-            )
-        )
-    }
     
     // MARK: - Body
     
@@ -78,43 +44,22 @@ struct MainView: View {
     
     private var tabView: some View {
         TabView {
-            SearchView(
-                viewModel: searchViewModel,
-                signRepository: signRepository,
-                videoRepository: videoRepository,
-                favoritesRepository: favoritesRepository,
-                networkMonitor: networkMonitor,
-                categoryService: categoryService
-            )
+            SearchView()
             .tabItem {
                 Label("Поиск", systemImage: "magnifyingglass")
             }
             
-            FavoritesView(
-                signRepository: signRepository,
-                favoritesRepository: favoritesRepository,
-                videoRepository: videoRepository,
-                categoryService: categoryService
-            )
+            FavoritesView()
             .tabItem {
                 Label("Избранное", systemImage: "heart.fill")
             }
             
-            CategoriesView(
-                signRepository: signRepository,
-                videoRepository: videoRepository,
-                favoritesRepository: favoritesRepository,
-                networkMonitor: networkMonitor,
-                categoryService: categoryService
-            )
+            CategoriesView()
             .tabItem {
                 Label("Категории", systemImage: "square.grid.2x2")
             }
             
-            LessonsView(
-                lessonRepository: lessonRepository,
-                videoRepository: videoRepository
-            )
+            LessonsView()
             .tabItem {
                 Label("Обучение", systemImage: "book.fill")
             }
@@ -144,7 +89,7 @@ struct MainView: View {
     
     private func initializeApp() async {
         guard !isInitialized else { return }
-        await categoryService.loadCategories()
+        await deps.categoryService.loadCategories()
         isInitialized = true
     }
 }
@@ -155,6 +100,7 @@ struct MainView: View {
 struct MainView_Previews: PreviewProvider {
     static var previews: some View {
         MainView()
+            .environment(\.dependencies, .preview)
     }
 }
 #endif

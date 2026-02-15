@@ -1,12 +1,8 @@
 import SwiftUI
 
 struct CategoriesView: View {
-    @StateObject private var viewModel: CategoriesViewModel
-    
-    private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    private let favoritesRepository: FavoritesRepositoryProtocol
-    private let categoryService: CategoryServiceProtocol
+    @StateObject private var viewModel = CategoriesViewModel()
+    @Environment(\.dependencies) private var deps
     
     private let columns: [GridItem] = [
         GridItem(
@@ -17,23 +13,6 @@ struct CategoriesView: View {
             spacing: LayoutConstants.CategoryCard.gridSpacing
         )
     ]
-    
-    init(
-        signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol,
-        networkMonitor: NetworkMonitorProtocol,
-        categoryService: CategoryServiceProtocol
-    ) {
-        self.signRepository = signRepository
-        self.videoRepository = videoRepository
-        self.favoritesRepository = favoritesRepository
-        self.categoryService = categoryService
-        _viewModel = StateObject(wrappedValue: CategoriesViewModel(
-            signRepository: signRepository,
-            networkMonitor: networkMonitor
-        ))
-    }
     
     var body: some View {
         NavigationStack {
@@ -71,13 +50,7 @@ struct CategoriesView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: LayoutConstants.CategoryCard.gridSpacing) {
                 ForEach(viewModel.categories) { category in
-                    NavigationLink(destination: CategoryDetailView(
-                        category: category,
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: favoritesRepository,
-                        categoryService: categoryService
-                    )) {
+                    NavigationLink(destination: CategoryDetailView(category: category)) {
                         CategoryCardView(category: category)
                     }
                     .buttonStyle(.plain)
@@ -93,14 +66,8 @@ struct CategoriesView: View {
 #if DEBUG
 struct CategoriesView_Previews: PreviewProvider {
     static var previews: some View {
-        CategoriesView(
-            signRepository: PreviewData.signRepository,
-            videoRepository: PreviewData.videoRepository,
-            favoritesRepository: PreviewData.favoritesRepository,
-            networkMonitor: PreviewData.networkMonitor,
-            categoryService: PreviewData.categoryService
-        )
+        CategoriesView()
+            .environment(\.dependencies, .preview)
     }
 }
 #endif
-

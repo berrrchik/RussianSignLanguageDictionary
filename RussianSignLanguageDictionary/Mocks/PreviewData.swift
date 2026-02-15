@@ -79,16 +79,5 @@ enum PreviewData {
         icon: "figure.run"
     )
     
-    // MARK: - Dependencies
-    
-    /// Группа зависимостей для SignDetailView
-    static var signDetailDependencies: SignDetailView.Dependencies {
-        .init(
-            signRepository: signRepository,
-            videoRepository: videoRepository,
-            favoritesRepository: favoritesRepository,
-            categoryService: categoryService
-        )
-    }
 }
 #endif

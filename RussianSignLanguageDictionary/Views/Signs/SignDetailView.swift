@@ -2,33 +2,13 @@ import SwiftUI
 
 struct SignDetailView: View {
     @StateObject private var viewModel: SignDetailViewModel
-    
-    // MARK: - Dependencies
-    
-    /// Группа зависимостей для SignDetailView
-    /// Уменьшает количество параметров в init и упрощает передачу зависимостей по цепочке
-    struct Dependencies {
-        let signRepository: SignRepositoryProtocol
-        let videoRepository: VideoRepositoryProtocol
-        let favoritesRepository: FavoritesRepositoryProtocol
-        let categoryService: CategoryServiceProtocol
-    }
-    
-    private let dependencies: Dependencies
+    @Environment(\.dependencies) private var deps
     
     // MARK: - Init
     
-    init(
-        sign: Sign,
-        dependencies: Dependencies,
-        visitedSignIds: Set<String> = []
-    ) {
-        self.dependencies = dependencies
+    init(sign: Sign, visitedSignIds: Set<String> = []) {
         _viewModel = StateObject(wrappedValue: SignDetailViewModel(
             sign: sign,
-            signRepository: dependencies.signRepository,
-            videoRepository: dependencies.videoRepository,
-            favoritesRepository: dependencies.favoritesRepository,
             visitedSignIds: visitedSignIds
         ))
     }
@@ -55,7 +35,6 @@ struct SignDetailView: View {
         .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
             SignDetailView(
                 sign: sign,
-                dependencies: dependencies,
                 visitedSignIds: viewModel.visitedSignIds
             )
         }
@@ -158,7 +137,7 @@ struct SignDetailView: View {
         HStack {
             Image(systemName: "folder.fill")
                 .font(.caption)
-            Text(dependencies.categoryService.name(for: viewModel.sign.categoryId))
+            Text(deps.categoryService.name(for: viewModel.sign.categoryId))
                 .font(.subheadline)
         }
         .padding(.horizontal, LayoutConstants.SignDetail.categoryBadgeHorizontalPadding)
@@ -195,41 +174,29 @@ struct SignDetailView_Previews: PreviewProvider {
         Group {
             // Превью с синонимами
             NavigationStack {
-                SignDetailView(
-                    sign: PreviewData.signWithSynonyms,
-                    dependencies: PreviewData.signDetailDependencies
-                )
+                SignDetailView(sign: PreviewData.signWithSynonyms)
             }
             .previewDisplayName("С синонимами")
             
             // Превью без синонимов (по умолчанию)
             NavigationStack {
-                SignDetailView(
-                    sign: PreviewData.sign,
-                    dependencies: PreviewData.signDetailDependencies
-                )
+                SignDetailView(sign: PreviewData.sign)
             }
             .previewDisplayName("Без синонимов")
             
             // Превью с множеством видео
             NavigationStack {
-                SignDetailView(
-                    sign: PreviewData.signWithMultipleVideos,
-                    dependencies: PreviewData.signDetailDependencies
-                )
+                SignDetailView(sign: PreviewData.signWithMultipleVideos)
             }
             .previewDisplayName("С несколькими видео")
             
             // Превью с длинным описанием
             NavigationStack {
-                SignDetailView(
-                    sign: PreviewData.signWithLongDescription,
-                    dependencies: PreviewData.signDetailDependencies
-                )
+                SignDetailView(sign: PreviewData.signWithLongDescription)
             }
             .previewDisplayName("Длинное описание")
         }
+        .environment(\.dependencies, .preview)
     }
 }
 #endif
-

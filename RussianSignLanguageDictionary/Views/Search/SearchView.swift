@@ -1,30 +1,9 @@
 import SwiftUI
 
 struct SearchView: View {
-    @ObservedObject var viewModel: SearchViewModel
+    @StateObject private var viewModel = SearchViewModel()
+    @Environment(\.dependencies) private var deps
     @State private var selectedSign: Sign?
-    
-    private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    private let favoritesRepository: FavoritesRepositoryProtocol
-    private let categoryService: CategoryServiceProtocol
-    private let networkMonitor: NetworkMonitorProtocol
-    
-    init(
-        viewModel: SearchViewModel,
-        signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol,
-        networkMonitor: NetworkMonitorProtocol,
-        categoryService: CategoryServiceProtocol
-    ) {
-        self.viewModel = viewModel
-        self.signRepository = signRepository
-        self.videoRepository = videoRepository
-        self.favoritesRepository = favoritesRepository
-        self.networkMonitor = networkMonitor
-        self.categoryService = categoryService
-    }
     
     var body: some View {
         NavigationStack {
@@ -39,15 +18,7 @@ struct SearchView: View {
                 await viewModel.loadAllSigns()
             }
             .navigationDestination(item: $selectedSign) { sign in
-                SignDetailView(
-                    sign: sign,
-                    dependencies: .init(
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: favoritesRepository,
-                        categoryService: categoryService
-                    )
-                )
+                SignDetailView(sign: sign)
             }
         }
     }
@@ -115,11 +86,9 @@ struct SearchView: View {
     private var searchResultsList: some View {
         AlphabeticScrollbarTableView(
             sections: viewModel.groupedResults,
-            signRepository: signRepository,
-            videoRepository: videoRepository,
-            favoritesRepository: favoritesRepository,
-            getCategoryName: { [categoryService] categoryId in
-                categoryService.name(for: categoryId)
+            favoritesRepository: deps.favoritesRepository,
+            getCategoryName: { categoryId in
+                deps.categoryService.name(for: categoryId)
             },
             onSignSelected: { sign in
                 selectedSign = sign
@@ -202,19 +171,8 @@ struct SearchView: View {
 #if DEBUG
 struct SearchView_Previews: PreviewProvider {
     static var previews: some View {
-        SearchView(
-            viewModel: SearchViewModel(
-                signRepository: PreviewData.signRepository,
-                networkMonitor: PreviewData.networkMonitor,
-                categoryService: PreviewData.categoryService
-            ),
-            signRepository: PreviewData.signRepository,
-            videoRepository: PreviewData.videoRepository,
-            favoritesRepository: PreviewData.favoritesRepository,
-            networkMonitor: PreviewData.networkMonitor,
-            categoryService: PreviewData.categoryService
-        )
+        SearchView()
+            .environment(\.dependencies, .preview)
     }
 }
 #endif
-

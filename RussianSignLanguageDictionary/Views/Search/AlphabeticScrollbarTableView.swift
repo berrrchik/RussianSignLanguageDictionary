@@ -3,8 +3,6 @@ import UIKit
 
 struct AlphabeticScrollbarTableView: UIViewRepresentable {
     let sections: [SearchViewModel.SignSection]
-    let signRepository: SignRepositoryProtocol
-    let videoRepository: VideoRepositoryProtocol
     let favoritesRepository: FavoritesRepositoryProtocol?
     let getCategoryName: (String) -> String
     let onSignSelected: (Sign) -> Void

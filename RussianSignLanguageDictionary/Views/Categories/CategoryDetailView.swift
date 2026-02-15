@@ -2,28 +2,11 @@ import SwiftUI
 
 struct CategoryDetailView: View {
     @StateObject private var viewModel: CategoryDetailViewModel
+    @Environment(\.dependencies) private var deps
     @State private var selectedSign: Sign?
     
-    private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    private let favoritesRepository: FavoritesRepositoryProtocol
-    private let categoryService: CategoryServiceProtocol
-    
-    init(
-        category: Category,
-        signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol,
-        categoryService: CategoryServiceProtocol
-    ) {
-        self.signRepository = signRepository
-        self.videoRepository = videoRepository
-        self.favoritesRepository = favoritesRepository
-        self.categoryService = categoryService
-        _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(
-            category: category,
-            signRepository: signRepository
-        ))
+    init(category: Category) {
+        _viewModel = StateObject(wrappedValue: CategoryDetailViewModel(category: category))
     }
     
     var body: some View {
@@ -31,15 +14,7 @@ struct CategoryDetailView: View {
             .navigationTitle(viewModel.category.name)
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(item: $selectedSign) { sign in
-                SignDetailView(
-                    sign: sign,
-                    dependencies: .init(
-                        signRepository: signRepository,
-                        videoRepository: videoRepository,
-                        favoritesRepository: favoritesRepository,
-                        categoryService: categoryService
-                    )
-                )
+                SignDetailView(sign: sign)
             }
             .task {
                 if viewModel.signs.isEmpty {
@@ -83,11 +58,9 @@ struct CategoryDetailView: View {
     private var signsList: some View {
         AlphabeticScrollbarTableView(
             sections: viewModel.groupedSigns,
-            signRepository: signRepository,
-            videoRepository: videoRepository,
-            favoritesRepository: favoritesRepository,
-            getCategoryName: { [categoryService] categoryId in
-                categoryService.name(for: categoryId)
+            favoritesRepository: deps.favoritesRepository,
+            getCategoryName: { categoryId in
+                deps.categoryService.name(for: categoryId)
             },
             onSignSelected: { sign in
                 selectedSign = sign
@@ -102,14 +75,9 @@ struct CategoryDetailView: View {
 struct CategoryDetailView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
-            CategoryDetailView(
-                category: PreviewData.category,
-                signRepository: PreviewData.signRepository,
-                videoRepository: PreviewData.videoRepository,
-                favoritesRepository: PreviewData.favoritesRepository,
-                categoryService: PreviewData.categoryService
-            )
+            CategoryDetailView(category: PreviewData.category)
         }
+        .environment(\.dependencies, .preview)
     }
 }
 #endif

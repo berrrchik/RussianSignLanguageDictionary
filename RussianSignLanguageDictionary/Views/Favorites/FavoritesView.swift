@@ -1,28 +1,10 @@
 import SwiftUI
 
 struct FavoritesView: View {
-    @StateObject private var viewModel: FavoritesViewModel
+    @StateObject private var viewModel = FavoritesViewModel()
+    @Environment(\.dependencies) private var deps
     @State private var showClearAlert = false
     @State private var selectedSign: Sign?
-    
-    private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    private let categoryService: CategoryServiceProtocol
-    
-    init(
-        signRepository: SignRepositoryProtocol,
-        favoritesRepository: FavoritesRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
-        categoryService: CategoryServiceProtocol
-    ) {
-        self.signRepository = signRepository
-        self.videoRepository = videoRepository
-        self.categoryService = categoryService
-        _viewModel = StateObject(wrappedValue: FavoritesViewModel(
-            favoritesRepository: favoritesRepository,
-            signRepository: signRepository
-        ))
-    }
     
     var body: some View {
         NavigationStack {
@@ -50,15 +32,7 @@ struct FavoritesView: View {
                     Text("Все избранные жесты будут удалены. Это действие нельзя отменить.")
                 }
                 .navigationDestination(item: $selectedSign) { sign in
-                    SignDetailView(
-                        sign: sign,
-                        dependencies: .init(
-                            signRepository: signRepository,
-                            videoRepository: videoRepository,
-                            favoritesRepository: viewModel.favoritesRepository,
-                            categoryService: categoryService
-                        )
-                    )
+                    SignDetailView(sign: sign)
                 }
                 .overlay(alignment: .bottom) {
                     if let errorMessage = viewModel.errorMessage {
@@ -98,11 +72,9 @@ struct FavoritesView: View {
     private var favoritesListView: some View {
         AlphabeticScrollbarTableView(
             sections: viewModel.groupedFavorites,
-            signRepository: signRepository,
-            videoRepository: videoRepository,
-            favoritesRepository: viewModel.favoritesRepository,
-            getCategoryName: { [categoryService] categoryId in
-                categoryService.name(for: categoryId)
+            favoritesRepository: deps.favoritesRepository,
+            getCategoryName: { categoryId in
+                deps.categoryService.name(for: categoryId)
             },
             onSignSelected: { sign in
                 selectedSign = sign
@@ -125,12 +97,8 @@ struct FavoritesView: View {
 #if DEBUG
 struct FavoritesView_Previews: PreviewProvider {
     static var previews: some View {
-        FavoritesView(
-            signRepository: PreviewData.signRepository,
-            favoritesRepository: PreviewData.favoritesRepository,
-            videoRepository: PreviewData.videoRepository,
-            categoryService: PreviewData.categoryService
-        )
+        FavoritesView()
+            .environment(\.dependencies, .preview)
     }
 }
 #endif

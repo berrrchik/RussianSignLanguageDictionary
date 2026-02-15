@@ -1,19 +1,7 @@
 import SwiftUI
 
 struct LessonsView: View {
-    @StateObject private var viewModel: LessonsViewModel
-    
-    private let lessonRepository: LessonRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
-    
-    init(
-        lessonRepository: LessonRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol
-    ) {
-        self.lessonRepository = lessonRepository
-        self.videoRepository = videoRepository
-        _viewModel = StateObject(wrappedValue: LessonsViewModel(lessonRepository: lessonRepository))
-    }
+    @StateObject private var viewModel = LessonsViewModel()
     
     var body: some View {
         NavigationStack {
@@ -61,8 +49,7 @@ struct LessonsView: View {
             ForEach(viewModel.lessons) { lesson in
                 NavigationLink(destination: LessonDetailView(
                     lesson: lesson,
-                    allLessons: viewModel.lessons,
-                    videoRepository: videoRepository
+                    allLessons: viewModel.lessons
                 )) {
                     lessonRow(lesson)
                 }
@@ -89,10 +76,8 @@ struct LessonsView: View {
 #if DEBUG
 struct LessonsView_Previews: PreviewProvider {
     static var previews: some View {
-        LessonsView(
-            lessonRepository: PreviewData.lessonRepository,
-            videoRepository: PreviewData.videoRepository
-        )
+        LessonsView()
+            .environment(\.dependencies, .preview)
     }
 }
 #endif
