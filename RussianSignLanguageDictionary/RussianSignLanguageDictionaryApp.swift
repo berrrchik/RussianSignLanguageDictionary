@@ -4,7 +4,8 @@ import SwiftUI
 struct RussianSignLanguageDictionaryApp: App {
         
     init() {
-        DIContainer.shared.configureAppDependencies()
+        FirebaseConfig.configure()    // 1. Firebase (Analytics + Crashlytics)
+        DIContainer.shared.configureAppDependencies() // 2. Затем DI
     }
     
     // MARK: - Body
