@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5739AE6A2F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll in Frameworks */ = {isa = PBXBuildFile; productRef = 5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */; };
+		57578D372F4322310073FB35 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57578D362F4322310073FB35 /* FirebaseAnalytics */; };
+		57578D3B2F4328150073FB35 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */; };
+		57BD95852F432F9200D09B31 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57BD95842F432F9200D09B31 /* FirebaseCrashlytics */; };
+		57BD958B2F433DC400D09B31 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 57BD958A2F433DC400D09B31 /* FirebasePerformance */; };
 		57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668A2EC78C50007D9784 /* PostgREST */; };
 		57D3668D2EC78C50007D9784 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668C2EC78C50007D9784 /* Storage */; };
 		57D366982ECA4C6C007D9784 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 57D366972ECA4C6C007D9784 /* Supabase */; };
-		57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3669A2ECA5716007D9784 /* SimilaritySearchKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,11 +49,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				57D3669B2ECA5716007D9784 /* SimilaritySearchKit in Frameworks */,
+				57BD958B2F433DC400D09B31 /* FirebasePerformance in Frameworks */,
+				57578D372F4322310073FB35 /* FirebaseAnalytics in Frameworks */,
 				57D3668D2EC78C50007D9784 /* Storage in Frameworks */,
-				5739AE6A2F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll in Frameworks */,
 				57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */,
+				57BD95852F432F9200D09B31 /* FirebaseCrashlytics in Frameworks */,
 				57D366982ECA4C6C007D9784 /* Supabase in Frameworks */,
+				57578D3B2F4328150073FB35 /* FirebaseAnalyticsCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -114,8 +118,10 @@
 				57D3668A2EC78C50007D9784 /* PostgREST */,
 				57D3668C2EC78C50007D9784 /* Storage */,
 				57D366972ECA4C6C007D9784 /* Supabase */,
-				57D3669A2ECA5716007D9784 /* SimilaritySearchKit */,
-				5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */,
+				57578D362F4322310073FB35 /* FirebaseAnalytics */,
+				57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */,
+				57BD95842F432F9200D09B31 /* FirebaseCrashlytics */,
+				57BD958A2F433DC400D09B31 /* FirebasePerformance */,
 			);
 			productName = RussianSignLanguageDictionary;
 			productReference = 57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */;
@@ -174,7 +180,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */,
+				57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 57D364A92EC4FC3E007D9784 /* Products */;
@@ -360,6 +366,7 @@
 				DEVELOPMENT_TEAM = 373B9Z76LT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем аналитику для улучшения приложения. Ваши данные остаются анонимными.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -389,6 +396,7 @@
 				DEVELOPMENT_TEAM = 373B9Z76LT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем аналитику для улучшения приложения. Ваши данные остаются анонимными.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -476,6 +484,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.9.0;
+			};
+		};
 		57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -484,21 +500,28 @@
 				minimumVersion = 2.5.1;
 			};
 		};
-		57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ZachNagengast/similarity-search-kit";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.15;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		5739AE692F1693F3005F59E7 /* SimilaritySearchKitMiniLMAll */ = {
+		57578D362F4322310073FB35 /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */;
-			productName = SimilaritySearchKitMiniLMAll;
+			package = 57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+		57BD95842F432F9200D09B31 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
+		};
+		57BD958A2F433DC400D09B31 /* FirebasePerformance */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebasePerformance;
 		};
 		57D3668A2EC78C50007D9784 /* PostgREST */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -514,11 +537,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
-		};
-		57D3669A2ECA5716007D9784 /* SimilaritySearchKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57D366992ECA5716007D9784 /* XCRemoteSwiftPackageReference "similarity-search-kit" */;
-			productName = SimilaritySearchKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
