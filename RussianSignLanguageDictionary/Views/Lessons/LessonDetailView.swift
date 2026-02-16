@@ -25,6 +25,9 @@ struct LessonDetailView: View {
         }
         .navigationTitle(viewModel.lesson.title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            AnalyticsService.logLessonViewed(lessonId: viewModel.lesson.id, lessonTitle: viewModel.lesson.title)
+        }
         .task {
             await viewModel.loadVideo()
         }

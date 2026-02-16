@@ -14,6 +14,9 @@ struct SearchView: View {
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "Введите слово для поиска"
             )
+            .onAppear {
+                AnalyticsService.logScreenView(screenName: "search", screenClass: "SearchView")
+            }
             .task(id: "initialLoad") {
                 await viewModel.loadAllSigns()
             }

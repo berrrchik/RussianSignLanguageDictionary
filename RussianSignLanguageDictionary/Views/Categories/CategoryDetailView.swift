@@ -13,6 +13,12 @@ struct CategoryDetailView: View {
         contentView
             .navigationTitle(viewModel.category.name)
             .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                AnalyticsService.logCategoryOpened(
+                    categoryId: viewModel.category.id,
+                    categoryName: viewModel.category.name
+                )
+            }
             .navigationDestination(item: $selectedSign) { sign in
                 SignDetailView(sign: sign)
             }

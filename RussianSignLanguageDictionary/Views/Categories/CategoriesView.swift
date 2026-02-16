@@ -33,6 +33,9 @@ struct CategoriesView: View {
                 }
             }
             .navigationTitle("Категории")
+            .onAppear {
+                AnalyticsService.logScreenView(screenName: "categories", screenClass: "CategoriesView")
+            }
             .task {
                 if viewModel.categories.isEmpty {
                     await viewModel.loadCategories()

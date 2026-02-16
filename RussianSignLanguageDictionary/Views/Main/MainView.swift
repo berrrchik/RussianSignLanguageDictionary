@@ -89,6 +89,9 @@ struct MainView: View {
     
     private func initializeApp() async {
         guard !isInitialized else { return }
+
+        TrackingPermissionService.requestTrackingPermission()
+        
         await deps.categoryService.loadCategories()
         isInitialized = true
     }

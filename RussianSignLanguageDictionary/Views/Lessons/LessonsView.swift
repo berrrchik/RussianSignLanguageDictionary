@@ -16,6 +16,9 @@ struct LessonsView: View {
                 }
             }
             .navigationTitle("Обучение")
+            .onAppear {
+                AnalyticsService.logScreenView(screenName: "lessons", screenClass: "LessonsView")
+            }
             .task {
                 await viewModel.loadLessons()
             }

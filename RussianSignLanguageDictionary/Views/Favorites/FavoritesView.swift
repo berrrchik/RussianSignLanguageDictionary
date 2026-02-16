@@ -46,6 +46,9 @@ struct FavoritesView: View {
                             .padding(.bottom, LayoutConstants.Toast.bottomPadding)
                     }
                 }
+                .onAppear {
+                    AnalyticsService.logScreenView(screenName: "favorites", screenClass: "FavoritesView")
+                }
                 .task {
                     await viewModel.loadFavorites()
                 }
