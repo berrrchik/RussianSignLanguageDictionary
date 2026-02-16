@@ -12,6 +12,10 @@ import os.log
 /// Система может очистить его при нехватке места, но между обычными сессиями
 /// кеш сохраняется, обеспечивая мгновенный доступ к ранее просмотренным видео.
 /// При превышении лимита (150MB) автоматически удаляются самые старые файлы.
+///
+/// **Performance Monitoring**: Операции загрузки видео отслеживаются через Firebase Performance Monitoring:
+/// - `video_load_favorites_cache` - загрузка из долгосрочного кеша избранных
+/// - `video_download_network` - загрузка видео с сервера в краткосрочный кеш
 final class VideoRepository: VideoRepositoryProtocol {
     // MARK: - Constants
     
@@ -191,9 +195,14 @@ final class VideoRepository: VideoRepositoryProtocol {
     /// - Returns: URL видео (локальный файл или оригинальный URL)
     /// - Throws: VideoRepositoryError
     private func getVideoURLFromFavoritesCache(url: URL, videoId: String, video: SignVideo) async throws -> URL {
+        let trace = PerformanceService.startTrace("video_load_favorites_cache")
+        PerformanceService.addAttribute(trace, name: "video_id", value: videoId)
+        defer { PerformanceService.stopTrace(trace) }
+        
         // Проверяем наличие в файловом кеше
         if let cachedFileURL = videoCacheService.getCachedVideoURL(video) {
             logger.info("✅ Видео \(videoId) загружено из файлового кеша")
+            PerformanceService.addAttribute(trace, name: "source", value: "cache")
             return cachedFileURL
         }
         
@@ -201,20 +210,30 @@ final class VideoRepository: VideoRepositoryProtocol {
         let isConnected = await networkMonitor.checkConnection()
         if !isConnected {
             logger.warning("⚠️ Видео \(videoId) не найдено в кеше и нет интернета")
+            PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
             throw VideoRepositoryError.videoNotCached
         }
         
         // Загружаем и сохраняем видео в файловый кеш
         logger.info("📥 Загрузка видео \(videoId) с сервера в файловый кеш...")
+        PerformanceService.addAttribute(trace, name: "source", value: "network")
         
         do {
             let cachedFileURL = try await videoCacheService.downloadAndCache(video: video)
             logger.info("✅ Видео \(videoId) сохранено в файловый кеш")
+            
+            // Добавляем метрику размера файла, если доступна
+            if let fileSize = try? cachedFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                PerformanceService.incrementMetric(trace, name: "video_size_bytes", by: Int64(fileSize))
+            }
+            
             return cachedFileURL
         } catch let error as VideoCacheError {
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
             throw VideoRepositoryError.from(error)
         } catch {
             logger.error("❌ Ошибка загрузки видео \(videoId): \(error.localizedDescription)")
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
             throw VideoRepositoryError.downloadFailed
         }
     }
@@ -258,10 +277,16 @@ final class VideoRepository: VideoRepositoryProtocol {
     /// - Returns: URL локального файла
     /// - Throws: VideoRepositoryError
     private func downloadAndCacheVideo(url: URL, video: SignVideo) async throws -> URL {
+        let trace = PerformanceService.startTrace("video_download_network")
+        PerformanceService.addAttribute(trace, name: "video_id", value: String(video.id))
+        PerformanceService.addAttribute(trace, name: "cache_type", value: "short_term")
+        defer { PerformanceService.stopTrace(trace) }
+        
         // 1. Проверяем интернет
         let isConnected = await networkMonitor.checkConnection()
         if !isConnected {
             logger.warning("⚠️ Нет интернета для загрузки видео \(video.id) (не в избранном)")
+            PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
             throw VideoRepositoryError.noInternetConnection
         }
         
@@ -284,12 +309,26 @@ final class VideoRepository: VideoRepositoryProtocol {
             
             logger.debug("✅ Видео \(video.id) сохранено в краткосрочный кеш")
             
+            // Добавляем метрику размера файла после загрузки
+            if let fileSize = try? localFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                PerformanceService.incrementMetric(trace, name: "video_size_bytes", by: Int64(fileSize))
+            }
+            
             // 5. Проверяем лимит кеша (LRU-очистка в фоне)
             ensureShortTermCacheLimit()
             
             return localFileURL
         } catch {
             logger.error("❌ Ошибка загрузки видео \(video.id) с \(url): \(error.localizedDescription)")
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
+            CrashlyticsErrorReporter.capture(
+                error,
+                context: [
+                    "videoId": "\(video.id)",
+                    "url": url.absoluteString
+                ],
+                subsystem: "com.rsl.videoRepository"
+            )
             throw VideoRepositoryError.downloadFailed
         }
     }
