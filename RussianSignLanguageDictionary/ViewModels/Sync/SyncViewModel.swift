@@ -103,14 +103,29 @@ final class SyncViewModel: ObservableObject {
                 saveLastSyncDate(data.lastUpdated)
                 
                 logger.info("✅ Синхронизация завершена успешно")
+                
+                // Логируем успешную синхронизацию в аналитику
+                AnalyticsService.logSyncCompleted(
+                    signsCount: data.signs.count,
+                    categoriesCount: data.categories.count,
+                    lessonsCount: data.lessons.count
+                )
             } else {
                 logger.info("ℹ️ Обновлений нет")
             }
         } catch let error as SyncError {
             handleSyncError(error)
+            CrashlyticsErrorReporter.capture(error, context: ["operation": "sync"], subsystem: "com.rsl.sync")
+            
+            // Логируем ошибку синхронизации в аналитику
+            if syncError != nil {
+                AnalyticsService.logSyncFailed(errorType: String(describing: error))
+            }
         } catch {
             logger.error("❌ Неизвестная ошибка синхронизации: \(error.localizedDescription)")
             syncError = "Ошибка синхронизации: \(error.localizedDescription)"
+            CrashlyticsErrorReporter.capture(error, context: ["operation": "sync"], subsystem: "com.rsl.sync")
+            AnalyticsService.logSyncFailed(errorType: String(describing: type(of: error)))
         }
         
         isSyncing = false

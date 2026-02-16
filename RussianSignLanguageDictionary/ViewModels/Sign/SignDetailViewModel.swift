@@ -92,6 +92,10 @@ final class SignDetailViewModel: ObservableObject {
         self.favoritesRepository = favoritesRepository
         self.visitedSignIds = visitedSignIds.union([sign.id])
         self.isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+        
+        // Логируем просмотр жеста при создании ViewModel (пользователь открыл жест)
+        // НЕ в loadVideo(), т.к. видео может не загрузиться, но просмотр жеста уже произошёл
+        AnalyticsService.logSignViewed(signId: sign.id, word: sign.word, categoryId: sign.categoryId)
     }
     
     // MARK: - Public Methods
@@ -99,11 +103,17 @@ final class SignDetailViewModel: ObservableObject {
     func loadVideo() async {
         guard let video = currentVideo else { return }
         
+        let trace = PerformanceService.startTrace("screen_sign_detail_load")
+        PerformanceService.addAttribute(trace, name: "sign_id", value: sign.id)
+        PerformanceService.addAttribute(trace, name: "video_id", value: String(video.id))
+        defer { PerformanceService.stopTrace(trace) }
+        
         videoErrorMessage = nil
         
         if let cachedURL = videoRepository.cachedVideoURL(for: video) {
             videoURL = cachedURL
             logger.debug("⚡ Видео \(video.id) загружено из кеша (без loading)")
+            PerformanceService.addAttribute(trace, name: "source", value: "cache")
             
             if favoritesRepository.isFavorite(signId: sign.id) {
                 preloadNextVideo()
@@ -113,6 +123,8 @@ final class SignDetailViewModel: ObservableObject {
         
         isLoadingVideo = true
         let useFavoritesCache = favoritesRepository.isFavorite(signId: sign.id)
+        PerformanceService.addAttribute(trace, name: "source", value: useFavoritesCache ? "favorites_cache" : "network")
+        PerformanceService.addAttribute(trace, name: "is_favorite", value: useFavoritesCache ? "true" : "false")
         
         do {
             let url = try await videoRepository.getVideoURL(
@@ -130,6 +142,15 @@ final class SignDetailViewModel: ObservableObject {
             videoErrorMessage = ErrorMessageMapper.message(for: error)
             isLoadingVideo = false
             logger.error("❌ Ошибка загрузки видео: \(error.localizedDescription)")
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
+            CrashlyticsErrorReporter.capture(
+                error,
+                context: [
+                    "signId": sign.id,
+                    "videoId": currentVideo?.id ?? ""
+                ],
+                subsystem: "com.rsl.signDetail"
+            )
         }
     }
     
@@ -146,8 +167,10 @@ final class SignDetailViewModel: ObservableObject {
     func toggleFavorite() {
         if isFavorite {
             favoritesRepository.removeFavorite(signId: sign.id)
+            AnalyticsService.logSignUnfavorited(signId: sign.id, word: sign.word)
         } else {
             favoritesRepository.addFavorite(signId: sign.id)
+            AnalyticsService.logSignFavorited(signId: sign.id, word: sign.word)
         }
         isFavorite.toggle()
     }

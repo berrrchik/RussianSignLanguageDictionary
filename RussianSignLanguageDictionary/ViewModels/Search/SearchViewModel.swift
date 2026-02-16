@@ -103,6 +103,9 @@ final class SearchViewModel: ObservableObject {
             return
         }
         
+        let trace = PerformanceService.startTrace("screen_search_load")
+        defer { PerformanceService.stopTrace(trace) }
+        
         isLoading = true
         errorMessage = nil
         isOfflineMode = false
@@ -112,6 +115,8 @@ final class SearchViewModel: ObservableObject {
             let signs = try await signRepository.loadAllSigns()
             updateSearchData(with: signs)
             hasLoadedInitialData = true
+            
+            PerformanceService.incrementMetric(trace, name: "signs_loaded", by: Int64(signs.count))
             
             if hasActiveSearch {
                 await performSearch(query: searchQuery)
@@ -124,10 +129,12 @@ final class SearchViewModel: ObservableObject {
             if !isConnected {
                 isOfflineMode = true
                 offlineMessage = "Работа в офлайн-режиме. Показаны сохранённые данные."
+                PerformanceService.addAttribute(trace, name: "offline_mode", value: "true")
             }
         } catch {
             errorMessage = errorMessage(for: error)
             isLoading = false
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
         }
     }
     
@@ -178,11 +185,23 @@ final class SearchViewModel: ObservableObject {
                     
                     self.searchResults = results
                     self.isLoading = false
+                    
+                    // Логируем успешный поиск в аналитику
+                    AnalyticsService.logSearch(
+                        query: trimmedQuery,
+                        resultsCount: results.count,
+                        searchType: "hybrid"
+                    )
                 } catch {
                     guard !Task.isCancelled else {
                         self.isLoading = false
                         return
                     }
+                    
+                    // CrashlyticsErrorReporter.isExpectedError() уже фильтрует ожидаемые ошибки:
+                    // - SBERTSearchError.httpError с 4xx → не отправляется
+                    // - SBERTSearchError.serverError и unknown → отправляются (критические)
+                    CrashlyticsErrorReporter.capture(error, context: ["query": trimmedQuery], subsystem: "com.rsl.search")
                     
                     let textResults = hybridService.performTextSearch(
                         query: trimmedQuery,
@@ -190,6 +209,13 @@ final class SearchViewModel: ObservableObject {
                     )
                     self.searchResults = textResults
                     self.isLoading = false
+                    
+                    // Логируем fallback на текстовый поиск
+                    AnalyticsService.logSearch(
+                        query: trimmedQuery,
+                        resultsCount: textResults.count,
+                        searchType: "text"
+                    )
                 }
             } else {
                 let lowercasedQuery = trimmedQuery.lowercased()
