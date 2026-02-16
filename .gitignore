@@ -108,10 +108,6 @@ __pycache__/
 *.pyd
 .Python
 *.py
-*.py
-
-# Documentation files (markdown)
-*.md
 
 # Documentation files (markdown)
 *.md
@@ -121,3 +117,4 @@ __pycache__/
 *_backup*.json
 
 *Example*.swift
+GoogleService-Info.plist
