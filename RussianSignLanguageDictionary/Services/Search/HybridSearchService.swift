@@ -2,6 +2,12 @@ import Foundation
 import os.log
 
 /// Сервис для гибридного поиска: текстовый поиск + SBERT семантический поиск
+///
+/// **Performance Monitoring**: Все этапы поиска отслеживаются через Firebase Performance Monitoring:
+/// - `hybrid_search` - общий трейс гибридного поиска
+/// - `search_exact_match` - поиск точных совпадений
+/// - `search_sbert` - SBERT семантический поиск
+/// - `search_text` - текстовый поиск по частичному совпадению
 final class HybridSearchService {
     // MARK: - Properties
     
@@ -61,9 +67,16 @@ final class HybridSearchService {
             return allSigns
         }
         
+        let mainTrace = PerformanceService.startTrace("hybrid_search")
+        PerformanceService.addAttribute(mainTrace, name: "query", value: trimmedQuery)
+        PerformanceService.addAttribute(mainTrace, name: "limit", value: String(limit))
+        PerformanceService.addAttribute(mainTrace, name: "high_quality", value: useHighQualityThreshold ? "true" : "false")
+        defer { PerformanceService.stopTrace(mainTrace) }
+        
         // 1. Точное совпадение
         var results = findExactMatches(query: trimmedQuery, limit: limit)
         guard results.count < limit else {
+            PerformanceService.incrementMetric(mainTrace, name: "total_results", by: Int64(results.count))
             return Array(results.prefix(limit))
         }
         
@@ -86,6 +99,7 @@ final class HybridSearchService {
             results.append(contentsOf: textResults)
         }
         
+        PerformanceService.incrementMetric(mainTrace, name: "total_results", by: Int64(results.count))
         return Array(results.prefix(limit))
     }
     
@@ -107,10 +121,17 @@ final class HybridSearchService {
     
     /// Шаг 1: Поиск точных совпадений по слову
     private func findExactMatches(query: String, limit: Int) -> [Sign] {
+        let trace = PerformanceService.startTrace("search_exact_match")
+        PerformanceService.addAttribute(trace, name: "query", value: query)
+        defer { PerformanceService.stopTrace(trace) }
+        
         let lowercasedQuery = query.lowercased()
         let matches = allSigns.filter { $0.word.lowercased() == lowercasedQuery }
         logger.info("🔍 Точных совпадений: \(matches.count)")
-        return Array(matches.prefix(limit))
+        
+        let results = Array(matches.prefix(limit))
+        PerformanceService.incrementMetric(trace, name: "results_count", by: Int64(results.count))
+        return results
     }
     
     /// Шаг 2: SBERT семантический поиск (только при наличии интернета)
@@ -120,8 +141,15 @@ final class HybridSearchService {
         excludingIds: Set<String>,
         useHighQualityThreshold: Bool
     ) async -> [Sign] {
+        let trace = PerformanceService.startTrace("search_sbert")
+        PerformanceService.addAttribute(trace, name: "query", value: query)
+        PerformanceService.addAttribute(trace, name: "limit", value: String(limit))
+        PerformanceService.addAttribute(trace, name: "high_quality", value: useHighQualityThreshold ? "true" : "false")
+        defer { PerformanceService.stopTrace(trace) }
+        
         guard await networkMonitor.checkConnection() else {
             logger.info("📴 Нет интернета, пропускаем SBERT поиск")
+            PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
             return []
         }
         
@@ -138,12 +166,16 @@ final class HybridSearchService {
             
             logger.info("🔍 SBERT результатов: \(sbertResults.count)")
             
-            return sbertResults.compactMap { result in
+            let results: [Sign] = sbertResults.compactMap { result in
                 guard !excludingIds.contains(result.id) else { return nil }
                 return allSigns.first { $0.id == result.id }
             }
+            
+            PerformanceService.incrementMetric(trace, name: "results_count", by: Int64(results.count))
+            return results
         } catch {
             logger.warning("⚠️ SBERT поиск не удался: \(error.localizedDescription)")
+            PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
             return []
         }
     }
@@ -154,9 +186,17 @@ final class HybridSearchService {
         limit: Int,
         excludingIds: Set<String>
     ) -> [Sign] {
+        let trace = PerformanceService.startTrace("search_text")
+        PerformanceService.addAttribute(trace, name: "query", value: query)
+        PerformanceService.addAttribute(trace, name: "limit", value: String(limit))
+        defer { PerformanceService.stopTrace(trace) }
+        
         let textMatches = SignTextSearchHelper.filterSigns(allSigns, query: query, excludingIds: excludingIds)
         let sorted = SignTextSearchHelper.sortByRelevance(textMatches, query: query)
         logger.info("🔍 Текстовых совпадений: \(sorted.count)")
-        return Array(sorted.prefix(limit))
+        
+        let results = Array(sorted.prefix(limit))
+        PerformanceService.incrementMetric(trace, name: "results_count", by: Int64(results.count))
+        return results
     }
 }
