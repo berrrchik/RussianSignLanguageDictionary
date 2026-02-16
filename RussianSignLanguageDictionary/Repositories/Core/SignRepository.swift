@@ -1,8 +1,12 @@
 import Foundation
 import os.log
 import Combine
+import FirebasePerformance
 
 /// Репозиторий для работы с данными о жестах
+///
+/// **Performance Monitoring**: Загрузка и парсинг данных отслеживаются через Firebase Performance Monitoring:
+/// - `signs_data_load` - загрузка данных жестов (из кеша или с сервера)
 final class SignRepository: SignRepositoryProtocol {
     
     // MARK: - Properties
@@ -87,25 +91,35 @@ final class SignRepository: SignRepositoryProtocol {
     }
     
     private func performDataLoad() async throws -> SyncData {
+        let trace = PerformanceService.startTrace("signs_data_load")
+        defer { PerformanceService.stopTrace(trace) }
+        
         logger.info("🔍 Проверка локального кеша...")
         
         // Попытка загрузить из дискового кеша
         if let diskCached = try? cacheService.load() {
             memoryCache.set(diskCached)
             logger.info("✅ Загружено из дискового кеша: \(diskCached.signs.count) жестов, \(diskCached.categories.count) категорий")
+            PerformanceService.addAttribute(trace, name: "source", value: "disk_cache")
+            PerformanceService.incrementMetric(trace, name: "signs_count", by: Int64(diskCached.signs.count))
+            PerformanceService.incrementMetric(trace, name: "categories_count", by: Int64(diskCached.categories.count))
             scheduleBackgroundSyncIfNeeded()
             return diskCached
         }
         
         logger.info("🌐 Кеш пуст, загрузка с сервера...")
-        return try await loadFromServer()
+        PerformanceService.addAttribute(trace, name: "source", value: "server")
+        return try await loadFromServer(trace: trace)
     }
     
     // MARK: - Server Sync
     
-    private func loadFromServer() async throws -> SyncData {
+    private func loadFromServer(trace: Trace? = nil) async throws -> SyncData {
         guard await networkMonitor.checkConnection() else {
             logger.error("❌ Первый запуск без интернета — данные недоступны")
+            if let trace = trace {
+                PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
+            }
             throw SignRepositoryError.noDataAvailable
         }
         
@@ -118,10 +132,19 @@ final class SignRepository: SignRepositoryProtocol {
             
             saveToAllCaches(syncData)
             logger.info("✅ Первая загрузка завершена успешно")
+            
+            if let trace = trace {
+                PerformanceService.incrementMetric(trace, name: "signs_count", by: Int64(syncData.signs.count))
+                PerformanceService.incrementMetric(trace, name: "categories_count", by: Int64(syncData.categories.count))
+            }
+            
             return syncData
             
         } catch {
             logger.error("❌ Ошибка загрузки с сервера: \(error.localizedDescription)")
+            if let trace = trace {
+                PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
+            }
             throw SignRepositoryError.from(error)
         }
     }
