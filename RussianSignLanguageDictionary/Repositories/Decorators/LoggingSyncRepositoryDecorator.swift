@@ -74,6 +74,13 @@ final class LoggingSyncRepositoryDecorator: SyncRepositoryProtocol {
         } else {
             logger.error("❌ [\(context, privacy: .public)] Ошибка: \(error.localizedDescription, privacy: .public)")
         }
+        
+        // ⚠️ ВАЖНО: Эта ошибка также будет отправлена из SyncViewModel.sync().
+        // Дублирование допустимо, т.к. контексты разные:
+        // - LoggingSyncRepositoryDecorator: контекст операции (checkForUpdates/fetchAllData)
+        // - SyncViewModel: контекст синхронизации (общий процесс)
+        // Crashlytics автоматически группирует похожие ошибки по stack trace.
+        CrashlyticsErrorReporter.capture(error, context: ["operation": context], subsystem: "com.rsl.SyncRepository")
     }
     
     private func logSyncError(_ error: SyncError, context: String) {
