@@ -13,6 +13,7 @@ struct CategoryDetailView: View {
         contentView
             .navigationTitle(viewModel.category.name)
             .navigationBarTitleDisplayMode(.large)
+            .navigationBackButton()
             .onAppear {
                 AnalyticsService.logCategoryOpened(
                     categoryId: viewModel.category.id,

@@ -24,6 +24,7 @@ struct SignDetailView: View {
         }
         .navigationTitle(viewModel.sign.word)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBackButton()
         .toolbar { toolbarContent }
         .task { await loadData() }
         .onChange(of: viewModel.currentVideoIndex) { _ in

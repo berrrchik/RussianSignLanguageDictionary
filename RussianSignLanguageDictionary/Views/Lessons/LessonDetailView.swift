@@ -25,6 +25,7 @@ struct LessonDetailView: View {
         }
         .navigationTitle(viewModel.lesson.title)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBackButton()
         .onAppear {
             AnalyticsService.logLessonViewed(lessonId: viewModel.lesson.id, lessonTitle: viewModel.lesson.title)
         }
