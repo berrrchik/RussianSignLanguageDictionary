@@ -63,6 +63,11 @@ struct MainView: View {
             .tabItem {
                 Label("Обучение", systemImage: "book.fill")
             }
+            
+            SettingsView()
+            .tabItem {
+                Label("Настройки", systemImage: "gear")
+            }
         }
     }
     
