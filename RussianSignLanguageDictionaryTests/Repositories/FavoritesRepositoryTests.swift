@@ -5,6 +5,8 @@ final class FavoritesRepositoryTests: XCTestCase {
     
     var sut: FavoritesRepository!
     var mockUserDefaults: UserDefaults!
+    var mockSignRepository: MockSignRepository!
+    var mockVideoCacheService: MockVideoCacheService!
     
     override func setUp() {
         super.setUp()
@@ -13,7 +15,15 @@ final class FavoritesRepositoryTests: XCTestCase {
         mockUserDefaults = UserDefaults(suiteName: "TestDefaults")!
         mockUserDefaults.removePersistentDomain(forName: "TestDefaults")
         
-        sut = FavoritesRepository(userDefaults: mockUserDefaults)
+        // Создание моков для обязательных зависимостей
+        mockSignRepository = MockSignRepository()
+        mockVideoCacheService = MockVideoCacheService()
+        
+        sut = FavoritesRepository(
+            userDefaults: mockUserDefaults,
+            signRepository: mockSignRepository,
+            videoCacheService: mockVideoCacheService
+        )
     }
     
     override func tearDown() {
@@ -21,6 +31,8 @@ final class FavoritesRepositoryTests: XCTestCase {
         mockUserDefaults.removePersistentDomain(forName: "TestDefaults")
         sut = nil
         mockUserDefaults = nil
+        mockSignRepository = nil
+        mockVideoCacheService = nil
         super.tearDown()
     }
     
@@ -125,11 +137,14 @@ final class FavoritesRepositoryTests: XCTestCase {
         let signId = "sign_001"
         sut.addFavorite(signId: signId)
         
-        let newRepository = FavoritesRepository(userDefaults: mockUserDefaults)
+        let newRepository = FavoritesRepository(
+            userDefaults: mockUserDefaults,
+            signRepository: mockSignRepository,
+            videoCacheService: mockVideoCacheService
+        )
         let favorites = newRepository.getFavorites()
         
         XCTAssertEqual(favorites.count, 1)
         XCTAssertTrue(favorites.contains(signId))
     }
 }
-

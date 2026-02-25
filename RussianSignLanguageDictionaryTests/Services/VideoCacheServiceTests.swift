@@ -7,7 +7,7 @@ final class VideoCacheServiceTests: XCTestCase {
     
     override func setUp() {
         super.setUp()
-        sut = VideoCacheService.shared
+        sut = VideoCacheService()
         // Очищаем кеш перед каждым тестом
         sut.clearAllCache()
     }

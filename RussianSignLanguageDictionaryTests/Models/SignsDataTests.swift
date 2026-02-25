@@ -6,27 +6,22 @@ final class SignsDataTests: XCTestCase {
     // MARK: - Test Data
     
     private func createMockSignsData() -> SignsData {
-        let metadata = SignMetadata(
-            duration: 3.5,
-            fileSize: 512000,
-            resolution: "1080x1920",
-            format: "mp4",
-            fps: 30
-        )
-        
         let sign = Sign(
             id: "sign_001",
             word: "Привет",
             description: "Приветствие",
-            category: "emotions",
-            videos: nil,
-            synonyms: nil,
-            embeddings: nil,
-            videoId: "video_001",
-            supabaseStoragePath: "signs/emotions/video_001.mp4",
-            supabaseUrl: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
-            keywords: ["привет", "здравствуй"],
-            metadata: metadata
+            categoryId: "emotions",
+            videos: [
+                SignVideo(
+                    id: 1,
+                    url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    contextDescription: "Основное видео",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ],
+            synonyms: nil
         )
         
         let category = Category(
@@ -43,6 +38,7 @@ final class SignsDataTests: XCTestCase {
         return SignsData(
             signs: [sign],
             categories: [category],
+            lessons: [],
             totalSigns: 1,
             totalCategories: 1,
             version: "1.0",

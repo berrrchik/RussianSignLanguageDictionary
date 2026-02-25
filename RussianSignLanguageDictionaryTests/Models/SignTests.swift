@@ -6,26 +6,22 @@ final class SignTests: XCTestCase {
     // MARK: - Test Data
     
     private func createMockSign() -> Sign {
-        let metadata = SignMetadata(
-            duration: 3.5,
-            fileSize: 512000,
-            resolution: "1080x1920",
-            format: "mp4",
-            fps: 30
-        )
-        
         return Sign(
             id: "sign_001",
             word: "Привет",
             description: "Приветствие",
             categoryId: "emotions",
-            videos: nil,
-            synonyms: nil,
-            videoId: "video_001",
-            supabaseStoragePath: "signs/emotions/video_001.mp4",
-            supabaseUrl: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
-            keywords: ["привет", "здравствуй", "приветствие"],
-            metadata: metadata
+            videos: [
+                SignVideo(
+                    id: 1,
+                    url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    contextDescription: "Основное видео",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ],
+            synonyms: nil
         )
     }
     
@@ -38,8 +34,8 @@ final class SignTests: XCTestCase {
         XCTAssertEqual(sign.word, "Привет")
         XCTAssertEqual(sign.description, "Приветствие")
         XCTAssertEqual(sign.categoryId, "emotions")
-        XCTAssertEqual(sign.videoId, "video_001")
-        XCTAssertEqual(sign.keywords?.count, 3)
+        XCTAssertNotNil(sign.videos)
+        XCTAssertEqual(sign.videos?.count, 1)
     }
     
     func testSignIdentifiable() {
@@ -69,7 +65,7 @@ final class SignTests: XCTestCase {
         XCTAssertEqual(sign.id, decodedSign.id)
         XCTAssertEqual(sign.word, decodedSign.word)
         XCTAssertEqual(sign.categoryId, decodedSign.categoryId)
-        XCTAssertEqual(sign.supabaseUrl, decodedSign.supabaseUrl)
+        XCTAssertEqual(sign.videos?.first?.url, decodedSign.videos?.first?.url)
     }
     
     func testSignDecodingFromSnakeCase() throws {
@@ -80,17 +76,14 @@ final class SignTests: XCTestCase {
             "word": "Привет",
             "description": "Приветствие",
             "category_id": "emotions",
-            "video_id": "video_001",
-            "supabase_storage_path": "signs/emotions/video_001.mp4",
-            "supabase_url": "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
-            "keywords": ["привет", "здравствуй"],
-            "metadata": {
-                "duration": 3.5,
-                "file_size": 512000,
-                "resolution": "1080x1920",
-                "format": "mp4",
-                "fps": 30
-            }
+            "videos": [
+                {
+                    "id": 1,
+                    "url": "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    "context_description": "Основное видео",
+                    "order": 0
+                }
+            ]
         }
         """.data(using: .utf8)!
         
@@ -101,8 +94,9 @@ final class SignTests: XCTestCase {
         
         XCTAssertEqual(sign.id, "sign_001")
         XCTAssertEqual(sign.word, "Привет")
-        XCTAssertEqual(sign.videoId, "video_001")
-        XCTAssertEqual(sign.supabaseUrl, "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4")
+        XCTAssertNotNil(sign.videos)
+        XCTAssertEqual(sign.videos?.first?.id, 1)
+        XCTAssertEqual(sign.videos?.first?.url, "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4")
     }
 }
 

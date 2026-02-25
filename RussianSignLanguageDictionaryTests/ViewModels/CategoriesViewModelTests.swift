@@ -4,17 +4,23 @@ import XCTest
 @MainActor
 final class CategoriesViewModelTests: XCTestCase {
     var sut: CategoriesViewModel!
-    var mockRepository: MockCategoriesSignRepository!
+    var mockRepository: MockSignRepository!
+    var mockNetworkMonitor: MockNetworkMonitor!
     
     override func setUp() {
         super.setUp()
-        mockRepository = MockCategoriesSignRepository()
-        sut = CategoriesViewModel(signRepository: mockRepository)
+        mockRepository = MockSignRepository()
+        mockNetworkMonitor = MockNetworkMonitor()
+        sut = CategoriesViewModel(
+            signRepository: mockRepository,
+            networkMonitor: mockNetworkMonitor
+        )
     }
     
     override func tearDown() {
         sut = nil
         mockRepository = nil
+        mockNetworkMonitor = nil
         super.tearDown()
     }
     
@@ -33,7 +39,7 @@ final class CategoriesViewModelTests: XCTestCase {
             Category.mock(id: "alphabet", name: "Алфавит", order: 1),
             Category.mock(id: "animals", name: "Животные", order: 2)
         ]
-        mockRepository.categories = mockCategories
+        mockRepository.mockCategories = mockCategories
         
         // When
         await sut.loadCategories()
@@ -50,7 +56,7 @@ final class CategoriesViewModelTests: XCTestCase {
             Category.mock(id: "animals", name: "Животные", order: 2),
             Category.mock(id: "alphabet", name: "Алфавит", order: 1)
         ]
-        mockRepository.categories = mockCategories
+        mockRepository.mockCategories = mockCategories
         
         // When
         await sut.loadCategories()
@@ -62,7 +68,8 @@ final class CategoriesViewModelTests: XCTestCase {
     
     func testLoadCategories_Error() async {
         // Given
-        mockRepository.shouldThrowError = true
+        mockRepository.shouldFail = true
+        mockRepository.errorToThrow = .fileNotFound
         
         // When
         await sut.loadCategories()
@@ -79,7 +86,10 @@ final class CategoriesViewModelTests: XCTestCase {
     
     func testLoadCategories_SetsLoadingState() async {
         // Given
-        mockRepository.loadDelay = 0.3
+        let mockCategories = [
+            Category.mock(id: "alphabet", name: "Алфавит", order: 1)
+        ]
+        mockRepository.mockCategories = mockCategories
         
         // When
         let task = Task {
@@ -92,62 +102,6 @@ final class CategoriesViewModelTests: XCTestCase {
         
         await task.value
         XCTAssertEqual(sut.state, .loaded)
-    }
-}
-
-// MARK: - Mock SignRepository
-
-class MockCategoriesSignRepository: SignRepositoryProtocol {
-    var categories: [RussianSignLanguageDictionary.Category] = []
-    var shouldThrowError = false
-    var loadDelay: TimeInterval = 0
-    
-    func loadAllSigns() async throws -> [Sign] {
-        if shouldThrowError {
-            throw SignRepositoryError.fileNotFound
-        }
-        return []
-    }
-    
-    func loadCategories() async throws -> [RussianSignLanguageDictionary.Category] {
-        if shouldThrowError {
-            throw SignRepositoryError.fileNotFound
-        }
-        
-        if loadDelay > 0 {
-            try? await Task.sleep(nanoseconds: UInt64(loadDelay * 1_000_000_000))
-        }
-        
-        return categories
-    }
-    
-    func getSign(byId id: String) async throws -> Sign? {
-        return nil
-    }
-    
-    func getSigns(byCategory categoryId: String) async throws -> [Sign] {
-        return []
-    }
-    
-    func searchSigns(query: String) async throws -> [Sign] {
-        return []
-    }
-}
-
-// MARK: - Category Mock Helper
-
-extension RussianSignLanguageDictionary.Category {
-    static func mock(id: String, name: String, order: Int) -> RussianSignLanguageDictionary.Category {
-        RussianSignLanguageDictionary.Category(
-            id: id,
-            name: name,
-            order: order,
-            signCount: 10,
-            icon: nil,
-            color: nil,
-            createdAt: nil,
-            updatedAt: nil
-        )
     }
 }
 

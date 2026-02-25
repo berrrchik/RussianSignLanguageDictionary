@@ -5,16 +5,26 @@ import XCTest
 final class SearchViewModelTests: XCTestCase {
     var sut: SearchViewModel!
     var mockRepository: MockSignRepository!
+    var mockNetworkMonitor: MockNetworkMonitor!
+    var mockCategoryService: MockCategoryService!
     
     override func setUp() {
         super.setUp()
         mockRepository = MockSignRepository()
-        sut = SearchViewModel(signRepository: mockRepository)
+        mockNetworkMonitor = MockNetworkMonitor()
+        mockCategoryService = MockCategoryService()
+        sut = SearchViewModel(
+            signRepository: mockRepository,
+            networkMonitor: mockNetworkMonitor,
+            categoryService: mockCategoryService
+        )
     }
     
     override func tearDown() {
         sut = nil
         mockRepository = nil
+        mockNetworkMonitor = nil
+        mockCategoryService = nil
         super.tearDown()
     }
     
@@ -48,7 +58,7 @@ final class SearchViewModelTests: XCTestCase {
             Sign.mockWithWord("Привет"),
             Sign.mockWithWord("Приветствие")
         ]
-        mockRepository.searchResults = mockSigns
+        mockRepository.mockSigns = mockSigns
         
         // When
         await sut.loadAllSigns()
@@ -63,7 +73,8 @@ final class SearchViewModelTests: XCTestCase {
     
     func testSearchWithError_SetsErrorMessage() async {
         // Given
-        mockRepository.shouldThrowError = true
+        mockRepository.shouldFail = true
+        mockRepository.errorToThrow = .fileNotFound
         
         // When
         await sut.loadAllSigns()
@@ -81,7 +92,7 @@ final class SearchViewModelTests: XCTestCase {
             Sign.mockWithWord("Привет"),
             Sign.mockWithWord("Приветствие")
         ]
-        mockRepository.searchResults = mockSigns
+        mockRepository.mockSigns = mockSigns
         
         // Загружаем данные сначала
         await sut.loadAllSigns()
@@ -100,48 +111,6 @@ final class SearchViewModelTests: XCTestCase {
     }
 }
 
-// MARK: - Mock SignRepository
-
-class MockSignRepository: SignRepositoryProtocol {
-    var searchResults: [Sign] = []
-    var shouldThrowError = false
-    var searchDelay: TimeInterval = 0
-    
-    func loadAllSigns() async throws -> [Sign] {
-        if shouldThrowError {
-            throw SignRepositoryError.fileNotFound
-        }
-        return searchResults
-    }
-    
-    func loadCategories() async throws -> [RussianSignLanguageDictionary.Category] {
-        return []
-    }
-    
-    func getSign(byId id: String) async throws -> Sign? {
-        return searchResults.first { $0.id == id }
-    }
-    
-    func getSigns(byCategory categoryId: String) async throws -> [Sign] {
-        return searchResults.filter { $0.categoryId == categoryId }
-    }
-    
-    func searchSigns(query: String) async throws -> [Sign] {
-        if shouldThrowError {
-            throw SignRepositoryError.fileNotFound
-        }
-        
-        if searchDelay > 0 {
-            try? await Task.sleep(nanoseconds: UInt64(searchDelay * 1_000_000_000))
-        }
-        
-        return searchResults.filter { sign in
-            sign.word.localizedCaseInsensitiveContains(query) ||
-            (sign.keywords?.contains { $0.localizedCaseInsensitiveContains(query) } ?? false)
-        }
-    }
-}
-
 // MARK: - Sign Mock Helpers
 
 extension Sign {
@@ -150,21 +119,18 @@ extension Sign {
             id: UUID().uuidString,
             word: word,
             description: "Описание для \(word)",
-            category: "test",
-            videos: nil,
-            synonyms: nil,
-            embeddings: nil,
-            videoId: "video_\(word)",
-            supabaseStoragePath: "test/path.mp4",
-            supabaseUrl: "https://example.com/\(word).mp4",
-            keywords: [word.lowercased()],
-            metadata: SignMetadata(
-                duration: 3.0,
-                fileSize: 500000,
-                resolution: "1080x1920",
-                format: "mp4",
-                fps: 30
-            )
+            categoryId: "test",
+            videos: [
+                SignVideo(
+                    id: 1,
+                    url: "https://example.com/\(word).mp4",
+                    contextDescription: "Основное видео",
+                    order: 0,
+                    createdAt: nil,
+                    updatedAt: nil
+                )
+            ],
+            synonyms: nil
         )
     }
 }

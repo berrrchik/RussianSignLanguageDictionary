@@ -10,15 +10,19 @@ final class VideoRepositoryOfflineTests: XCTestCase {
     override func setUp() {
         super.setUp()
         mockNetworkMonitor = MockNetworkMonitor()
-        sut = VideoRepository(networkMonitor: mockNetworkMonitor)
+        let videoCacheService = VideoCacheService()
+        sut = VideoRepository(
+            videoCacheService: videoCacheService,
+            networkMonitor: mockNetworkMonitor
+        )
         
         // Очищаем кеш перед каждым тестом
-        VideoCacheService.shared.clearAllCache()
+        videoCacheService.clearAllCache()
     }
     
     override func tearDown() {
         sut?.clearCache()
-        VideoCacheService.shared.clearAllCache()
+        VideoCacheService().clearAllCache()
         sut = nil
         mockNetworkMonitor = nil
         super.tearDown()
@@ -57,6 +61,7 @@ final class VideoRepositoryOfflineTests: XCTestCase {
     }
     
     /// Тест: Загрузка видео с интернетом (не из избранного) должна работать
+    /// Примечание: требует сетевого доступа (скачивает видео в tmp/)
     func testGetVideoURLWithInternet_NonFavorite_Success() async throws {
         // Arrange
         mockNetworkMonitor.simulateInternetRestored()
@@ -67,7 +72,8 @@ final class VideoRepositoryOfflineTests: XCTestCase {
         
         // Assert
         XCTAssertNotNil(url)
-        XCTAssertEqual(url.absoluteString, video.url)
+        // Краткосрочный кеш скачивает видео в tmp/ и возвращает локальный file URL
+        XCTAssertTrue(url.isFileURL, "Краткосрочный кеш должен возвращать локальный file URL")
     }
     
     // MARK: - Tests: Избранное видео (с долгосрочным кешем)
