@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-/// Репозиторий для работы с видео из Supabase Storage
+/// Репозиторий для работы с видео с сервера
 ///
 /// Поддерживает двухуровневое кеширование:
 /// - **Долгосрочный кеш**: файлы на диске для избранных жестов (до 500MB)
@@ -132,7 +132,7 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     func getVideoURL(for video: SignVideo, useFavoritesCache: Bool = false) async throws -> URL {
-        guard let url = URL(string: video.url) else {
+        guard let url = APIConfig.videoURL(forPath: video.url) else {
             throw VideoRepositoryError.invalidURL
         }
         
@@ -148,8 +148,8 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     func getVideoURL(for lesson: Lesson) async throws -> URL {
-        guard let url = URL(string: lesson.videoUrl) else {
-            logger.error("❌ Lesson video: невалидный URL для урока \(lesson.id) (\(lesson.videoUrl))")
+        guard let url = APIConfig.videoURL(forPath: lesson.videoUrl) else {
+            logger.error("❌ Lesson video: невалидный путь для урока \(lesson.id) (\(lesson.videoUrl))")
             throw VideoRepositoryError.invalidURL
         }
         

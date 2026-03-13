@@ -74,7 +74,7 @@ final class VideoCacheDownloader {
     /// - Returns: URL локального файла
     /// - Throws: Ошибка при загрузке
     func downloadAndCache(video: SignVideo) async throws -> URL {
-        guard let url = URL(string: video.url) else {
+        guard let url = APIConfig.videoURL(forPath: video.url) else {
             throw VideoCacheError.invalidURL
         }
         return try await downloadAndCache(url: url)

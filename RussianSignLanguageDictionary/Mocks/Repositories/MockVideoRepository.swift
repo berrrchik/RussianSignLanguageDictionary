@@ -47,8 +47,7 @@ final class MockVideoRepository: VideoRepositoryProtocol {
         // Имитация небольшой задержки
         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунда
         
-        // Используем URL из урока или fallback на mockURL
-        if let url = URL(string: lesson.videoUrl) {
+        if let url = APIConfig.videoURL(forPath: lesson.videoUrl) {
             return url
         }
         
@@ -63,8 +62,7 @@ final class MockVideoRepository: VideoRepositoryProtocol {
         // Имитация небольшой задержки
         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунда
         
-        // Используем URL из видео или fallback на mockURL
-        if let url = URL(string: video.url) {
+        if let url = APIConfig.videoURL(forPath: video.url) {
             return url
         }
         

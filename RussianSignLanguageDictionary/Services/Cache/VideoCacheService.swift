@@ -46,7 +46,7 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     /// - Parameter video: Видео для проверки
     /// - Returns: true если видео есть в кеше
     func isVideoCached(_ video: SignVideo) -> Bool {
-        guard let url = URL(string: video.url) else { return false }
+        guard let url = APIConfig.videoURL(forPath: video.url) else { return false }
         return isVideoCached(url: url)
     }
     
@@ -65,7 +65,7 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     /// - Parameter video: Видео
     /// - Returns: URL файла или nil если не кеширован
     func getCachedVideoURL(_ video: SignVideo) -> URL? {
-        guard let url = URL(string: video.url) else { return nil }
+        guard let url = APIConfig.videoURL(forPath: video.url) else { return nil }
         return getCachedVideoURL(originalURL: url)
     }
     
@@ -111,7 +111,7 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     /// Очищает кеш для конкретного видео
     /// - Parameter video: Видео для удаления из кеша
     func clearCache(for video: SignVideo) {
-        guard let url = URL(string: video.url) else { return }
+        guard let url = APIConfig.videoURL(forPath: video.url) else { return }
         clearCache(for: url)
     }
     
