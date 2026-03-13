@@ -296,10 +296,10 @@ final class SearchViewModel: ObservableObject {
         }
         
         hybridSearchService = HybridSearchService(
-            baseURL: APIConfig.baseURL,
+            baseURL: APIConfig.apiBaseURL,
             signs: signs,
             networkMonitor: networkMonitor,
-            sbertService: SBERTSearchService(baseURL: APIConfig.baseURL)
+            sbertService: SBERTSearchService(baseURL: APIConfig.apiBaseURL)
         )
     }
 }

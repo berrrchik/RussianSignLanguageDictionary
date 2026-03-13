@@ -38,7 +38,7 @@ final class HybridSearchService {
     ///   - signs: Все жесты из локального кеша
     ///   - networkMonitor: Монитор сети для проверки доступности
     init(
-        baseURL: URL = APIConfig.baseURL,
+        baseURL: URL = APIConfig.apiBaseURL,
         signs: [Sign],
         networkMonitor: NetworkMonitorProtocol,
         sbertService: SBERTSearchServiceProtocol

@@ -13,10 +13,10 @@ final class SBERTSearchService: SBERTSearchServiceProtocol {
     
     /// Инициализатор сервиса
     /// - Parameters:
-    ///   - baseURL: Базовый URL API (по умолчанию из APIConfig)
+    ///   - baseURL: Базовый URL API (по умолчанию из APIConfig.apiBaseURL)
     ///   - session: URLSession для выполнения запросов (по умолчанию shared)
     init(
-        baseURL: URL = APIConfig.baseURL,
+        baseURL: URL = APIConfig.apiBaseURL,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL

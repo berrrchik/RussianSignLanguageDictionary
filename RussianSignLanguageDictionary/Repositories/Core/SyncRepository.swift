@@ -15,7 +15,7 @@ final class SyncRepository: SyncRepositoryProtocol {
     // MARK: - Initialization
     
     init(
-        baseURL: URL = APIConfig.baseURL,
+        baseURL: URL = APIConfig.apiBaseURL,
         session: URLSession? = nil,
         etagManager: ETagManager = ETagManager(),
         responseHandler: HTTPResponseHandler = HTTPResponseHandler()
