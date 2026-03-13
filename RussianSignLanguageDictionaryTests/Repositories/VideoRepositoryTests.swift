@@ -35,7 +35,7 @@ final class VideoRepositoryTests: XCTestCase {
             videos: [
                 SignVideo(
                     id: 1,
-                    url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    url: "/signs/emotions/video_001.mp4",
                     contextDescription: "Основное видео",
                     order: 0,
                     createdAt: nil,
@@ -49,7 +49,7 @@ final class VideoRepositoryTests: XCTestCase {
     private func createMockVideo(id: Int = 1) -> SignVideo {
         return SignVideo(
             id: id,
-            url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/test/video_\(id).mp4",
+            url: "/signs/test/video_\(id).mp4",
             contextDescription: "Test video \(id)",
             order: 1,
             createdAt: nil,
@@ -65,7 +65,8 @@ final class VideoRepositoryTests: XCTestCase {
         let url = try await sut.getVideoURL(for: sign)
         
         XCTAssertNotNil(url)
-        XCTAssertEqual(url.absoluteString, sign.videos?.first?.url)
+        let expectedURL = APIConfig.videoURL(forPath: sign.videos!.first!.url)
+        XCTAssertEqual(url.absoluteString, expectedURL?.absoluteString)
     }
     
     func testGetVideoURLCaching() async throws {

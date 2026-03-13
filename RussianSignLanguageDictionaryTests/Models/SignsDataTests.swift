@@ -14,7 +14,7 @@ final class SignsDataTests: XCTestCase {
             videos: [
                 SignVideo(
                     id: 1,
-                    url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    url: "/signs/emotions/video_001.mp4",
                     contextDescription: "Основное видео",
                     order: 0,
                     createdAt: nil,

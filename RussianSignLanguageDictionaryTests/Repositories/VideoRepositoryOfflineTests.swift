@@ -33,7 +33,7 @@ final class VideoRepositoryOfflineTests: XCTestCase {
     private func createMockVideo() -> SignVideo {
         return SignVideo(
             id: 1,
-            url: "https://example.com/video.mp4",
+            url: "/signs/test/video.mp4",
             contextDescription: "Тестовое видео",
             order: 1,
             createdAt: nil,

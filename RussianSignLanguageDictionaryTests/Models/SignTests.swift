@@ -14,7 +14,7 @@ final class SignTests: XCTestCase {
             videos: [
                 SignVideo(
                     id: 1,
-                    url: "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    url: "/signs/emotions/video_001.mp4",
                     contextDescription: "Основное видео",
                     order: 0,
                     createdAt: nil,
@@ -79,7 +79,7 @@ final class SignTests: XCTestCase {
             "videos": [
                 {
                     "id": 1,
-                    "url": "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4",
+                    "url": "/signs/emotions/video_001.mp4",
                     "context_description": "Основное видео",
                     "order": 0
                 }
@@ -96,7 +96,7 @@ final class SignTests: XCTestCase {
         XCTAssertEqual(sign.word, "Привет")
         XCTAssertNotNil(sign.videos)
         XCTAssertEqual(sign.videos?.first?.id, 1)
-        XCTAssertEqual(sign.videos?.first?.url, "https://lesulvngqpvgepijazin.supabase.co/storage/v1/object/public/signs/emotions/video_001.mp4")
+        XCTAssertEqual(sign.videos?.first?.url, "/signs/emotions/video_001.mp4")
     }
 }
 
