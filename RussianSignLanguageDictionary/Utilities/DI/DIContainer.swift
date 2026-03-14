@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Простой DI-контейнер для управления зависимостями
 ///
@@ -23,6 +24,8 @@ final class DIContainer {
     static let shared = DIContainer()
     
     // MARK: - Properties
+    
+    private let logger = Logger(subsystem: "com.rsl.di", category: "DIContainer")
     
     /// Фабрики для создания зависимостей
     private var factories: [String: () -> Any] = [:]
@@ -87,39 +90,43 @@ final class DIContainer {
     /// - Parameter type: Тип зависимости
     /// - Returns: Экземпляр зависимости
     ///
-    /// - Warning: Вызовет `fatalError`, если зависимость не зарегистрирована
+    /// В DEBUG — `fatalError` при отсутствии зависимости.
+    /// В release — логирование + non-fatal отчёт перед `fatalError`,
+    /// чтобы ошибка конфигурации фиксировалась в Crashlytics.
     func resolve<T>(_ type: T.Type) -> T {
         let key = String(describing: type)
         
         lock.lock()
         defer { lock.unlock() }
         
-        // Проверяем singleton кэш (быстрый путь)
         if let singleton = singletons[key] as? T {
             return singleton
         }
         
-        // Получаем фабрику
         guard let factory = factories[key] else {
-            fatalError("""
-            ❌ Зависимость '\(key)' не зарегистрирована в DI-контейнере.
-            
-            Добавьте регистрацию в configureAppDependencies():
-            container.register(\(key).self) {
-                YourImplementation()
-            }
-            """)
+            handleResolutionFailure("Зависимость '\(key)' не зарегистрирована в DI-контейнере")
         }
         
-        // Создаём экземпляр
         guard let instance = factory() as? T else {
-            fatalError("""
-            ❌ Не удалось создать зависимость '\(key)'.
-            Фабрика вернула неверный тип.
-            """)
+            handleResolutionFailure("Фабрика для '\(key)' вернула неверный тип")
         }
         
         return instance
+    }
+    
+    /// Обрабатывает ошибку разрешения зависимости с разным поведением для DEBUG и release
+    private func handleResolutionFailure(_ message: String) -> Never {
+        #if DEBUG
+        fatalError("❌ \(message)")
+        #else
+        logger.critical("❌ DI: \(message)")
+        CrashlyticsErrorReporter.capture(
+            DIContainerError.resolutionFailed(message),
+            context: ["message": message],
+            subsystem: "com.rsl.di"
+        )
+        fatalError("❌ DI configuration error: \(message)")
+        #endif
     }
     
     /// Безопасное разрешение зависимости (возвращает nil, если не зарегистрирована)
@@ -167,6 +174,60 @@ final class DIContainer {
         lock.lock()
         defer { lock.unlock() }
         return factories[key] != nil
+    }
+    
+    // MARK: - Validation
+    
+    /// Проверяет, что все ожидаемые зависимости зарегистрированы в контейнере
+    ///
+    /// Сравнивает список типов, используемых в `configureAppDependencies()`,
+    /// с реально зарегистрированными фабриками.
+    /// Не вызывает фабрики — только проверяет их наличие (safe для production).
+    ///
+    /// - Returns: Массив имён типов, для которых фабрика не найдена.
+    ///   Пустой массив — все зависимости зарегистрированы.
+    func validateConfiguration() -> [String] {
+        let expectedKeys: [String] = [
+            String(describing: NetworkMonitorProtocol.self),
+            String(describing: CacheService.self),
+            String(describing: VideoCacheServiceProtocol.self),
+            String(describing: CategoryServiceProtocol.self),
+            String(describing: SyncRepositoryProtocol.self),
+            String(describing: SignRepositoryProtocol.self),
+            String(describing: VideoRepositoryProtocol.self),
+            String(describing: LessonRepositoryProtocol.self),
+            String(describing: FavoritesRepositoryProtocol.self),
+        ]
+        
+        lock.lock()
+        defer { lock.unlock() }
+        
+        var missingKeys: [String] = []
+        for key in expectedKeys {
+            if factories[key] == nil {
+                missingKeys.append(key)
+                logger.error("❌ DI validation: фабрика для '\(key)' не зарегистрирована")
+            }
+        }
+        
+        if missingKeys.isEmpty {
+            logger.info("✅ DI validation: все \(expectedKeys.count) зависимостей зарегистрированы")
+        }
+        
+        return missingKeys
+    }
+}
+
+// MARK: - DIContainerError
+
+enum DIContainerError: LocalizedError {
+    case resolutionFailed(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .resolutionFailed(let message):
+            return "DI resolution failed: \(message)"
+        }
     }
 }
 

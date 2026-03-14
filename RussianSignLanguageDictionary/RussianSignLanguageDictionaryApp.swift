@@ -2,14 +2,13 @@ import SwiftUI
 
 @main
 struct RussianSignLanguageDictionaryApp: App {
-        
+
     init() {
         FirebaseConfig.configure()
         DIContainer.shared.configureAppDependencies()
+        DIStartupValidation.validateDependencies()
     }
-    
-    // MARK: - Body
-    
+
     var body: some Scene {
         WindowGroup {
             MainView()
