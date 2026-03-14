@@ -172,67 +172,48 @@ final class SearchViewModel: ObservableObject {
             errorMessage = nil
             
             if let hybridService = hybridSearchService {
-                do {
-                    let results = try await hybridService.performHybridSearch(
-                        query: trimmedQuery,
-                        limit: 50
-                    )
-                    
-                    guard !Task.isCancelled else {
-                        self.isLoading = false
-                        return
-                    }
-                    
-                    self.searchResults = results
-                    self.isLoading = false
-                    
-                    // Логируем успешный поиск в аналитику
-                    AnalyticsService.logSearch(
-                        query: trimmedQuery,
-                        resultsCount: results.count,
-                        searchType: "hybrid"
-                    )
-                } catch {
-                    guard !Task.isCancelled else {
-                        self.isLoading = false
-                        return
-                    }
-                    
-                    // CrashlyticsErrorReporter.isExpectedError() уже фильтрует ожидаемые ошибки:
-                    // - SBERTSearchError.httpError с 4xx → не отправляется
-                    // - SBERTSearchError.serverError и unknown → отправляются (критические)
-                    CrashlyticsErrorReporter.capture(error, context: ["query": trimmedQuery], subsystem: "com.rsl.search")
-                    
-                    let textResults = hybridService.performTextSearch(
-                        query: trimmedQuery,
-                        limit: 50
-                    )
-                    self.searchResults = textResults
-                    self.isLoading = false
-                    
-                    // Логируем fallback на текстовый поиск
-                    AnalyticsService.logSearch(
-                        query: trimmedQuery,
-                        resultsCount: textResults.count,
-                        searchType: "text"
-                    )
-                }
+                await executeHybridSearch(trimmedQuery, service: hybridService)
             } else {
-                let lowercasedQuery = trimmedQuery.lowercased()
-                
-                let filtered = searchableSigns.filter { searchable in
-                    searchable.lowercasedWord.contains(lowercasedQuery)
-                }
-                
-                guard !Task.isCancelled else {
-                    self.isLoading = false
-                    return
-                }
-                
-                self.searchResults = filtered.map { $0.sign }
-                self.isLoading = false
+                executeLocalSearch(trimmedQuery)
             }
         }
+    }
+    
+    // MARK: - Search Steps
+    
+    private func executeHybridSearch(_ query: String, service: HybridSearchService) async {
+        do {
+            let results = try await runHybridSearch(query, service: service)
+            guard !Task.isCancelled else { isLoading = false; return }
+            applySearchResults(results, query: query, searchType: "hybrid")
+        } catch {
+            guard !Task.isCancelled else { isLoading = false; return }
+            CrashlyticsErrorReporter.capture(error, context: ["query": query], subsystem: "com.rsl.search")
+            let textResults = runTextSearchFallback(query, service: service)
+            applySearchResults(textResults, query: query, searchType: "text")
+        }
+    }
+    
+    private func runHybridSearch(_ query: String, service: HybridSearchService) async throws -> [Sign] {
+        try await service.performHybridSearch(query: query, limit: 50)
+    }
+    
+    private func runTextSearchFallback(_ query: String, service: HybridSearchService) -> [Sign] {
+        service.performTextSearch(query: query, limit: 50)
+    }
+    
+    private func executeLocalSearch(_ query: String) {
+        let lowercasedQuery = query.lowercased()
+        let filtered = searchableSigns.filter { $0.lowercasedWord.contains(lowercasedQuery) }
+        guard !Task.isCancelled else { isLoading = false; return }
+        searchResults = filtered.map { $0.sign }
+        isLoading = false
+    }
+    
+    private func applySearchResults(_ results: [Sign], query: String, searchType: String) {
+        searchResults = results
+        isLoading = false
+        AnalyticsService.logSearch(query: query, resultsCount: results.count, searchType: searchType)
     }
     
     func clearSearch() {
