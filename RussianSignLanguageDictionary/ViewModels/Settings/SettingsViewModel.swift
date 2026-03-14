@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
-import MessageUI
+// import MessageUI // для секции «Обратная связь» (reportBug)
 import os.log
 
 /// ViewModel для экрана настроек
@@ -82,9 +82,10 @@ final class SettingsViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Обратная связь (секция временно отключена в SettingsView)
+    /*
     /// Открывает страницу приложения в App Store для оставления отзыва
     func openAppStoreReview() {
-        // Используем универсальный URL для открытия App Store с поиском приложения
         let appName = appInfo.name.replacingOccurrences(of: " ", with: "+")
         if let url = URL(string: "https://apps.apple.com/search?term=\(appName)") {
             UIApplication.shared.open(url)
@@ -93,80 +94,19 @@ final class SettingsViewModel: ObservableObject {
     
     /// Открывает email для сообщения об ошибке
     func reportBug() {
-        let email = appInfo.author.email ?? "berrrchik@mail.ru"
-        let subject = "Ошибка в \(appInfo.name)"
-        let body = """
-        Версия приложения: \(appInfo.version) (\(appInfo.buildNumber))
-        Устройство: \(UIDevice.current.model)
-        iOS: \(UIDevice.current.systemVersion)
-        
-        Опишите проблему:
-        
-        
-        """
-        
-        // Получаем rootViewController более надежным способом
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let rootViewController = windowScene.windows
-            .first(where: { $0.isKeyWindow })?.rootViewController else {
+        guard let topController = topViewController() else {
             logger.error("❌ Не удалось получить rootViewController для отправки email")
             return
         }
         
-        // Проверяем, доступен ли Mail app
+        let email = appInfo.author.email ?? "berrrchik@mail.ru"
+        let subject = mailSubject()
+        let body = mailBody()
+        
         if MFMailComposeViewController.canSendMail() {
-            // Используем MFMailComposeViewController для отправки email
-            let mailComposer = MFMailComposeViewController()
-            mailComposer.mailComposeDelegate = MailComposeDelegate.shared
-            mailComposer.setToRecipients([email])
-            mailComposer.setSubject(subject)
-            mailComposer.setMessageBody(body, isHTML: false)
-            
-            // Находим top-most view controller для корректного отображения
-            var topController = rootViewController
-            while let presented = topController.presentedViewController {
-                topController = presented
-            }
-            
-            topController.present(mailComposer, animated: true) { [weak self] in
-                self?.logger.info("✅ MFMailComposeViewController представлен")
-            }
+            presentMailComposer(on: topController, email: email, subject: subject, body: body)
         } else {
-            // Fallback: используем UIActivityViewController для шаринга email
-            // Это покажет все доступные способы отправки (Mail, Messages, копирование и т.д.)
-            let emailText = """
-            To: \(email)
-            Subject: \(subject)
-            
-            \(body)
-            """
-            
-            let activityVC = UIActivityViewController(
-                activityItems: [emailText],
-                applicationActivities: nil
-            )
-            
-            // Устанавливаем тип контента для email
-            activityVC.setValue(subject, forKey: "subject")
-            
-            // Находим top-most view controller для корректного отображения
-            var topController = rootViewController
-            while let presented = topController.presentedViewController {
-                topController = presented
-            }
-            
-            // Для iPad нужно указать sourceView
-            if let popover = activityVC.popoverPresentationController {
-                popover.sourceView = topController.view
-                popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midY, width: 0, height: 0)
-                popover.permittedArrowDirections = []
-            }
-            
-            topController.present(activityVC, animated: true) { [weak self] in
-                self?.logger.info("✅ UIActivityViewController представлен")
-            }
+            presentShareSheet(on: topController, email: email, subject: subject, body: body)
         }
     }
     
@@ -181,33 +121,96 @@ final class SettingsViewModel: ObservableObject {
             applicationActivities: nil
         )
         
-        // Получаем rootViewController более надежным способом
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let rootViewController = windowScene.windows
-            .first(where: { $0.isKeyWindow })?.rootViewController else {
+        guard let topController = topViewController() else {
             logger.error("❌ Не удалось получить rootViewController для шаринга")
             return
         }
         
-        // Находим top-most view controller для корректного отображения
-        var topController = rootViewController
-        while let presented = topController.presentedViewController {
-            topController = presented
-        }
-        
-        // Для iPad нужно указать sourceView
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = topController.view
-            popover.sourceRect = CGRect(x: topController.view.bounds.midX, y: topController.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
+        configurePopover(activityVC, on: topController)
         
         topController.present(activityVC, animated: true) { [weak self] in
             self?.logger.info("✅ UIActivityViewController для шаринга представлен")
         }
     }
+    
+    private func mailSubject() -> String {
+        "Ошибка в \(appInfo.name)"
+    }
+    
+    private func mailBody() -> String {
+        """
+        Версия приложения: \(appInfo.version) (\(appInfo.buildNumber))
+        Устройство: \(UIDevice.current.model)
+        iOS: \(UIDevice.current.systemVersion)
+        
+        Опишите проблему:
+        
+        
+        """
+    }
+    
+    private func topViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let root = windowScene.windows
+            .first(where: { $0.isKeyWindow })?.rootViewController else {
+            return nil
+        }
+        
+        var topController = root
+        while let presented = topController.presentedViewController {
+            topController = presented
+        }
+        return topController
+    }
+    
+    private func presentMailComposer(on controller: UIViewController, email: String, subject: String, body: String) {
+        let mailComposer = MFMailComposeViewController()
+        mailComposer.mailComposeDelegate = MailComposeDelegate.shared
+        mailComposer.setToRecipients([email])
+        mailComposer.setSubject(subject)
+        mailComposer.setMessageBody(body, isHTML: false)
+        
+        controller.present(mailComposer, animated: true) { [weak self] in
+            self?.logger.info("✅ MFMailComposeViewController представлен")
+        }
+    }
+    
+    private func presentShareSheet(on controller: UIViewController, email: String, subject: String, body: String) {
+        let emailText = """
+        To: \(email)
+        Subject: \(subject)
+        
+        \(body)
+        """
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [emailText],
+            applicationActivities: nil
+        )
+        activityVC.setValue(subject, forKey: "subject")
+        
+        configurePopover(activityVC, on: controller)
+        
+        controller.present(activityVC, animated: true) { [weak self] in
+            self?.logger.info("✅ UIActivityViewController представлен")
+        }
+    }
+    
+    private func configurePopover(_ activityVC: UIActivityViewController, on controller: UIViewController) {
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = controller.view
+            popover.sourceRect = CGRect(
+                x: controller.view.bounds.midX,
+                y: controller.view.bounds.midY,
+                width: 0,
+                height: 0
+            )
+            popover.permittedArrowDirections = []
+        }
+    }
+    */
     
     // MARK: - Computed Properties
     
@@ -240,9 +243,8 @@ final class SettingsViewModel: ObservableObject {
     }
 }
 
-// MARK: - Mail Compose Delegate
-
-/// Делегат для обработки закрытия MFMailComposeViewController
+// MARK: - Mail Compose Delegate (используется в reportBug — секция «Обратная связь» отключена)
+/*
 private class MailComposeDelegate: NSObject, MFMailComposeViewControllerDelegate {
     static let shared = MailComposeDelegate()
     
@@ -250,3 +252,4 @@ private class MailComposeDelegate: NSObject, MFMailComposeViewControllerDelegate
         controller.dismiss(animated: true)
     }
 }
+*/
