@@ -282,55 +282,54 @@ final class VideoRepository: VideoRepositoryProtocol {
         PerformanceService.addAttribute(trace, name: "cache_type", value: "short_term")
         defer { PerformanceService.stopTrace(trace) }
         
-        // 1. Проверяем интернет
         let isConnected = await networkMonitor.checkConnection()
-        if !isConnected {
+        guard isConnected else {
             logger.warning("⚠️ Нет интернета для загрузки видео \(video.id) (не в избранном)")
             PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
             throw VideoRepositoryError.noInternetConnection
         }
         
-        // 2. Скачиваем видео
         logger.debug("📥 Загрузка видео \(video.id) в краткосрочный кеш...")
         
         do {
-            let (tempDownloadURL, _) = try await URLSession.shared.download(from: url)
+            let tempURL = try await downloadToTemp(from: url)
+            let localURL = try moveToCache(tempURL: tempURL, videoId: video.id)
+            updateInMemoryCache(localURL: localURL, videoId: video.id)
             
-            // 3. Перемещаем в управляемую директорию
-            let localFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
-            
-            // Удаляем старый файл если есть
-            try? FileManager.default.removeItem(at: localFileURL)
-            try FileManager.default.moveItem(at: tempDownloadURL, to: localFileURL)
-            
-            // 4. Сохраняем в NSCache (потокобезопасен, синхронизация не нужна)
-            let cacheKey = "video_\(video.id)" as NSString
-            cache.setObject(localFileURL as NSURL, forKey: cacheKey)
-            
-            logger.debug("✅ Видео \(video.id) сохранено в краткосрочный кеш")
-            
-            // Добавляем метрику размера файла после загрузки
-            if let fileSize = try? localFileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            if let fileSize = try? localURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                 PerformanceService.incrementMetric(trace, name: "video_size_bytes", by: Int64(fileSize))
             }
             
-            // 5. Проверяем лимит кеша (LRU-очистка в фоне)
             ensureShortTermCacheLimit()
-            
-            return localFileURL
+            return localURL
         } catch {
             logger.error("❌ Ошибка загрузки видео \(video.id) с \(url): \(error.localizedDescription)")
             PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
             CrashlyticsErrorReporter.capture(
                 error,
-                context: [
-                    "videoId": "\(video.id)",
-                    "url": url.absoluteString
-                ],
+                context: ["videoId": "\(video.id)", "url": url.absoluteString],
                 subsystem: "com.rsl.videoRepository"
             )
             throw VideoRepositoryError.downloadFailed
         }
+    }
+    
+    private func downloadToTemp(from url: URL) async throws -> URL {
+        let (tempURL, _) = try await URLSession.shared.download(from: url)
+        return tempURL
+    }
+    
+    private func moveToCache(tempURL: URL, videoId: Int) throws -> URL {
+        let localFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(videoId).mp4")
+        try? FileManager.default.removeItem(at: localFileURL)
+        try FileManager.default.moveItem(at: tempURL, to: localFileURL)
+        logger.debug("✅ Видео \(videoId) сохранено в краткосрочный кеш")
+        return localFileURL
+    }
+    
+    private func updateInMemoryCache(localURL: URL, videoId: Int) {
+        let cacheKey = "video_\(videoId)" as NSString
+        cache.setObject(localURL as NSURL, forKey: cacheKey)
     }
     
     // MARK: - Cache Maintenance
