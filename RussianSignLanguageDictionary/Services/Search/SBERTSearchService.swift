@@ -45,26 +45,50 @@ final class SBERTSearchService: SBERTSearchServiceProtocol {
             )
         }
         
-        // Валидация параметров
         let validatedLimit = max(1, min(50, limit))
         let validatedMinSimilarity = max(0.0, min(1.0, minSimilarity))
         
-        // Построение URL (используем appendingPathComponent для надежности)
+        let request = try buildRequest(
+            query: trimmedQuery,
+            limit: validatedLimit,
+            minSimilarity: validatedMinSimilarity
+        )
+        
+        logger.info("🔍 SBERT поиск: '\(trimmedQuery, privacy: .public)' (limit: \(validatedLimit), minSimilarity: \(validatedMinSimilarity))")
+        logger.info("🌐 URL: \(request.url?.absoluteString ?? "nil")")
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                logger.error("❌ Неверный формат ответа")
+                throw SBERTSearchError.invalidResponse
+            }
+            
+            return try parseResponse(data: data, httpResponse: httpResponse)
+        } catch let error as SBERTSearchError {
+            throw error
+        } catch {
+            throw mapToSearchError(error)
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func buildRequest(query: String, limit: Int, minSimilarity: Double) throws -> URLRequest {
         let url = baseURL
             .appendingPathComponent("search")
             .appendingPathComponent("sbert")
         
-        // Подготовка запроса
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 180.0  // Увеличено для первой загрузки модели SBERT
+        request.timeoutInterval = 180.0
         
-        // Подготовка тела запроса
         let requestBody: [String: Any] = [
-            "text": trimmedQuery,
-            "limit": validatedLimit,
-            "min_similarity": validatedMinSimilarity
+            "text": query,
+            "limit": limit,
+            "min_similarity": minSimilarity
         ]
         
         do {
@@ -74,68 +98,52 @@ final class SBERTSearchService: SBERTSearchServiceProtocol {
             throw SBERTSearchError.invalidResponse
         }
         
-        logger.info("🔍 SBERT поиск: '\(trimmedQuery, privacy: .public)' (limit: \(validatedLimit), minSimilarity: \(validatedMinSimilarity))")
-        logger.info("🌐 URL: \(url.absoluteString)")
+        return request
+    }
+    
+    private func parseResponse(data: Data, httpResponse: HTTPURLResponse) throws -> [SBERTSearchResult] {
+        guard httpResponse.statusCode == 200 else {
+            logger.warning("⚠️ HTTP ошибка: \(httpResponse.statusCode)")
+            
+            if let errorData = try? JSONDecoder().decode(SBERTSearchResponse.self, from: data),
+               let error = errorData.error {
+                logger.warning("⚠️ Ошибка сервера: \(error.code) - \(error.message)")
+                throw SBERTSearchError.serverError(code: error.code, message: error.message)
+            }
+            
+            throw SBERTSearchError.httpError(statusCode: httpResponse.statusCode)
+        }
         
-        // Выполнение запроса
-        do {
-            let (data, response) = try await session.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                logger.error("❌ Неверный формат ответа")
-                throw SBERTSearchError.invalidResponse
+        let searchResponse = try JSONDecoder().decode(SBERTSearchResponse.self, from: data)
+        
+        guard searchResponse.success,
+              let searchData = searchResponse.data else {
+            if let error = searchResponse.error {
+                throw SBERTSearchError.serverError(code: error.code, message: error.message)
             }
-            
-            // Обработка HTTP статусов
-            guard httpResponse.statusCode == 200 else {
-                logger.warning("⚠️ HTTP ошибка: \(httpResponse.statusCode)")
-                logger.warning("⚠️ URL: \(url.absoluteString)")
-                
-                // Попытка декодировать ошибку
-                if let errorData = try? JSONDecoder().decode(SBERTSearchResponse.self, from: data),
-                   let error = errorData.error {
-                    logger.warning("⚠️ Ошибка сервера: \(error.code) - \(error.message)")
-                    throw SBERTSearchError.serverError(code: error.code, message: error.message)
-                }
-                
-                throw SBERTSearchError.httpError(statusCode: httpResponse.statusCode)
-            }
-            
-            // Декодирование ответа
-            let decoder = JSONDecoder()
-            let searchResponse = try decoder.decode(SBERTSearchResponse.self, from: data)
-            
-            guard searchResponse.success,
-                  let searchData = searchResponse.data else {
-                if let error = searchResponse.error {
-                    throw SBERTSearchError.serverError(code: error.code, message: error.message)
-                }
-                logger.error("❌ Неизвестная ошибка в ответе")
-                throw SBERTSearchError.unknown
-            }
-            
-            logger.info("✅ Найдено результатов: \(searchData.totalFound)")
-            return searchData.results
-            
-        } catch let error as SBERTSearchError {
-            throw error
-        } catch let urlError as URLError {
-            logger.error("❌ Ошибка сети: \(urlError.localizedDescription)")
-            logger.error("❌ Код ошибки: \(urlError.code.rawValue)")
-            logger.error("❌ URL: \(url.absoluteString)")
-            
-            // Специальная обработка для ошибок подключения
-            if urlError.code == .cannotConnectToHost || 
-               urlError.code == .networkConnectionLost ||
-               urlError.code == .timedOut {
-                throw SBERTSearchError.httpError(statusCode: 0)  // Специальный код для сетевых ошибок
-            }
-            
-            throw SBERTSearchError.httpError(statusCode: urlError.code.rawValue)
-        } catch {
+            logger.error("❌ Неизвестная ошибка в ответе")
+            throw SBERTSearchError.unknown
+        }
+        
+        logger.info("✅ Найдено результатов: \(searchData.totalFound)")
+        return searchData.results
+    }
+    
+    private func mapToSearchError(_ error: Error) -> SBERTSearchError {
+        guard let urlError = error as? URLError else {
             logger.error("❌ Неизвестная ошибка: \(error.localizedDescription)")
             logger.error("❌ Тип ошибки: \(type(of: error))")
-            throw SBERTSearchError.unknown
+            return .unknown
+        }
+        
+        logger.error("❌ Ошибка сети: \(urlError.localizedDescription)")
+        logger.error("❌ Код ошибки: \(urlError.code.rawValue)")
+        
+        switch urlError.code {
+        case .cannotConnectToHost, .networkConnectionLost, .timedOut:
+            return .httpError(statusCode: 0)
+        default:
+            return .httpError(statusCode: urlError.code.rawValue)
         }
     }
 }
