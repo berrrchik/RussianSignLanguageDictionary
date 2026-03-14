@@ -28,9 +28,10 @@ final class CategoryDetailViewModel: ObservableObject {
     
     /// Convenience init для production — резолвит зависимости из DIContainer
     convenience init(category: Category) {
+        let container = DIContainer.shared
         self.init(
             category: category,
-            signRepository: DIContainer.shared.resolve(SignRepositoryProtocol.self)
+            signRepository: container.resolve(SignRepositoryProtocol.self)
         )
     }
     

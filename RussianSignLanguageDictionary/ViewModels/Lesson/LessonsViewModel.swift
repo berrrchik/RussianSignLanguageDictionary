@@ -21,8 +21,9 @@ final class LessonsViewModel: ObservableObject {
     
     /// Convenience init для production — резолвит зависимости из DIContainer
     convenience init() {
+        let container = DIContainer.shared
         self.init(
-            lessonRepository: DIContainer.shared.resolve(LessonRepositoryProtocol.self)
+            lessonRepository: container.resolve(LessonRepositoryProtocol.self)
         )
     }
     

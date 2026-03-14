@@ -33,10 +33,11 @@ final class LessonDetailViewModel: ObservableObject {
 
     /// Convenience init для production — резолвит зависимости из DIContainer
     convenience init(lesson: Lesson, allLessons: [Lesson]) {
+        let container = DIContainer.shared
         self.init(
             lesson: lesson,
             allLessons: allLessons,
-            videoRepository: DIContainer.shared.resolve(VideoRepositoryProtocol.self)
+            videoRepository: container.resolve(VideoRepositoryProtocol.self)
         )
     }
     
