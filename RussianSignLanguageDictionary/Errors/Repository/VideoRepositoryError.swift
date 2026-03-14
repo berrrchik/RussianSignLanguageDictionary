@@ -6,9 +6,6 @@ enum VideoRepositoryError: Error {
     /// URL видео недействителен или отсутствует
     case invalidURL
     
-    /// Ошибка при работе с Supabase Storage
-    case supabaseError(String)
-    
     /// Не удалось загрузить видео
     case downloadFailed
     
@@ -52,8 +49,6 @@ extension VideoRepositoryError: Equatable {
             return true
         case (.noInternetConnection, .noInternetConnection):
             return true
-        case (.supabaseError(let lhsMessage), .supabaseError(let rhsMessage)):
-            return lhsMessage == rhsMessage
         default:
             return false
         }

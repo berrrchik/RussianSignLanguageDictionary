@@ -11,9 +11,6 @@
 		57578D3B2F4328150073FB35 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */; };
 		57BD95852F432F9200D09B31 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57BD95842F432F9200D09B31 /* FirebaseCrashlytics */; };
 		57BD958B2F433DC400D09B31 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = 57BD958A2F433DC400D09B31 /* FirebasePerformance */; };
-		57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668A2EC78C50007D9784 /* PostgREST */; };
-		57D3668D2EC78C50007D9784 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = 57D3668C2EC78C50007D9784 /* Storage */; };
-		57D366982ECA4C6C007D9784 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 57D366972ECA4C6C007D9784 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,10 +48,7 @@
 			files = (
 				57BD958B2F433DC400D09B31 /* FirebasePerformance in Frameworks */,
 				57578D372F4322310073FB35 /* FirebaseAnalytics in Frameworks */,
-				57D3668D2EC78C50007D9784 /* Storage in Frameworks */,
-				57D3668B2EC78C50007D9784 /* PostgREST in Frameworks */,
 				57BD95852F432F9200D09B31 /* FirebaseCrashlytics in Frameworks */,
-				57D366982ECA4C6C007D9784 /* Supabase in Frameworks */,
 				57578D3B2F4328150073FB35 /* FirebaseAnalyticsCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -115,9 +109,6 @@
 			);
 			name = RussianSignLanguageDictionary;
 			packageProductDependencies = (
-				57D3668A2EC78C50007D9784 /* PostgREST */,
-				57D3668C2EC78C50007D9784 /* Storage */,
-				57D366972ECA4C6C007D9784 /* Supabase */,
 				57578D362F4322310073FB35 /* FirebaseAnalytics */,
 				57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */,
 				57BD95842F432F9200D09B31 /* FirebaseCrashlytics */,
@@ -179,7 +170,6 @@
 			mainGroup = 57D3649F2EC4FC3E007D9784;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -365,13 +355,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"RussianSignLanguageDictionary/Preview Content\"";
 				DEVELOPMENT_TEAM = 373B9Z76LT;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем аналитику для улучшения приложения. Ваши данные остаются анонимными.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -395,13 +380,8 @@
 				DEVELOPMENT_ASSET_PATHS = "\"RussianSignLanguageDictionary/Preview Content\"";
 				DEVELOPMENT_TEAM = 373B9Z76LT;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Мы используем аналитику для улучшения приложения. Ваши данные остаются анонимными.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -492,14 +472,6 @@
 				minimumVersion = 12.9.0;
 			};
 		};
-		57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/supabase/supabase-swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -522,21 +494,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 57578D352F4322310073FB35 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebasePerformance;
-		};
-		57D3668A2EC78C50007D9784 /* PostgREST */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = PostgREST;
-		};
-		57D3668C2EC78C50007D9784 /* Storage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Storage;
-		};
-		57D366972ECA4C6C007D9784 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 57D366892EC78C50007D9784 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

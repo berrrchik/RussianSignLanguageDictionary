@@ -93,7 +93,6 @@ iOSInjectionProject/
 .DS_Store
 
 
-# Supabase Config (contains sensitive keys)
 RussianSignLanguageDictionary/Config/
 Config/
 

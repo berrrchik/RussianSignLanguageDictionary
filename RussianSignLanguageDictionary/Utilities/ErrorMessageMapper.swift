@@ -29,8 +29,6 @@ enum ErrorMessageMapper {
             return "Неверный URL видео"
         case .downloadFailed:
             return "Не удалось загрузить видео"
-        case .supabaseError(let message):
-            return "Ошибка сервера: \(message)"
         case .videoNotCached:
             return "Видео недоступно в офлайн-режиме. Добавьте жест в избранное для просмотра без интернета."
         case .noInternetConnection:
