@@ -73,6 +73,10 @@ final class SignRepository: SignRepositoryProtocol {
         let signs = try await loadAllSigns()
         return SignTextSearchHelper.filterSigns(signs, query: query, includeDescription: true)
     }
+
+    func cachedSigns() -> [Sign]? {
+        memoryCache.get()?.signs
+    }
     
     // MARK: - Data Loading
     

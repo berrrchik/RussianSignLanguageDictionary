@@ -29,5 +29,9 @@ protocol SignRepositoryProtocol {
     /// - Returns: Массив найденных жестов
     /// - Throws: SignRepositoryError в случае ошибки
     func searchSigns(query: String) async throws -> [Sign]
+
+    /// Возвращает жесты из memory-кэша синхронно, без обращения к диску или сети.
+    /// - Returns: Закэшированный массив жестов, либо nil если кэш пуст.
+    func cachedSigns() -> [Sign]?
 }
 

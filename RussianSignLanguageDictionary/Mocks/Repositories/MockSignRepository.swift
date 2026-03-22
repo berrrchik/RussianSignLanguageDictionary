@@ -67,6 +67,10 @@ final class MockSignRepository: SignRepositoryProtocol {
             sign.word.lowercased().contains(lowercasedQuery)
         }
     }
+
+    func cachedSigns() -> [Sign]? {
+        shouldFail ? nil : mockSigns
+    }
 }
 
 // MARK: - Shared Instance
