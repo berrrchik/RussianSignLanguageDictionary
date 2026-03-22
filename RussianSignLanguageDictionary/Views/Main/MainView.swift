@@ -6,6 +6,7 @@ struct MainView: View {
     @Environment(\.dependencies) private var deps
     @StateObject private var syncViewModel = SyncViewModel()
     @State private var isInitialized = false
+    @State private var showSplashOverlay = true
     @State private var showSyncError = false
     
     // MARK: - Body
@@ -14,12 +15,21 @@ struct MainView: View {
         ZStack {
             if isInitialized {
                 tabView
-            } else {
-                LoadingView(message: "Загрузка данных...")
+            }
+            if showSplashOverlay {
+                StartupSplashScreen()
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
         .task {
             await initializeApp()
+        }
+        .onChange(of: isInitialized) { _, newValue in
+            guard newValue else { return }
+            withAnimation(.easeOut(duration: 0.4)) {
+                showSplashOverlay = false
+            }
         }
         .overlay {
             if syncViewModel.isSyncing {
@@ -96,8 +106,11 @@ struct MainView: View {
         guard !isInitialized else { return }
 
         TrackingPermissionService.requestTrackingPermission()
-        
-        await deps.categoryService.loadCategories()
+
+        async let categoriesLoad: Void = deps.categoryService.loadCategories()
+        async let signsLoad: Void = { _ = try? await deps.signRepository.loadAllSigns() }()
+        _ = await (categoriesLoad, signsLoad)
+
         isInitialized = true
     }
 }
