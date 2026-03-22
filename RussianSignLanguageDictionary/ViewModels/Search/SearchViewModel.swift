@@ -37,7 +37,7 @@ final class SearchViewModel: ObservableObject {
     private var searchableSigns: [SearchableSign] = []
     private var searchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
-    private var hasLoadedInitialData = false
+    private(set) var hasLoadedInitialData = false
     
     // MARK: - Enums
     
@@ -81,7 +81,8 @@ final class SearchViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.categoryService = categoryService
         setupDebouncing()
-        
+        preloadFromCache()
+
         NotificationCenter.default.publisher(for: .signsDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -225,6 +226,8 @@ final class SearchViewModel: ObservableObject {
     
     // MARK: - Computed Properties
     
+    var isReady: Bool { hasLoadedInitialData }
+    
     var categories: [Category] {
         categoryService.allCategories()
     }
@@ -246,7 +249,16 @@ final class SearchViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
-    
+
+    private func preloadFromCache() {
+        guard let cached = signRepository.cachedSigns(), !cached.isEmpty else { return }
+        // Обязательно через updateSearchData — иначе hybridSearchService остаётся nil
+        // и loadAllSigns() выходит по раннему guard без построения гибридного поиска.
+        updateSearchData(with: cached)
+        searchResults = cached
+        hasLoadedInitialData = true
+    }
+
     private func setupDebouncing() {
         $searchQuery
             .debounce(for: .milliseconds(Constants.debounceMilliseconds), scheduler: DispatchQueue.main)
