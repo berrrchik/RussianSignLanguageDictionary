@@ -50,11 +50,13 @@ struct SearchView: View {
                 } else if let errorMessage = viewModel.errorMessage {
                     ErrorView(message: errorMessage, retryAction: retryLoading)
                 } else if viewModel.searchResults.isEmpty {
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: emptyStateTitle,
-                        message: emptyStateMessage
-                    )
+                    if viewModel.isReady {
+                        EmptyStateView(
+                            icon: "magnifyingglass",
+                            title: emptyStateTitle,
+                            message: emptyStateMessage
+                        )
+                    }
                 } else {
                     searchResultsList
                 }
