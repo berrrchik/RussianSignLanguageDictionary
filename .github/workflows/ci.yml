@@ -18,11 +18,25 @@ jobs:
       - name: Restore config files from secrets
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p RussianSignLanguageDictionary/Config
+          require_secret() {
+            local name="$1" val="$2"
+            if [ -z "$val" ]; then
+              echo "::error::Секрет $name не задан в GitHub Actions (нужен base64 файла)"
+              exit 1
+            fi
+          }
+          require_secret "GOOGLE_SERVICE_INFO_PLIST" "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}"
+          require_secret "API_CONFIG_SWIFT" "${{ secrets.API_CONFIG_SWIFT }}"
+          require_secret "FIREBASE_CONFIG_SWIFT" "${{ secrets.FIREBASE_CONFIG_SWIFT }}"
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -D > RussianSignLanguageDictionary/Config/GoogleService-Info.plist
           echo "${{ secrets.API_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/APIConfig.swift
           echo "${{ secrets.FIREBASE_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/FirebaseConfig.swift
-          
+          test -s RussianSignLanguageDictionary/Config/GoogleService-Info.plist || { echo "::error::GoogleService-Info.plist пуст после base64"; exit 1; }
+          test -s RussianSignLanguageDictionary/Config/APIConfig.swift || { echo "::error::APIConfig.swift пуст после base64 — проверьте секрет API_CONFIG_SWIFT"; exit 1; }
+          test -s RussianSignLanguageDictionary/Config/FirebaseConfig.swift || { echo "::error::FirebaseConfig.swift пуст после base64"; exit 1; }
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -48,10 +62,24 @@ jobs:
       - name: Restore config files from secrets
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p RussianSignLanguageDictionary/Config
+          require_secret() {
+            local name="$1" val="$2"
+            if [ -z "$val" ]; then
+              echo "::error::Секрет $name не задан в GitHub Actions (нужен base64 файла)"
+              exit 1
+            fi
+          }
+          require_secret "GOOGLE_SERVICE_INFO_PLIST" "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}"
+          require_secret "API_CONFIG_SWIFT" "${{ secrets.API_CONFIG_SWIFT }}"
+          require_secret "FIREBASE_CONFIG_SWIFT" "${{ secrets.FIREBASE_CONFIG_SWIFT }}"
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -D > RussianSignLanguageDictionary/Config/GoogleService-Info.plist
           echo "${{ secrets.API_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/APIConfig.swift
           echo "${{ secrets.FIREBASE_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/FirebaseConfig.swift
+          test -s RussianSignLanguageDictionary/Config/GoogleService-Info.plist || { echo "::error::GoogleService-Info.plist пуст после base64"; exit 1; }
+          test -s RussianSignLanguageDictionary/Config/APIConfig.swift || { echo "::error::APIConfig.swift пуст после base64"; exit 1; }
+          test -s RussianSignLanguageDictionary/Config/FirebaseConfig.swift || { echo "::error::FirebaseConfig.swift пуст после base64"; exit 1; }
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
