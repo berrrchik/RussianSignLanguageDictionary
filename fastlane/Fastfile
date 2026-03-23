@@ -1,0 +1,104 @@
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    setup_ci if ENV["CI"]
+  end
+
+  def app_store_api_key
+    key_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID")
+    issuer_id = ENV.fetch("APP_STORE_CONNECT_ISSUER_ID")
+    key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+
+    if key_path && !key_path.empty?
+      app_store_connect_api_key(
+        key_id: key_id,
+        issuer_id: issuer_id,
+        key_filepath: key_path
+      )
+    else
+      app_store_connect_api_key(
+        key_id: key_id,
+        issuer_id: issuer_id,
+        key_content: ENV.fetch("APP_STORE_CONNECT_API_KEY"),
+        is_key_content_base64: false
+      )
+    end
+  end
+
+  desc "Run unit tests locally (cooler/slower)"
+  lane :tests_local do
+    run_tests(
+      project: "RussianSignLanguageDictionary.xcodeproj",
+      scheme: "RussianSignLanguageDictionary",
+      clean: false,
+      destination: "platform=iOS Simulator,name=iPhone 16",
+      disable_concurrent_testing: true,
+      max_concurrent_simulators: 1
+    )
+  end
+
+  desc "Run unit tests in CI (faster)"
+  lane :tests_ci do
+    run_tests(
+      project: "RussianSignLanguageDictionary.xcodeproj",
+      scheme: "RussianSignLanguageDictionary",
+      clean: true,
+      destination: "platform=iOS Simulator,name=iPhone 16",
+      disable_concurrent_testing: false,
+      max_concurrent_simulators: 4
+    )
+  end
+
+  desc "Default tests lane for local usage"
+  lane :tests do
+    tests_local
+  end
+
+  desc "Initial signing setup: creates/updates appstore certificates and profiles"
+  lane :init_signing do
+    api_key = app_store_api_key
+    original_key_path = ENV.delete("APP_STORE_CONNECT_API_KEY_PATH")
+    begin
+      match(
+        type: "appstore",
+        readonly: false,
+        api_key: api_key
+      )
+    ensure
+      ENV["APP_STORE_CONNECT_API_KEY_PATH"] = original_key_path if original_key_path
+    end
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    api_key = app_store_api_key
+
+    increment_build_number(
+      xcodeproj: "RussianSignLanguageDictionary.xcodeproj"
+    )
+
+    original_key_path = ENV.delete("APP_STORE_CONNECT_API_KEY_PATH")
+    begin
+      match(
+        type: "appstore",
+        readonly: true,
+        api_key: api_key
+      )
+    ensure
+      ENV["APP_STORE_CONNECT_API_KEY_PATH"] = original_key_path if original_key_path
+    end
+
+    build_app(
+      project: "RussianSignLanguageDictionary.xcodeproj",
+      scheme: "RussianSignLanguageDictionary",
+      clean: true,
+      export_method: "app-store"
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

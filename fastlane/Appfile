@@ -1,0 +1,6 @@
+app_identifier("berchik.RussianSignLanguageDictionary")
+team_id("373B9Z76LT")
+
+# Apple ID email for optional lanes that require login.
+# Keep it in secrets/local env instead of committing it here.
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]

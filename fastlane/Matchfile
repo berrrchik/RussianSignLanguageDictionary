@@ -1,0 +1,6 @@
+git_url(ENV.fetch("MATCH_GIT_URL"))
+storage_mode("git")
+type("appstore")
+app_identifier(["berchik.RussianSignLanguageDictionary"])
+username(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+team_id("373B9Z76LT")
