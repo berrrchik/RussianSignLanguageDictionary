@@ -8,11 +8,16 @@ final class CacheService {
     private let logger = Logger(subsystem: "com.rsl.CacheService", category: "cache")
     private let cacheKey = "cached_signs_data"
     private let fileManager: FileManager
+    private let cacheDirectoryURL: URL?
     
     // MARK: - Initialization
     
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        cacheDirectoryURL: URL? = nil
+    ) {
         self.fileManager = fileManager
+        self.cacheDirectoryURL = cacheDirectoryURL
     }
     
     // MARK: - Public Methods
@@ -30,6 +35,13 @@ final class CacheService {
         logger.info("💾 Путь для сохранения: \(fileURL.path)")
         
         do {
+            let directoryURL = fileURL.deletingLastPathComponent()
+            if !fileManager.fileExists(atPath: directoryURL.path) {
+                try fileManager.createDirectory(
+                    at: directoryURL,
+                    withIntermediateDirectories: true
+                )
+            }
             try jsonData.write(to: fileURL, options: .atomic)
             let savedExists = fileManager.fileExists(atPath: fileURL.path)
             logger.info("✅ Данные сохранены в кеш. Файл существует: \(savedExists)")
@@ -99,6 +111,10 @@ final class CacheService {
     // MARK: - Private Methods
     
     private func cacheFileURL() throws -> URL {
+        if let cacheDirectoryURL {
+            return cacheDirectoryURL.appendingPathComponent("\(cacheKey).json")
+        }
+        
         guard let documentsURL = fileManager.urls(
             for: .documentDirectory,
             in: .userDomainMask

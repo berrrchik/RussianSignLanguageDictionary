@@ -5,16 +5,23 @@ final class SignRepositoryTests: XCTestCase {
     
     var sut: SignRepository!
     var mockSyncRepository: MockSyncRepository!
+    var mockNetworkMonitor: MockNetworkMonitor!
     var cacheService: CacheService!
+    var cacheDirectoryURL: URL!
     
     override func setUp() {
         super.setUp()
         mockSyncRepository = MockSyncRepository()
-        cacheService = CacheService()
+        mockNetworkMonitor = MockNetworkMonitor()
+        mockNetworkMonitor.simulateInternetRestored()
+        cacheDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SignRepositoryTests-\(UUID().uuidString)", isDirectory: true)
+        cacheService = CacheService(cacheDirectoryURL: cacheDirectoryURL)
         try? cacheService.clearCache()
         sut = SignRepository(
             syncRepository: mockSyncRepository,
-            cacheService: cacheService
+            cacheService: cacheService,
+            networkMonitor: mockNetworkMonitor
         )
     }
     
@@ -22,7 +29,12 @@ final class SignRepositoryTests: XCTestCase {
         try? cacheService?.clearCache()
         sut = nil
         mockSyncRepository = nil
+        mockNetworkMonitor = nil
         cacheService = nil
+        if let cacheDirectoryURL {
+            try? FileManager.default.removeItem(at: cacheDirectoryURL)
+        }
+        cacheDirectoryURL = nil
         super.tearDown()
     }
     

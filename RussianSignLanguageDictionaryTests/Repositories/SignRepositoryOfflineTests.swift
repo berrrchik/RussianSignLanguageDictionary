@@ -8,12 +8,15 @@ final class SignRepositoryOfflineTests: XCTestCase {
     var mockNetworkMonitor: MockNetworkMonitor!
     var mockSyncRepository: MockSyncRepository!
     var cacheService: CacheService!
+    var cacheDirectoryURL: URL!
     
     override func setUp() {
         super.setUp()
         mockNetworkMonitor = MockNetworkMonitor()
         mockSyncRepository = MockSyncRepository()
-        cacheService = CacheService()
+        cacheDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SignRepositoryOfflineTests-\(UUID().uuidString)", isDirectory: true)
+        cacheService = CacheService(cacheDirectoryURL: cacheDirectoryURL)
         
         sut = SignRepository(
             syncRepository: mockSyncRepository,
@@ -23,15 +26,15 @@ final class SignRepositoryOfflineTests: XCTestCase {
     }
     
     override func tearDown() {
-        // Очищаем кеш
-        if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let cacheURL = documentsURL.appendingPathComponent("cached_signs_data.json")
-            try? FileManager.default.removeItem(at: cacheURL)
-        }
+        try? cacheService?.clearCache()
         sut = nil
         mockNetworkMonitor = nil
         mockSyncRepository = nil
         cacheService = nil
+        if let cacheDirectoryURL {
+            try? FileManager.default.removeItem(at: cacheDirectoryURL)
+        }
+        cacheDirectoryURL = nil
         super.tearDown()
     }
     

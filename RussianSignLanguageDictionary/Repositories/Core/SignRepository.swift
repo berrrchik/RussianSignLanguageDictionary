@@ -45,6 +45,10 @@ final class SignRepository: SignRepositoryProtocol {
         self.networkMonitor = networkMonitor
     }
     
+    deinit {
+        backgroundSyncTask?.cancel()
+    }
+    
     // MARK: - SignRepositoryProtocol
     
     func loadAllSigns() async throws -> [Sign] {
@@ -167,6 +171,11 @@ final class SignRepository: SignRepositoryProtocol {
     }
     
     private func performBackgroundSync() async {
+        guard !Task.isCancelled else {
+            logger.debug("🛑 Фоновая синхронизация отменена до старта")
+            return
+        }
+        
         guard await networkMonitor.checkConnection() else {
             logger.debug("📴 Нет интернета для фоновой синхронизации")
             return
@@ -183,6 +192,11 @@ final class SignRepository: SignRepositoryProtocol {
                 return cached
             }
             
+            guard !Task.isCancelled else {
+                logger.debug("🛑 Фоновая синхронизация отменена после загрузки")
+                return
+            }
+            
             guard currentData?.lastUpdated != syncData.lastUpdated else {
                 logger.info("ℹ️ Данные не изменились")
                 return
@@ -194,6 +208,10 @@ final class SignRepository: SignRepositoryProtocol {
             logger.info("✅ Фоновая синхронизация завершена с обновлением UI")
             
         } catch {
+            if error is CancellationError {
+                logger.debug("🛑 Фоновая синхронизация отменена")
+                return
+            }
             logger.warning("⚠️ Фоновая синхронизация не удалась: \(error.localizedDescription)")
         }
     }
