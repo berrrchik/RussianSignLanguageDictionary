@@ -98,6 +98,7 @@ Config/
 
 # Environment variables
 .env
+fastlane/.env
 
 # Python
 venv/
@@ -110,6 +111,8 @@ __pycache__/
 
 # Documentation files (markdown)
 *.md
+# Allow versioned project documentation
+!docs/**/*.md
 
 # Backup files
 *.backup_*
@@ -117,3 +120,7 @@ __pycache__/
 
 *Example*.swift
 GoogleService-Info.plist
+
+# Local Ruby/Bundler artifacts
+.bundle/
+vendor/
