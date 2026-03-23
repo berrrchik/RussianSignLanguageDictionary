@@ -36,6 +36,18 @@ jobs:
           test -s RussianSignLanguageDictionary/Config/GoogleService-Info.plist || { echo "::error::GoogleService-Info.plist пуст после base64"; exit 1; }
           test -s RussianSignLanguageDictionary/Config/APIConfig.swift || { echo "::error::APIConfig.swift пуст после base64 — проверьте секрет API_CONFIG_SWIFT"; exit 1; }
           test -s RussianSignLanguageDictionary/Config/FirebaseConfig.swift || { echo "::error::FirebaseConfig.swift пуст после base64"; exit 1; }
+          if ! grep -q '<plist' RussianSignLanguageDictionary/Config/GoogleService-Info.plist; then
+            echo "::error::После base64 plist не похож на XML. В секрет кладите вывод: base64 -i GoogleService-Info.plist | tr -d '\n'"
+            exit 1
+          fi
+          if ! grep -q 'enum APIConfig' RussianSignLanguageDictionary/Config/APIConfig.swift; then
+            echo "::error::APIConfig.swift битый после decode. В секрет только base64 файла: base64 -i APIConfig.swift | tr -d '\n' (не исходный Swift, не двойной base64)."
+            exit 1
+          fi
+          if ! grep -q 'enum FirebaseConfig' RussianSignLanguageDictionary/Config/FirebaseConfig.swift; then
+            echo "::error::FirebaseConfig.swift битый после decode (часто в секрет попал исходник вместо base64 или лишний символ в конце). Обновите FIREBASE_CONFIG_SWIFT: base64 -i FirebaseConfig.swift | tr -d '\n'"
+            exit 1
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -80,6 +92,18 @@ jobs:
           test -s RussianSignLanguageDictionary/Config/GoogleService-Info.plist || { echo "::error::GoogleService-Info.plist пуст после base64"; exit 1; }
           test -s RussianSignLanguageDictionary/Config/APIConfig.swift || { echo "::error::APIConfig.swift пуст после base64"; exit 1; }
           test -s RussianSignLanguageDictionary/Config/FirebaseConfig.swift || { echo "::error::FirebaseConfig.swift пуст после base64"; exit 1; }
+          if ! grep -q '<plist' RussianSignLanguageDictionary/Config/GoogleService-Info.plist; then
+            echo "::error::После base64 plist не похож на XML. В секрет кладите вывод: base64 -i GoogleService-Info.plist | tr -d '\n'"
+            exit 1
+          fi
+          if ! grep -q 'enum APIConfig' RussianSignLanguageDictionary/Config/APIConfig.swift; then
+            echo "::error::APIConfig.swift битый после decode. В секрет только base64 файла: base64 -i APIConfig.swift | tr -d '\n' (не исходный Swift, не двойной base64)."
+            exit 1
+          fi
+          if ! grep -q 'enum FirebaseConfig' RussianSignLanguageDictionary/Config/FirebaseConfig.swift; then
+            echo "::error::FirebaseConfig.swift битый после decode (часто в секрет попал исходник вместо base64 или лишний символ в конце). Обновите FIREBASE_CONFIG_SWIFT: base64 -i FirebaseConfig.swift | tr -d '\n'"
+            exit 1
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
