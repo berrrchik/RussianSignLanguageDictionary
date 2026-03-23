@@ -1,0 +1,70 @@
+name: iOS CI/CD
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore config files from secrets
+        shell: bash
+        run: |
+          mkdir -p RussianSignLanguageDictionary/Config
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -D > RussianSignLanguageDictionary/Config/GoogleService-Info.plist
+          echo "${{ secrets.API_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/APIConfig.swift
+          echo "${{ secrets.FIREBASE_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/FirebaseConfig.swift
+          
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Run tests
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: bundle exec fastlane tests_ci
+
+  deploy_testflight:
+    name: Deploy TestFlight
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore config files from secrets
+        shell: bash
+        run: |
+          mkdir -p RussianSignLanguageDictionary/Config
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" | base64 -D > RussianSignLanguageDictionary/Config/GoogleService-Info.plist
+          echo "${{ secrets.API_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/APIConfig.swift
+          echo "${{ secrets.FIREBASE_CONFIG_SWIFT }}" | base64 -D > RussianSignLanguageDictionary/Config/FirebaseConfig.swift
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Deploy to TestFlight via Fastlane
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: bundle exec fastlane beta
