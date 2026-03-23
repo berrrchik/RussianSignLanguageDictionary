@@ -3,6 +3,7 @@ import Foundation
 #if DEBUG
 /// Централизованные данные для Preview
 /// Используется для единообразного доступа ко всем mock данным в Preview
+@MainActor
 enum PreviewData {
     // MARK: - Repositories
     
