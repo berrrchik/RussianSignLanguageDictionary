@@ -111,10 +111,10 @@ final class DataLoadCoordinatorTests: XCTestCase {
         )
         
         let testData = SyncData(
-            signs: [],
             categories: [],
-            lastUpdated: Date(),
-            serverEtag: nil
+            signs: [],
+            lessons: [],
+            lastUpdated: Date()
         )
         
         // Act
@@ -125,5 +125,6 @@ final class DataLoadCoordinatorTests: XCTestCase {
         // Assert
         XCTAssertEqual(result.signs.count, 0)
         XCTAssertEqual(result.categories.count, 0)
+        XCTAssertEqual(result.lessons.count, 0)
     }
 }

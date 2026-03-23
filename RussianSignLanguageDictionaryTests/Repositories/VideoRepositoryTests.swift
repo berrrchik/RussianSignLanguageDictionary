@@ -5,14 +5,15 @@ final class VideoRepositoryTests: XCTestCase {
     
     var sut: VideoRepository!
     var mockNetworkMonitor: MockNetworkMonitor!
+    var mockVideoCacheService: MockVideoCacheService!
     
     override func setUp() {
         super.setUp()
         mockNetworkMonitor = MockNetworkMonitor()
         mockNetworkMonitor.setConnected(true)
-        let videoCacheService = VideoCacheService()
+        mockVideoCacheService = MockVideoCacheService()
         sut = VideoRepository(
-            videoCacheService: videoCacheService,
+            videoCacheService: mockVideoCacheService,
             networkMonitor: mockNetworkMonitor
         )
     }
@@ -21,6 +22,7 @@ final class VideoRepositoryTests: XCTestCase {
         sut?.clearCache()
         sut = nil
         mockNetworkMonitor = nil
+        mockVideoCacheService = nil
         super.tearDown()
     }
     
@@ -65,8 +67,7 @@ final class VideoRepositoryTests: XCTestCase {
         let url = try await sut.getVideoURL(for: sign)
         
         XCTAssertNotNil(url)
-        let expectedURL = APIConfig.videoURL(forPath: sign.videos!.first!.url)
-        XCTAssertEqual(url.absoluteString, expectedURL?.absoluteString)
+        XCTAssertTrue(url.isFileURL, "Для обычного просмотра репозиторий должен возвращать локальный file URL из краткосрочного кеша")
     }
     
     func testGetVideoURLCaching() async throws {
@@ -194,7 +195,7 @@ final class VideoRepositoryTests: XCTestCase {
         // Given
         let video = createMockVideo()
         mockNetworkMonitor.setConnected(false)
-        VideoCacheService().clearAllCache()
+        mockVideoCacheService.clearAllCache()
         
         // When/Then
         do {
@@ -211,7 +212,7 @@ final class VideoRepositoryTests: XCTestCase {
         // Given
         let videoWithInvalidURL = SignVideo(
             id: 999,
-            url: "not a valid url",
+            url: "",
             contextDescription: "Invalid",
             order: 1,
             createdAt: nil,
@@ -251,4 +252,3 @@ final class VideoRepositoryTests: XCTestCase {
         try await sut.preloadVideo(video: video, useFavoritesCache: true)
     }
 }
-

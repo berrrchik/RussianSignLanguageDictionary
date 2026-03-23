@@ -11,6 +11,7 @@ final class SignRepositoryTests: XCTestCase {
         super.setUp()
         mockSyncRepository = MockSyncRepository()
         cacheService = CacheService()
+        try? cacheService.clearCache()
         sut = SignRepository(
             syncRepository: mockSyncRepository,
             cacheService: cacheService
@@ -18,6 +19,7 @@ final class SignRepositoryTests: XCTestCase {
     }
     
     override func tearDown() {
+        try? cacheService?.clearCache()
         sut = nil
         mockSyncRepository = nil
         cacheService = nil
@@ -124,4 +126,3 @@ final class SignRepositoryTests: XCTestCase {
         XCTAssertEqual(signs1.count, signs2.count)
     }
 }
-

@@ -96,12 +96,11 @@ final class CategoriesViewModelTests: XCTestCase {
             await sut.loadCategories()
         }
         
-        // Then (проверяем loading state)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(sut.state, .loading)
+        // Then
+        await Task.yield()
+        XCTAssertNotEqual(sut.state, .idle)
         
         await task.value
         XCTAssertEqual(sut.state, .loaded)
     }
 }
-

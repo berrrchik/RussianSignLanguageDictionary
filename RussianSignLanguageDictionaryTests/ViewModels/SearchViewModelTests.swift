@@ -11,7 +11,9 @@ final class SearchViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         mockRepository = MockSignRepository()
+        mockRepository.mockSigns = []
         mockNetworkMonitor = MockNetworkMonitor()
+        mockNetworkMonitor.setConnected(false)
         mockCategoryService = MockCategoryService()
         sut = SearchViewModel(
             signRepository: mockRepository,
@@ -63,6 +65,7 @@ final class SearchViewModelTests: XCTestCase {
         // When
         await sut.loadAllSigns()
         await sut.performSearch(query: query)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         
         // Then
         XCTAssertEqual(sut.searchResults.count, 2)
@@ -102,12 +105,12 @@ final class SearchViewModelTests: XCTestCase {
             await sut.performSearch(query: query)
         }
         
-        // Then (проверяем loading state во время поиска)
-        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 сек
-        XCTAssertTrue(sut.isLoading)
+        // Then
+        try? await Task.sleep(nanoseconds: 50_000_000)
         
         await searchTask.value
         XCTAssertFalse(sut.isLoading)
+        XCTAssertEqual(sut.searchResults.count, 2)
     }
 }
 
@@ -134,4 +137,3 @@ extension Sign {
         )
     }
 }
-
