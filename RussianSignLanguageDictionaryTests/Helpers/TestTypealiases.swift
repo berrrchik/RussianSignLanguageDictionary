@@ -1,0 +1,3 @@
+@testable import RussianSignLanguageDictionary
+
+typealias AppCategory = RussianSignLanguageDictionary.Category
