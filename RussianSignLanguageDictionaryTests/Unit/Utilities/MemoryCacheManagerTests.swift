@@ -47,6 +47,14 @@ final class MemoryCacheManagerTests: XCTestCase {
         XCTAssertNil(sut.get())
         XCTAssertFalse(sut.hasData)
     }
+
+    func testHasDataBecomesTrueAfterSetAndFalseAfterClear() {
+        sut.set("Cached")
+        XCTAssertTrue(sut.hasData)
+
+        sut.clear()
+        XCTAssertFalse(sut.hasData)
+    }
     
     func testOverwrite() {
         // Arrange
@@ -76,6 +84,19 @@ final class MemoryCacheManagerTests: XCTestCase {
         }
         
         // Assert - не должно быть крашей
+        XCTAssertTrue(sut.hasData)
+    }
+
+    func testConcurrentWritesKeepManagerOperational() async {
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<200 {
+                group.addTask {
+                    self.sut.set("Value \(index)")
+                }
+            }
+        }
+
+        XCTAssertNotNil(sut.get())
         XCTAssertTrue(sut.hasData)
     }
     

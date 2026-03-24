@@ -141,14 +141,23 @@ final class SyncRepositorySpy: SyncRepositoryProtocol {
     var checkForUpdatesResult: Result<SyncMetadata, Error> = .success(TestFixtures.syncMetadata)
     var fetchAllDataResult: Result<SyncData, Error> = .success(TestFixtures.syncData)
     var shouldInvokeCachedDataProvider = false
+    var checkForUpdatesImplementation: ((Date?) async throws -> SyncMetadata)?
+    var fetchAllDataImplementation: (((() throws -> SyncData)) async throws -> SyncData)?
 
     func checkForUpdates(lastUpdated: Date?) async throws -> SyncMetadata {
         checkForUpdatesArguments.append(lastUpdated)
+        if let checkForUpdatesImplementation {
+            return try await checkForUpdatesImplementation(lastUpdated)
+        }
         return try checkForUpdatesResult.get()
     }
 
     func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
         fetchAllDataCallCount += 1
+
+        if let fetchAllDataImplementation {
+            return try await fetchAllDataImplementation(cachedDataProvider)
+        }
 
         if shouldInvokeCachedDataProvider {
             cachedDataProviderCallCount += 1

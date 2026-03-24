@@ -2,18 +2,31 @@ import Foundation
 
 final class MockURLProtocol: URLProtocol {
     typealias RequestHandler = (URLRequest) throws -> (HTTPURLResponse, Data)
+    typealias GenericRequestHandler = (URLRequest) throws -> (URLResponse, Data)
 
     private static let lock = NSLock()
     private static var requestHandler: RequestHandler?
+    private static var genericRequestHandler: GenericRequestHandler?
 
     static func setRequestHandler(_ handler: RequestHandler?) {
         lock.lock()
         requestHandler = handler
+        genericRequestHandler = nil
+        lock.unlock()
+    }
+
+    static func setGenericRequestHandler(_ handler: GenericRequestHandler?) {
+        lock.lock()
+        genericRequestHandler = handler
+        requestHandler = nil
         lock.unlock()
     }
 
     static func reset() {
-        setRequestHandler(nil)
+        lock.lock()
+        requestHandler = nil
+        genericRequestHandler = nil
+        lock.unlock()
     }
 
     static func makeEphemeralSession() -> URLSession {
@@ -33,15 +46,28 @@ final class MockURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         let handler = Self.requestHandler
+        let genericHandler = Self.genericRequestHandler
         Self.lock.unlock()
 
-        guard let handler else {
+        guard handler != nil || genericHandler != nil else {
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             return
         }
 
         do {
-            let (response, data) = try handler(request)
+            let responseAndData: (URLResponse, Data)
+
+            if let genericHandler {
+                responseAndData = try genericHandler(request)
+            } else if let handler {
+                let (response, data) = try handler(request)
+                responseAndData = (response, data)
+            } else {
+                client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
+                return
+            }
+
+            let (response, data) = responseAndData
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             if !data.isEmpty {
                 client?.urlProtocol(self, didLoad: data)

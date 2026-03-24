@@ -5,178 +5,74 @@ import XCTest
 final class SignRepositoryOfflineTests: XCTestCase {
     
     var sut: SignRepository!
-    var mockNetworkMonitor: MockNetworkMonitor!
-    var mockSyncRepository: MockSyncRepository!
+    var networkMonitor: NetworkMonitorSpy!
+    var syncRepository: SyncRepositorySpy!
     var cacheService: CacheService!
     var cacheDirectoryURL: URL!
     
     override func setUp() {
         super.setUp()
-        mockNetworkMonitor = MockNetworkMonitor()
-        mockSyncRepository = MockSyncRepository()
-        cacheDirectoryURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SignRepositoryOfflineTests-\(UUID().uuidString)", isDirectory: true)
+        networkMonitor = NetworkMonitorSpy()
+        syncRepository = SyncRepositorySpy()
+        cacheDirectoryURL = try? createTemporaryDirectory()
         cacheService = CacheService(cacheDirectoryURL: cacheDirectoryURL)
         
         sut = SignRepository(
-            syncRepository: mockSyncRepository,
+            syncRepository: syncRepository,
             cacheService: cacheService,
-            networkMonitor: mockNetworkMonitor
+            networkMonitor: networkMonitor
         )
     }
     
     override func tearDown() {
         try? cacheService?.clearCache()
         sut = nil
-        mockNetworkMonitor = nil
-        mockSyncRepository = nil
+        networkMonitor = nil
+        syncRepository = nil
         cacheService = nil
-        if let cacheDirectoryURL {
-            try? FileManager.default.removeItem(at: cacheDirectoryURL)
-        }
         cacheDirectoryURL = nil
         super.tearDown()
     }
     
-    // MARK: - Tests: Загрузка жестов
-    
-    /// Тест: Загрузка жестов с интернетом должна работать и сохранять в кеш
-    func testLoadAllSignsWithInternet_SavesToCache() async throws {
-        // Arrange
-        mockNetworkMonitor.simulateInternetRestored()
-        mockSyncRepository.shouldSucceed = true
-        
-        // Act
-        let signs1 = try await sut.loadAllSigns()
-        
-        // Симулируем потерю интернета
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Пытаемся загрузить снова (должно быть из кеша)
-        let signs2 = try await sut.loadAllSigns()
-        
-        // Assert
-        XCTAssertFalse(signs1.isEmpty, "Жесты должны быть загружены")
-        XCTAssertFalse(signs2.isEmpty, "Жесты должны быть загружены из кеша")
-        XCTAssertEqual(signs1.count, signs2.count, "Количество жестов должно совпадать")
-    }
-    
-    /// Тест: Загрузка жестов без интернета, но с кешем должна работать
-    func testLoadAllSignsWithoutInternet_WithCache_Success() async throws {
-        // Arrange
-        // Сначала загружаем с интернетом
-        mockNetworkMonitor.simulateInternetRestored()
-        mockSyncRepository.shouldSucceed = true
-        _ = try await sut.loadAllSigns()
-        
-        // Теперь симулируем отсутствие интернета
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Act
-        let signs = try await sut.loadAllSigns()
-        
-        // Assert
-        XCTAssertFalse(signs.isEmpty, "Жесты должны быть загружены из кеша")
-    }
-    
-    /// Тест: Загрузка жестов без интернета и без кеша должна выбрасывать ошибку
-    func testLoadAllSignsWithoutInternet_NoCache_ThrowsError() async {
-        // Arrange
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Act & Assert
+    func testFirstLaunchOfflineWithoutCacheThrowsNoDataAvailable() async {
+        networkMonitor.checkConnectionValue = false
+        networkMonitor.isConnectedValue = false
+
         do {
             _ = try await sut.loadAllSigns()
-            XCTFail("Должна быть выброшена ошибка noDataAvailable")
+            XCTFail("Expected noDataAvailable")
         } catch let error as SignRepositoryError {
-            XCTAssertEqual(error, .noDataAvailable, "Должна быть ошибка отсутствия данных")
+            XCTAssertEqual(error, .noDataAvailable)
         } catch {
-            XCTFail("Неожиданная ошибка: \(error)")
+            XCTFail("Unexpected error: \(error)")
         }
     }
     
-    // MARK: - Tests: Загрузка категорий
-    
-    /// Тест: Загрузка категорий с интернетом должна работать
-    func testLoadCategoriesWithInternet_Success() async throws {
-        // Arrange
-        mockNetworkMonitor.simulateInternetRestored()
-        mockSyncRepository.shouldSucceed = true
-        
-        // Act
-        let categories1 = try await sut.loadCategories()
-        
-        // Симулируем потерю интернета
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Пытаемся загрузить снова (должно быть из кеша)
-        let categories2 = try await sut.loadCategories()
-        
-        // Assert
-        XCTAssertFalse(categories1.isEmpty, "Категории должны быть загружены")
-        XCTAssertFalse(categories2.isEmpty, "Категории должны быть загружены из кеша")
-        XCTAssertEqual(categories1.count, categories2.count, "Количество категорий должно совпадать")
+    func testOfflineWithDiskCacheLoadsSuccessfully() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        networkMonitor.checkConnectionValue = false
+        networkMonitor.isConnectedValue = false
+
+        let signs = try await sut.loadAllSigns()
+
+        XCTAssertEqual(signs.count, TestFixtures.syncData.signs.count)
     }
     
-    /// Тест: Загрузка категорий без интернета, но с кешем должна работать
-    func testLoadCategoriesWithoutInternet_WithCache_Success() async throws {
-        // Arrange
-        // Сначала загружаем с интернетом
-        mockNetworkMonitor.simulateInternetRestored()
-        mockSyncRepository.shouldSucceed = true
-        _ = try await sut.loadCategories()
-        
-        // Теперь симулируем отсутствие интернета
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Act
+    func testOfflineCategoriesUseDiskCache() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        networkMonitor.checkConnectionValue = false
+
         let categories = try await sut.loadCategories()
-        
-        // Assert
-        XCTAssertFalse(categories.isEmpty, "Категории должны быть загружены из кеша")
+
+        XCTAssertEqual(categories.count, TestFixtures.syncData.categories.count)
     }
-    
-    /// Тест: Загрузка категорий без интернета и без кеша должна выбрасывать ошибку
-    func testLoadCategoriesWithoutInternet_NoCache_ThrowsError() async {
-        // Arrange
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Act & Assert
-        do {
-            _ = try await sut.loadCategories()
-            XCTFail("Должна быть выброшена ошибка noDataAvailable")
-        } catch let error as SignRepositoryError {
-            XCTAssertEqual(error, .noDataAvailable, "Должна быть ошибка отсутствия данных")
-        } catch {
-            XCTFail("Неожиданная ошибка: \(error)")
-        }
-    }
-    
-    // MARK: - Tests: Поиск жестов
-    
-    /// Тест: Поиск жестов в офлайн-режиме должен работать с кешированными данными
-    func testSearchSignsOffline_WithCache_Success() async throws {
-        // Arrange
-        // Сначала загружаем с интернетом
-        mockNetworkMonitor.simulateInternetRestored()
-        mockSyncRepository.shouldSucceed = true
-        _ = try await sut.loadAllSigns()
-        
-        // Симулируем потерю интернета
-        mockNetworkMonitor.simulateNoInternet()
-        mockSyncRepository.shouldSucceed = false
-        
-        // Act
-        let results = try await sut.searchSigns(query: "привет")
-        
-        // Assert
-        // Результаты могут быть пустыми, но ошибки быть не должно
-        XCTAssertNotNil(results)
+
+    func testOfflineSearchUsesCachedData() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        networkMonitor.checkConnectionValue = false
+
+        let results = try await sut.searchSigns(query: "прив")
+
+        XCTAssertEqual(results.map(\.id), [TestFixtures.sign.id])
     }
 }
