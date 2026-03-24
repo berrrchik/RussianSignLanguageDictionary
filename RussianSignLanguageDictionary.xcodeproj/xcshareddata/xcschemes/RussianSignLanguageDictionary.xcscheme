@@ -27,8 +27,19 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      codeCoverageEnabled = "YES"
+      onlyGenerateCoverageForSpecifiedTargets = "YES"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      shouldAutocreateTestPlan = "NO">
+      <CodeCoverageTargets>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "57D364A72EC4FC3E007D9784"
+            BuildableName = "RussianSignLanguageDictionary.app"
+            BlueprintName = "RussianSignLanguageDictionary"
+            ReferencedContainer = "container:RussianSignLanguageDictionary.xcodeproj">
+         </BuildableReference>
+      </CodeCoverageTargets>
       <Testables>
          <TestableReference
             skipped = "NO"
@@ -41,7 +52,27 @@
                ReferencedContainer = "container:RussianSignLanguageDictionary.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A1B2C3D32F01000100AABBCC"
+               BuildableName = "RussianSignLanguageDictionaryUITests.xctest"
+               BlueprintName = "RussianSignLanguageDictionaryUITests"
+               ReferencedContainer = "container:RussianSignLanguageDictionary.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "57D364A72EC4FC3E007D9784"
+            BuildableName = "RussianSignLanguageDictionary.app"
+            BlueprintName = "RussianSignLanguageDictionary"
+            ReferencedContainer = "container:RussianSignLanguageDictionary.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
