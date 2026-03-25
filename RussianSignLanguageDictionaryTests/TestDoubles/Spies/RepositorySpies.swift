@@ -14,19 +14,31 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     var getSignsByCategoryResult: Result<[Sign], Error> = .success([])
     var searchSignsResult: Result<[Sign], Error> = .success([])
     var cachedSignsValue: [Sign]?
+    var loadAllSignsImplementation: (() async throws -> [Sign])?
+    var loadCategoriesImplementation: (() async throws -> [AppCategory])?
+    var getSignImplementation: ((String) async throws -> Sign?)?
 
     func loadAllSigns() async throws -> [Sign] {
         loadAllSignsCallCount += 1
+        if let loadAllSignsImplementation {
+            return try await loadAllSignsImplementation()
+        }
         return try loadAllSignsResult.get()
     }
 
     func loadCategories() async throws -> [AppCategory] {
         loadCategoriesCallCount += 1
+        if let loadCategoriesImplementation {
+            return try await loadCategoriesImplementation()
+        }
         return try loadCategoriesResult.get()
     }
 
     func getSign(byId id: String) async throws -> Sign? {
         getSignCallArguments.append(id)
+        if let getSignImplementation {
+            return try await getSignImplementation(id)
+        }
         return try getSignResult.get()
     }
 
@@ -109,6 +121,7 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
 
     var favorites: [String] = []
     var favoriteLookup: [String: Bool] = [:]
+    var mutatesStoredFavorites = true
 
     func getFavorites() -> [String] {
         getFavoritesCallCount += 1
@@ -117,10 +130,20 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
 
     func addFavorite(signId: String) {
         addFavoriteCalls.append(signId)
+        if mutatesStoredFavorites {
+            if !favorites.contains(signId) {
+                favorites.append(signId)
+            }
+            favoriteLookup[signId] = true
+        }
     }
 
     func removeFavorite(signId: String) {
         removeFavoriteCalls.append(signId)
+        if mutatesStoredFavorites {
+            favorites.removeAll { $0 == signId }
+            favoriteLookup[signId] = false
+        }
     }
 
     func isFavorite(signId: String) -> Bool {
