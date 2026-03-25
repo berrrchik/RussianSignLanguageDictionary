@@ -29,8 +29,18 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         context.coordinator.favoritesRepository = favoritesRepository
         context.coordinator.getCategoryName = getCategoryName
         context.coordinator.tableView = uiView
-        
-        uiView.reloadData()
+
+        // SwiftUI может вызывать `updateUIView` до того, как UIKit-вью окажется в `window`.
+        // В этот момент принудительный `reloadData()` может приводить к предупреждению
+        // "UITableView was told to layout its visible cells ... without being in the view hierarchy".
+        if uiView.window != nil {
+            uiView.reloadData()
+        } else {
+            DispatchQueue.main.async {
+                guard uiView.window != nil else { return }
+                uiView.reloadData()
+            }
+        }
     }
     
     static func dismantleUIView(_ uiView: UITableView, coordinator: Coordinator) {
@@ -88,6 +98,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         
         private func reloadVisibleCells() {
             guard let tableView = tableView else { return }
+            guard tableView.window != nil else { return }
             if let visibleIndexPaths = tableView.indexPathsForVisibleRows {
                 tableView.reloadRows(at: visibleIndexPaths, with: .none)
             }
