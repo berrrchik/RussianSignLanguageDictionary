@@ -4,135 +4,247 @@ import XCTest
 @MainActor
 final class SearchViewModelTests: XCTestCase {
     var sut: SearchViewModel!
-    var mockRepository: MockSignRepository!
-    var mockNetworkMonitor: MockNetworkMonitor!
-    var mockCategoryService: MockCategoryService!
+    var signRepository: SignRepositorySpy!
+    var networkMonitor: NetworkMonitorSpy!
+    var categoryService: CategoryServiceSpy!
+    var hybridSearchService: HybridSearchServiceSpy!
+    var hybridSearchServiceBuilder: HybridSearchServiceBuilderSpy!
     
     override func setUp() {
         super.setUp()
-        mockRepository = MockSignRepository()
-        mockRepository.mockSigns = []
-        mockNetworkMonitor = MockNetworkMonitor()
-        mockNetworkMonitor.setConnected(false)
-        mockCategoryService = MockCategoryService()
+        signRepository = SignRepositorySpy()
+        signRepository.loadAllSignsResult = .success([])
+        signRepository.cachedSignsValue = nil
+        networkMonitor = NetworkMonitorSpy()
+        networkMonitor.checkConnectionValue = true
+        categoryService = CategoryServiceSpy()
+        hybridSearchService = HybridSearchServiceSpy()
+        hybridSearchServiceBuilder = HybridSearchServiceBuilderSpy(service: hybridSearchService)
         sut = SearchViewModel(
-            signRepository: mockRepository,
-            networkMonitor: mockNetworkMonitor,
-            categoryService: mockCategoryService
+            signRepository: signRepository,
+            networkMonitor: networkMonitor,
+            categoryService: categoryService,
+            hybridSearchServiceBuilder: hybridSearchServiceBuilder
         )
     }
     
     override func tearDown() {
         sut = nil
-        mockRepository = nil
-        mockNetworkMonitor = nil
-        mockCategoryService = nil
+        signRepository = nil
+        networkMonitor = nil
+        categoryService = nil
+        hybridSearchService = nil
+        hybridSearchServiceBuilder = nil
         super.tearDown()
     }
-    
-    // MARK: - Initial State Tests
     
     func testInitialState() {
         XCTAssertEqual(sut.searchQuery, "")
         XCTAssertEqual(sut.searchResults, [])
         XCTAssertFalse(sut.isLoading)
         XCTAssertNil(sut.errorMessage)
+        XCTAssertFalse(sut.isReady)
     }
     
-    // MARK: - Search Tests
-    
-    func testSearchWithEmptyQuery_ReturnsEmptyResults() async {
-        // Given
-        let emptyQuery = ""
-        
-        // When
-        await sut.performSearch(query: emptyQuery)
-        
-        // Then
-        XCTAssertEqual(sut.searchResults, [])
-        XCTAssertFalse(sut.isLoading)
-    }
-    
-    func testSearchWithValidQuery_ReturnsResults() async {
-        // Given
-        let query = "привет"
-        let mockSigns = [
-            Sign.mockWithWord("Привет"),
-            Sign.mockWithWord("Приветствие")
-        ]
-        mockRepository.mockSigns = mockSigns
-        
-        // When
+    func testLoadAllSignsLoadsInitialResults() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+
         await sut.loadAllSigns()
-        await sut.performSearch(query: query)
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        
-        // Then
-        XCTAssertEqual(sut.searchResults.count, 2)
-        XCTAssertEqual(sut.searchResults[0].word, "Привет")
-        XCTAssertFalse(sut.isLoading)
+
+        XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+        XCTAssertTrue(sut.isReady)
         XCTAssertNil(sut.errorMessage)
     }
-    
-    func testSearchWithError_SetsErrorMessage() async {
-        // Given
-        mockRepository.shouldFail = true
-        mockRepository.errorToThrow = .fileNotFound
-        
-        // When
+
+    func testDebouncePerformsSearchAfterQueryUpdate() async {
+        let signs = makeSigns()
+        signRepository.cachedSignsValue = signs
+        hybridSearchService.hybridSearchResult = .success([signs[0]])
+
+        let sut = SearchViewModel(
+            signRepository: signRepository,
+            networkMonitor: networkMonitor,
+            categoryService: categoryService,
+            hybridSearchServiceBuilder: hybridSearchServiceBuilder
+        )
+        self.sut = sut
+
+        sut.searchQuery = "прив"
+
+        let didPerformDebouncedSearch = await waitUntil {
+            sut.searchResults.map(\.id) == [signs[0].id]
+        }
+        XCTAssertTrue(didPerformDebouncedSearch)
+        XCTAssertTrue(hybridSearchService.hybridQueries.contains("прив"))
+    }
+
+    func testEmptyQueryShowsFullList() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
         await sut.loadAllSigns()
-        
-        // Then
-        XCTAssertTrue(sut.searchResults.isEmpty)
+
+        await sut.performSearch(query: "")
+
+        XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+    }
+
+    func testGroupedResultsUsesSingleSectionForActiveSearch() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+        hybridSearchService.hybridSearchResult = .success([signs[0], signs[1]])
+        await sut.loadAllSigns()
+        sut.searchQuery = "прив"
+
+        let didLoadSearchResults = await waitUntil {
+            self.sut.searchResults.count == 2
+        }
+        XCTAssertTrue(didLoadSearchResults)
+        XCTAssertEqual(sut.groupedResults.count, 1)
+        XCTAssertEqual(sut.groupedResults.first?.id, "search_results")
+    }
+
+    func testGroupedResultsAppliesCategoryFilter() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+
+        await sut.loadAllSigns()
+        sut.selectedCategoryId = "category-2"
+
+        XCTAssertEqual(sut.groupedResults.flatMap(\.signs).map(\.id), ["3"])
+    }
+
+    func testGroupedResultsRespectsDescendingSortOrder() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+
+        await sut.loadAllSigns()
+        sut.sortOrder = .descending
+
+        XCTAssertEqual(sut.groupedResults.map(\.letter), ["П", "А"])
+    }
+
+    func testClearSearchResetsQueryAndResults() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+        hybridSearchService.hybridSearchResult = .success([signs[0]])
+
+        await sut.loadAllSigns()
+        await sut.performSearch(query: "прив")
+
+        let didApplySearchResults = await waitUntil {
+            self.sut.searchResults.map(\.id) == [signs[0].id]
+        }
+        XCTAssertTrue(didApplySearchResults)
+
+        sut.clearSearch()
+
+        XCTAssertEqual(sut.searchQuery, "")
+        XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+        XCTAssertNil(sut.errorMessage)
+    }
+
+    func testPreloadFromCacheInitializesResultsAndReadyState() {
+        let signs = makeSigns()
+        signRepository.cachedSignsValue = signs
+
+        let sut = SearchViewModel(
+            signRepository: signRepository,
+            networkMonitor: networkMonitor,
+            categoryService: categoryService,
+            hybridSearchServiceBuilder: hybridSearchServiceBuilder
+        )
+
+        XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+        XCTAssertTrue(sut.isReady)
+    }
+
+    func testLoadAllSignsMapsErrorMessage() async {
+        signRepository.loadAllSignsResult = .failure(SignRepositoryError.fileNotFound)
+
+        await sut.loadAllSigns()
+
         XCTAssertNotNil(sut.errorMessage)
         XCTAssertFalse(sut.isLoading)
     }
-    
-    func testSearchSetsLoadingState() async {
-        // Given
-        let query = "привет"
-        let mockSigns = [
-            Sign.mockWithWord("Привет"),
-            Sign.mockWithWord("Приветствие")
-        ]
-        mockRepository.mockSigns = mockSigns
-        
-        // Загружаем данные сначала
+
+    func testLoadAllSignsEnablesOfflineModeWhenNetworkUnavailable() async {
+        let signs = makeSigns()
+        signRepository.loadAllSignsResult = .success(signs)
+        networkMonitor.checkConnectionValue = false
+
         await sut.loadAllSigns()
-        
-        // When
-        let searchTask = Task {
-            await sut.performSearch(query: query)
-        }
-        
-        // Then
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        
-        await searchTask.value
-        XCTAssertFalse(sut.isLoading)
-        XCTAssertEqual(sut.searchResults.count, 2)
+
+        XCTAssertTrue(sut.isOfflineMode)
+        XCTAssertNotNil(sut.offlineMessage)
     }
-}
 
-// MARK: - Sign Mock Helpers
+    func testPerformSearchCancelsPreviousTaskOnQueryChange() async {
+        let signs = makeSigns()
+        signRepository.cachedSignsValue = signs
 
-extension Sign {
-    static func mockWithWord(_ word: String) -> Sign {
+        let sut = SearchViewModel(
+            signRepository: signRepository,
+            networkMonitor: networkMonitor,
+            categoryService: categoryService,
+            hybridSearchServiceBuilder: hybridSearchServiceBuilder
+        )
+        self.sut = sut
+
+        let secondSearchStarted = expectation(description: "Second search started")
+        hybridSearchService.hybridSearchImplementation = { query, _, _ in
+            if query == "прив" {
+                try await Task.sleep(nanoseconds: 200_000_000)
+                return [signs[0]]
+            }
+
+            secondSearchStarted.fulfill()
+            return [signs[2]]
+        }
+
+        sut.searchQuery = "прив"
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        sut.searchQuery = "ал"
+
+        await fulfillment(of: [secondSearchStarted], timeout: 2.0)
+
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(sut.searchResults.map(\.id), [signs[2].id])
+    }
+
+    private func makeSigns() -> [Sign] {
+        [
+            makeSign(id: "1", word: "Привет", categoryId: "category-1"),
+            makeSign(id: "2", word: "Приветствие", categoryId: "category-1"),
+            makeSign(id: "3", word: "Алоха", categoryId: "category-2")
+        ]
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.5,
+        pollInterval: UInt64 = 20_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+
+        return condition()
+    }
+
+    private func makeSign(id: String, word: String, categoryId: String) -> Sign {
         Sign(
-            id: UUID().uuidString,
+            id: id,
             word: word,
             description: "Описание для \(word)",
-            categoryId: "test",
-            videos: [
-                SignVideo(
-                    id: 1,
-                    url: "https://example.com/\(word).mp4",
-                    contextDescription: "Основное видео",
-                    order: 0,
-                    createdAt: nil,
-                    updatedAt: nil
-                )
-            ],
+            categoryId: categoryId,
+            videos: [TestFixtures.video],
             synonyms: nil
         )
     }

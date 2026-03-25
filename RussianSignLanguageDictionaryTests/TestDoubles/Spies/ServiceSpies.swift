@@ -146,3 +146,86 @@ final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
         ensureCacheLimitCallCount += 1
     }
 }
+
+final class SBERTSearchServiceSpy: SBERTSearchServiceProtocol {
+    private(set) var queries: [String] = []
+    private(set) var limits: [Int] = []
+    private(set) var minSimilarities: [Double] = []
+
+    var searchResult: Result<[SBERTSearchResult], Error> = .success([])
+    var searchImplementation: ((String, Int, Double) async throws -> [SBERTSearchResult])?
+
+    func search(
+        query: String,
+        limit: Int,
+        minSimilarity: Double
+    ) async throws -> [SBERTSearchResult] {
+        queries.append(query)
+        limits.append(limit)
+        minSimilarities.append(minSimilarity)
+
+        if let searchImplementation {
+            return try await searchImplementation(query, limit, minSimilarity)
+        }
+
+        return try searchResult.get()
+    }
+}
+
+final class HybridSearchServiceSpy: HybridSearchServiceProtocol {
+    private(set) var hybridQueries: [String] = []
+    private(set) var hybridLimits: [Int] = []
+    private(set) var highQualityFlags: [Bool] = []
+    private(set) var textQueries: [String] = []
+    private(set) var textLimits: [Int] = []
+
+    var hybridSearchResult: Result<[Sign], Error> = .success([])
+    var textSearchResult: [Sign] = []
+    var hybridSearchImplementation: ((String, Int, Bool) async throws -> [Sign])?
+    var textSearchImplementation: ((String, Int) -> [Sign])?
+
+    func performHybridSearch(
+        query: String,
+        limit: Int,
+        useHighQualityThreshold: Bool
+    ) async throws -> [Sign] {
+        hybridQueries.append(query)
+        hybridLimits.append(limit)
+        highQualityFlags.append(useHighQualityThreshold)
+
+        if let hybridSearchImplementation {
+            return try await hybridSearchImplementation(query, limit, useHighQualityThreshold)
+        }
+
+        return try hybridSearchResult.get()
+    }
+
+    func performTextSearch(query: String, limit: Int) -> [Sign] {
+        textQueries.append(query)
+        textLimits.append(limit)
+
+        if let textSearchImplementation {
+            return textSearchImplementation(query, limit)
+        }
+
+        return Array(textSearchResult.prefix(limit))
+    }
+}
+
+final class HybridSearchServiceBuilderSpy: HybridSearchServiceBuilderProtocol {
+    private(set) var makeCalls: [(signs: [Sign], networkMonitor: NetworkMonitorProtocol)] = []
+
+    var service: HybridSearchServiceProtocol
+
+    init(service: HybridSearchServiceProtocol) {
+        self.service = service
+    }
+
+    func make(
+        signs: [Sign],
+        networkMonitor: NetworkMonitorProtocol
+    ) -> HybridSearchServiceProtocol {
+        makeCalls.append((signs, networkMonitor))
+        return service
+    }
+}
