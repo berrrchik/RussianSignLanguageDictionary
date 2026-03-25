@@ -2,165 +2,150 @@ import XCTest
 @testable import RussianSignLanguageDictionary
 
 final class VideoCacheServiceTests: XCTestCase {
-    
-    var sut: VideoCacheService!
-    
-    override func setUp() {
-        super.setUp()
-        sut = VideoCacheService()
-        // Очищаем кеш перед каждым тестом
-        sut.clearAllCache()
+    private var sut: VideoCacheService!
+    private var tempDirectory: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        tempDirectory = try createTemporaryDirectory()
+        let manager = VideoCacheDirectoryManager(cacheDirectory: tempDirectory)
+        let downloader = VideoCacheDownloader(
+            directoryManager: manager,
+            session: MockURLProtocol.makeEphemeralSession()
+        )
+        sut = VideoCacheService(directoryManager: manager, downloader: downloader)
+        MockURLProtocol.reset()
     }
-    
+
     override func tearDown() {
-        sut.clearAllCache()
+        MockURLProtocol.reset()
         sut = nil
+        tempDirectory = nil
         super.tearDown()
     }
-    
-    // MARK: - Test Data
-    
-    private func createMockVideo(id: Int = 1) -> SignVideo {
-        return SignVideo(
-            id: id,
-            url: "https://example.com/video_\(id).mp4",
-            contextDescription: "Test video \(id)",
-            order: 1,
-            createdAt: nil,
-            updatedAt: nil
-        )
-    }
-    
-    // MARK: - Cache Size Tests
-    
-    func testGetCacheSizeInitiallyZero() {
-        // Given - пустой кеш
-        sut.clearAllCache()
-        
-        // When
-        let size = sut.getCacheSize()
-        
-        // Then
-        XCTAssertEqual(size, 0, "Размер пустого кеша должен быть 0")
-    }
-    
-    // MARK: - Cache Checking Tests
-    
-    func testIsVideoCachedReturnsFalseForNotCachedVideo() {
-        // Given
-        let video = createMockVideo()
-        sut.clearAllCache()
-        
-        // When
-        let isCached = sut.isVideoCached(video)
-        
-        // Then
-        XCTAssertFalse(isCached, "Видео не должно быть в кеше")
-    }
-    
-    func testIsVideoCachedURLReturnsFalseForNotCachedURL() {
-        // Given
-        let url = URL(string: "https://example.com/test.mp4")!
-        sut.clearAllCache()
-        
-        // When
-        let isCached = sut.isVideoCached(url: url)
-        
-        // Then
-        XCTAssertFalse(isCached, "URL не должен быть в кеше")
-    }
-    
-    // MARK: - Get Cached Video URL Tests
-    
-    func testGetCachedVideoURLReturnsNilForNotCachedVideo() {
-        // Given
-        let video = createMockVideo()
-        sut.clearAllCache()
-        
-        // When
-        let cachedURL = sut.getCachedVideoURL(video)
-        
-        // Then
-        XCTAssertNil(cachedURL, "URL кешированного видео должен быть nil для не кешированного видео")
-    }
-    
-    // MARK: - Clear Cache Tests
-    
-    func testClearAllCache() {
-        // Given/When
-        sut.clearAllCache()
-        
-        // Then - если дошли сюда без крэша, тест прошёл
-        XCTAssertEqual(sut.getCacheSize(), 0, "Кеш должен быть очищен")
-    }
-    
-    func testClearCacheForVideo() {
-        // Given
-        let video = createMockVideo()
-        
-        // When
-        sut.clearCache(for: video)
-        
-        // Ждём выполнения async операции
-        let expectation = XCTestExpectation(description: "Cache cleared")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 1.0)
-        
-        // Then - если дошли сюда без крэша, тест прошёл
-        XCTAssertFalse(sut.isVideoCached(video))
-    }
-    
-    // MARK: - Video Invalid URL Tests
-    
+
     func testIsVideoCachedReturnsFalseForInvalidURL() {
-        // Given
-        let videoWithInvalidURL = SignVideo(
-            id: 999,
-            url: "not a valid url",
-            contextDescription: "Invalid",
+        XCTAssertFalse(sut.isVideoCached(makeVideo(url: "")))
+        XCTAssertNil(sut.getCachedVideoURL(makeVideo(url: "")))
+    }
+
+    func testDownloadAndCacheStoresVideoForLookupByModelAndURL() async throws {
+        let video = makeVideo()
+        MockURLProtocol.setRequestHandler { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data("video-data".utf8))
+        }
+
+        let localURL = try await sut.downloadAndCache(video: video)
+
+        XCTAssertTrue(localURL.isFileURL)
+        XCTAssertTrue(sut.isVideoCached(video))
+        XCTAssertTrue(sut.isVideoCached(url: try XCTUnwrap(APIConfig.videoURL(forPath: video.url))))
+        XCTAssertEqual(sut.getCachedVideoURL(video), localURL)
+    }
+
+    func testGetCachedVideoURLReturnsNilForMissingVideo() {
+        XCTAssertNil(sut.getCachedVideoURL(makeVideo()))
+        XCTAssertNil(sut.getCachedVideoURL(originalURL: URL(string: "https://example.com/missing.mp4")!))
+    }
+
+    func testClearCacheForSignRemovesAllCachedVideos() async throws {
+        let first = makeVideo(id: 1, url: "/signs/test/one.mp4")
+        let second = makeVideo(id: 2, url: "/signs/test/two.mp4")
+        MockURLProtocol.setRequestHandler { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data((request.url?.absoluteString ?? "").utf8))
+        }
+
+        _ = try await sut.downloadAndCache(video: first)
+        _ = try await sut.downloadAndCache(video: second)
+
+        sut.clearCache(for: "sign-1", videos: [first, second])
+
+        let cleared = await waitUntil {
+            !self.sut.isVideoCached(first) && !self.sut.isVideoCached(second)
+        }
+        XCTAssertTrue(cleared)
+    }
+
+    func testClearAllCacheRemovesDownloadedFiles() async throws {
+        let video = makeVideo()
+        MockURLProtocol.setRequestHandler { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data("video-data".utf8))
+        }
+
+        _ = try await sut.downloadAndCache(video: video)
+        sut.clearAllCache()
+
+        let cleared = await waitUntil {
+            !self.sut.isVideoCached(video) && self.sut.getCacheSize() == 0
+        }
+        XCTAssertTrue(cleared)
+    }
+
+    func testGetCacheSizeReflectsDownloadedBytes() async throws {
+        MockURLProtocol.setRequestHandler { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data(repeating: 0x41, count: 7))
+        }
+
+        _ = try await sut.downloadAndCache(video: makeVideo())
+
+        XCTAssertGreaterThanOrEqual(sut.getCacheSize(), 7)
+    }
+
+    func testEnsureCacheLimitDoesNotCrashOnEmptyCache() {
+        sut.ensureCacheLimit()
+        XCTAssertEqual(sut.getCacheSize(), 0)
+    }
+
+    private func makeVideo(id: Int = 1, url: String = "/signs/test/video_1.mp4") -> SignVideo {
+        SignVideo(
+            id: id,
+            url: url,
+            contextDescription: "Video \(id)",
             order: 1,
             createdAt: nil,
             updatedAt: nil
         )
-        
-        // When
-        let isCached = sut.isVideoCached(videoWithInvalidURL)
-        
-        // Then
-        XCTAssertFalse(isCached, "Видео с невалидным URL не должно быть в кеше")
     }
-    
-    // MARK: - Ensure Cache Limit Tests
-    
-    func testEnsureCacheLimitDoesNotCrash() {
-        // Given/When - просто проверяем, что метод не крашится
-        sut.ensureCacheLimit()
-        
-        // Then - если дошли сюда, тест прошёл
-        XCTAssertTrue(true)
-    }
-    
-    // MARK: - Clear Cache for Sign Tests
-    
-    func testClearCacheForSignWithVideos() {
-        // Given
-        let signId = "test-sign-id"
-        let videos = [createMockVideo(id: 1), createMockVideo(id: 2)]
-        
-        // When
-        sut.clearCache(for: signId, videos: videos)
-        
-        // Ждём выполнения async операции
-        let expectation = XCTestExpectation(description: "Cache cleared for sign")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            expectation.fulfill()
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        pollInterval: UInt64 = 20_000_000,
+        condition: @escaping () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
         }
-        wait(for: [expectation], timeout: 1.0)
-        
-        // Then - если дошли сюда без крэша, тест прошёл
-        XCTAssertFalse(sut.isVideoCached(videos[0]))
-        XCTAssertFalse(sut.isVideoCached(videos[1]))
+
+        return condition()
     }
 }
