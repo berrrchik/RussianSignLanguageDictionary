@@ -130,6 +130,11 @@ final class SBERTSearchService: SBERTSearchServiceProtocol {
     }
     
     private func mapToSearchError(_ error: Error) -> SBERTSearchError {
+        if error is DecodingError {
+            logger.error("❌ Ошибка декодирования ответа: \(error.localizedDescription)")
+            return .invalidResponse
+        }
+
         guard let urlError = error as? URLError else {
             logger.error("❌ Неизвестная ошибка: \(error.localizedDescription)")
             logger.error("❌ Тип ошибки: \(type(of: error))")
