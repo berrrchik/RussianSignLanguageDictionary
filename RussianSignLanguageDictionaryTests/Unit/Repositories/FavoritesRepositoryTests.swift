@@ -2,147 +2,213 @@ import XCTest
 @testable import RussianSignLanguageDictionary
 
 final class FavoritesRepositoryTests: XCTestCase {
-    
-    var sut: FavoritesRepository!
-    var mockUserDefaults: UserDefaults!
-    var mockSignRepository: MockSignRepository!
-    var mockVideoCacheService: MockVideoCacheService!
-    
+    private var sut: FavoritesRepository!
+    private var userDefaults: UserDefaults!
+    private var signRepository: MockSignRepository!
+    private var videoCacheService: MockVideoCacheService!
+
     override func setUp() {
         super.setUp()
-        
-        // Создание изолированного UserDefaults для каждого теста
-        mockUserDefaults = makeIsolatedUserDefaults()
-        
-        // Создание моков для обязательных зависимостей
-        mockSignRepository = MockSignRepository()
-        mockVideoCacheService = MockVideoCacheService()
-        
+        userDefaults = makeIsolatedUserDefaults()
+        signRepository = MockSignRepository()
+        videoCacheService = MockVideoCacheService()
         sut = FavoritesRepository(
-            userDefaults: mockUserDefaults,
-            signRepository: mockSignRepository,
-            videoCacheService: mockVideoCacheService
+            userDefaults: userDefaults,
+            signRepository: signRepository,
+            videoCacheService: videoCacheService
         )
     }
-    
+
     override func tearDown() {
-        sut?.clearAllFavorites()
         sut = nil
-        mockUserDefaults = nil
-        mockSignRepository = nil
-        mockVideoCacheService = nil
+        userDefaults = nil
+        signRepository = nil
+        videoCacheService = nil
         super.tearDown()
     }
-    
-    // MARK: - Tests
-    
+
     func testGetFavoritesInitiallyEmpty() {
-        let favorites = sut.getFavorites()
-        
-        XCTAssertTrue(favorites.isEmpty, "Изначально избранное должно быть пустым")
+        XCTAssertEqual(sut.getFavorites(), [])
     }
-    
-    func testAddFavorite() {
-        let signId = "sign_001"
-        
-        sut.addFavorite(signId: signId)
-        let favorites = sut.getFavorites()
-        
-        XCTAssertEqual(favorites.count, 1)
-        XCTAssertTrue(favorites.contains(signId))
+
+    func testAddFavoritePersistsWithoutDuplicatesAndPreservesInsertionOrder() {
+        sut.addFavorite(signId: "sign-1")
+        sut.addFavorite(signId: "sign-2")
+        sut.addFavorite(signId: "sign-1")
+
+        XCTAssertEqual(sut.getFavorites(), ["sign-1", "sign-2"])
     }
-    
-    func testAddMultipleFavorites() {
-        let signIds = ["sign_001", "sign_002", "sign_003"]
-        
-        signIds.forEach { sut.addFavorite(signId: $0) }
-        let favorites = sut.getFavorites()
-        
-        XCTAssertEqual(favorites.count, 3)
-        signIds.forEach { XCTAssertTrue(favorites.contains($0)) }
+
+    func testRemoveFavoriteRemovesOnlyRequestedId() {
+        sut.addFavorite(signId: "sign-1")
+        sut.addFavorite(signId: "sign-2")
+
+        sut.removeFavorite(signId: "sign-1")
+
+        XCTAssertEqual(sut.getFavorites(), ["sign-2"])
+        XCTAssertFalse(sut.isFavorite(signId: "sign-1"))
     }
-    
-    func testAddDuplicateFavorite() {
-        let signId = "sign_001"
-        sut.addFavorite(signId: signId)
-        
-        sut.addFavorite(signId: signId)
-        let favorites = sut.getFavorites()
-        
-        XCTAssertEqual(favorites.count, 1, "Дубликаты не должны добавляться")
-    }
-    
-    func testRemoveFavorite() {
-        let signId = "sign_001"
-        sut.addFavorite(signId: signId)
-        
-        sut.removeFavorite(signId: signId)
-        let favorites = sut.getFavorites()
-        
-        XCTAssertTrue(favorites.isEmpty)
-        XCTAssertFalse(favorites.contains(signId))
-    }
-    
-    func testRemoveNonExistentFavorite() {
-        let signId = "sign_001"
-        sut.addFavorite(signId: signId)
-        
-        sut.removeFavorite(signId: "sign_002")
-        let favorites = sut.getFavorites()
-        
-        XCTAssertEqual(favorites.count, 1)
-        XCTAssertTrue(favorites.contains(signId))
-    }
-    
-    func testIsFavorite() {
-        let signId = "sign_001"
-        sut.addFavorite(signId: signId)
-        
-        XCTAssertTrue(sut.isFavorite(signId: signId))
-        XCTAssertFalse(sut.isFavorite(signId: "sign_002"))
-    }
-    
-    func testClearAllFavorites() {
-        ["sign_001", "sign_002", "sign_003"].forEach { sut.addFavorite(signId: $0) }
-        
+
+    func testClearAllFavoritesRemovesPersistedDataAndClearsVideoCache() {
+        sut.addFavorite(signId: "sign-1")
+        sut.addFavorite(signId: "sign-2")
+
         sut.clearAllFavorites()
-        let favorites = sut.getFavorites()
-        
-        XCTAssertTrue(favorites.isEmpty)
+
+        XCTAssertEqual(sut.getFavorites(), [])
+        XCTAssertEqual(videoCacheService.clearAllCacheCallCount, 1)
     }
-    
-    func testFavoritesPublisher() {
-        let expectation = XCTestExpectation(description: "Publisher должен обновиться")
-        let signId = "sign_001"
-        
-        var receivedFavorites: [String] = []
+
+    func testFavoritesPersistAcrossRepositoryInstances() {
+        sut.addFavorite(signId: "sign-1")
+
+        let secondRepository = FavoritesRepository(
+            userDefaults: userDefaults,
+            signRepository: signRepository,
+            videoCacheService: videoCacheService
+        )
+
+        XCTAssertEqual(secondRepository.getFavorites(), ["sign-1"])
+    }
+
+    func testFavoritesPublisherEmitsUpdatedFavorites() async {
+        let expected = expectation(description: "favorites publisher updated")
         let cancellable = sut.$favoritesPublisher.sink { favorites in
-            receivedFavorites = favorites
-            if favorites.contains(signId) {
-                expectation.fulfill()
+            if favorites == ["sign-1"] {
+                expected.fulfill()
             }
         }
-        
-        sut.addFavorite(signId: signId)
-        
-        wait(for: [expectation], timeout: 1.0)
-        XCTAssertTrue(receivedFavorites.contains(signId))
-        
+
+        sut.addFavorite(signId: "sign-1")
+
+        await fulfillment(of: [expected], timeout: 1.0)
         cancellable.cancel()
     }
-    
-    func testPersistence() {
-        let signId = "sign_001"
-        sut.addFavorite(signId: signId)
-        
-        let newRepository = FavoritesRepository(
-            userDefaults: mockUserDefaults,
-            signRepository: mockSignRepository,
-            videoCacheService: mockVideoCacheService
+
+    func testAddFavoritePreloadsVideosWhenSignExists() async {
+        signRepository.mockSigns = [makeSign(id: "sign-1", videos: [makeVideo(id: 1), makeVideo(id: 2)])]
+
+        sut.addFavorite(signId: "sign-1")
+
+        let preloaded = await waitUntil {
+            self.videoCacheService.preloadVideoCallCount == 2
+        }
+        XCTAssertTrue(preloaded)
+        XCTAssertEqual(videoCacheService.lastPreloadedVideos.map(\.id), [1, 2])
+    }
+
+    func testAddFavoriteSkipsPreloadWhenSignMissing() async {
+        signRepository.mockSigns = []
+
+        sut.addFavorite(signId: "missing-sign")
+
+        let noPreload = await waitUntil {
+            self.videoCacheService.preloadVideoCallCount == 0
+        }
+        XCTAssertTrue(noPreload)
+    }
+
+    func testAddFavoriteSkipsPreloadWhenSignHasNoVideos() async {
+        signRepository.mockSigns = [makeSign(id: "sign-1", videos: nil)]
+
+        sut.addFavorite(signId: "sign-1")
+
+        let noPreload = await waitUntil {
+            self.videoCacheService.preloadVideoCallCount == 0
+        }
+        XCTAssertTrue(noPreload)
+    }
+
+    func testRemoveFavoriteClearsCachedVideosForKnownSign() async {
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        signRepository.mockSigns = [makeSign(id: "sign-1", videos: videos)]
+        sut.addFavorite(signId: "sign-1")
+
+        sut.removeFavorite(signId: "sign-1")
+
+        let cleared = await waitUntil {
+            self.videoCacheService.clearCacheCallCount > 0
+        }
+        XCTAssertTrue(cleared)
+    }
+
+    func testRemoveFavoriteDoesNotClearCacheWhenSignMissing() async {
+        signRepository.mockSigns = []
+
+        sut.removeFavorite(signId: "sign-1")
+
+        let noCleanup = await waitUntil {
+            self.videoCacheService.clearCacheCallCount == 0
+        }
+        XCTAssertTrue(noCleanup)
+    }
+
+    func testBackgroundThreadAddFavoriteMarshalsToMainThread() async {
+        let completed = expectation(description: "background add completed")
+        let sut = self.sut!
+
+        DispatchQueue.global().async {
+            sut.addFavorite(signId: "sign-1")
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 1.0)
+        let added = await waitUntil { self.sut.isFavorite(signId: "sign-1") }
+        XCTAssertTrue(added)
+    }
+
+    func testBackgroundThreadRemoveFavoriteMarshalsToMainThread() async {
+        sut.addFavorite(signId: "sign-1")
+        let completed = expectation(description: "background remove completed")
+        let sut = self.sut!
+
+        DispatchQueue.global().async {
+            sut.removeFavorite(signId: "sign-1")
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 1.0)
+        let removed = await waitUntil { !self.sut.isFavorite(signId: "sign-1") }
+        XCTAssertTrue(removed)
+    }
+
+    private func makeSign(id: String, videos: [SignVideo]?) -> Sign {
+        Sign(
+            id: id,
+            word: "Word \(id)",
+            description: "Description",
+            categoryId: "category-1",
+            videos: videos,
+            synonyms: nil
         )
-        let favorites = newRepository.getFavorites()
-        
-        XCTAssertEqual(favorites.count, 1)
-        XCTAssertTrue(favorites.contains(signId))
+    }
+
+    private func makeVideo(id: Int) -> SignVideo {
+        SignVideo(
+            id: id,
+            url: "/signs/test/video_\(id).mp4",
+            contextDescription: "Video \(id)",
+            order: id,
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        pollInterval: UInt64 = 20_000_000,
+        condition: @escaping () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+
+        return condition()
     }
 }
