@@ -8,7 +8,7 @@ import os.log
 /// - `search_exact_match` - поиск точных совпадений
 /// - `search_sbert` - SBERT семантический поиск
 /// - `search_text` - текстовый поиск по частичному совпадению
-final class HybridSearchService {
+final class HybridSearchService: HybridSearchServiceProtocol {
     // MARK: - Properties
     
     private let baseURL: URL
