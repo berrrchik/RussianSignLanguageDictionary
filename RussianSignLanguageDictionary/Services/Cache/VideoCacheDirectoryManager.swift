@@ -29,14 +29,21 @@ final class VideoCacheDirectoryManager {
     
     /// FileManager для работы с файлами
     private let fileManager: FileManager
+
+    /// Пользовательская директория кеша для тестов
+    private let customCacheDirectory: URL?
     
     /// Максимальный размер кеша
     let maxDiskCapacity: Int
     
     // MARK: - Initialization
     
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        cacheDirectory: URL? = nil
+    ) {
         self.fileManager = fileManager
+        self.customCacheDirectory = cacheDirectory
         self.maxDiskCapacity = Constants.maxDiskCapacity
         configureCacheDirectory()
     }
@@ -46,15 +53,20 @@ final class VideoCacheDirectoryManager {
     /// Настраивает директорию для кеша видео
     private func configureCacheDirectory() {
         cacheQueue.sync {
-            guard let cachesDirectory = fileManager.urls(
-                for: .cachesDirectory,
-                in: .userDomainMask
-            ).first else {
-                logger.error("❌ Не удалось получить директорию Caches")
-                return
+            let videoCacheDir: URL
+            if let customCacheDirectory {
+                videoCacheDir = customCacheDirectory
+            } else {
+                guard let cachesDirectory = fileManager.urls(
+                    for: .cachesDirectory,
+                    in: .userDomainMask
+                ).first else {
+                    logger.error("❌ Не удалось получить директорию Caches")
+                    return
+                }
+                
+                videoCacheDir = cachesDirectory.appendingPathComponent(Constants.cacheDirectoryName)
             }
-            
-            let videoCacheDir = cachesDirectory.appendingPathComponent(Constants.cacheDirectoryName)
             
             if !fileManager.fileExists(atPath: videoCacheDir.path) {
                 do {

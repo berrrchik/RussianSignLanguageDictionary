@@ -17,6 +17,8 @@ import os.log
 /// - `video_load_favorites_cache` - загрузка из долгосрочного кеша избранных
 /// - `video_download_network` - загрузка видео с сервера в краткосрочный кеш
 final class VideoRepository: VideoRepositoryProtocol {
+    typealias CacheLimitEnforcer = (URL, Int, Int) -> Int
+
     // MARK: - Constants
     
     private enum Constants {
@@ -51,15 +53,31 @@ final class VideoRepository: VideoRepositoryProtocol {
     /// Координатор активных загрузок для дедупликации параллельных запросов
     /// Использует Swift actor для потокобезопасности без блокировки потоков
     private let downloadCoordinator = VideoDownloadCoordinator()
+
+    /// FileManager для работы с файлами краткосрочного кеша
+    private let fileManager: FileManager
+
+    /// URLSession для загрузки видео в краткосрочный кеш
+    private let session: URLSession
+
+    /// Алгоритм LRU-очистки, подменяемый в тестах
+    private let cacheLimitEnforcer: CacheLimitEnforcer
     
     // MARK: - Initialization
     
     init(
         videoCacheService: VideoCacheServiceProtocol,
-        networkMonitor: NetworkMonitorProtocol
+        networkMonitor: NetworkMonitorProtocol,
+        fileManager: FileManager = .default,
+        session: URLSession = .shared,
+        shortTermCacheDirectory: URL? = nil,
+        cacheLimitEnforcer: @escaping CacheLimitEnforcer = FileCacheLRU.enforceSizeLimit
     ) {
         self.videoCacheService = videoCacheService
         self.networkMonitor = networkMonitor
+        self.fileManager = fileManager
+        self.session = session
+        self.cacheLimitEnforcer = cacheLimitEnforcer
         
         // Настройка NSCache (хранит маппинг video_id → локальный file URL)
         cache.countLimit = Constants.cacheCountLimit
@@ -68,18 +86,18 @@ final class VideoRepository: VideoRepositoryProtocol {
         // cachesDirectory — штатное место для кешей в iOS:
         // - Сохраняется между обычными сессиями приложения
         // - Может быть очищена системой при нехватке места (что допустимо для кеша)
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let cacheDir = shortTermCacheDirectory ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent(Constants.shortTermCacheDirectoryName, isDirectory: true)
         self.shortTermCacheDirectory = cacheDir
         
-        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         
         // LRU-очистка в фоне (не блокируем main thread при холодном старте)
         DispatchQueue.global(qos: .utility).async {
-            let removedCount = FileCacheLRU.enforceSizeLimit(
-                at: cacheDir,
-                maxSize: Constants.maxShortTermCacheSize,
-                targetPercent: Constants.targetSizePercent
+            let removedCount = cacheLimitEnforcer(
+                cacheDir,
+                Constants.maxShortTermCacheSize,
+                Constants.targetSizePercent
             )
             if removedCount > 0 {
                 Logger(subsystem: "com.rsl.videoRepository", category: "VideoRepository")
@@ -98,7 +116,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         // 1. Проверяем NSCache (быстрый путь, O(1))
         // NSCache потокобезопасен — дополнительная синхронизация не нужна
         if let cachedURL = cache.object(forKey: cacheKey) as URL?,
-           FileManager.default.fileExists(atPath: cachedURL.path) {
+           fileManager.fileExists(atPath: cachedURL.path) {
             // Обновляем дату модификации для корректной работы LRU-алгоритма:
             // без этого файлы, к которым обращаются часто, могут быть удалены
             // раньше реально «старых» файлов
@@ -108,7 +126,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         
         // 2. NSCache мог evict запись — проверяем файл на диске по имени
         let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
-        if FileManager.default.fileExists(atPath: cachedFileURL.path) {
+        if fileManager.fileExists(atPath: cachedFileURL.path) {
             // Восстанавливаем запись в NSCache и обновляем дату для LRU
             cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
             touchFile(at: cachedFileURL)
@@ -315,14 +333,14 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     private func downloadToTemp(from url: URL) async throws -> URL {
-        let (tempURL, _) = try await URLSession.shared.download(from: url)
+        let (tempURL, _) = try await session.download(from: url)
         return tempURL
     }
     
     private func moveToCache(tempURL: URL, videoId: Int) throws -> URL {
         let localFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(videoId).mp4")
-        try? FileManager.default.removeItem(at: localFileURL)
-        try FileManager.default.moveItem(at: tempURL, to: localFileURL)
+        try? fileManager.removeItem(at: localFileURL)
+        try fileManager.moveItem(at: tempURL, to: localFileURL)
         logger.debug("✅ Видео \(videoId) сохранено в краткосрочный кеш")
         return localFileURL
     }
@@ -336,7 +354,6 @@ final class VideoRepository: VideoRepositoryProtocol {
     
     /// Очищает все файлы краткосрочного кеша
     private func clearShortTermCacheDirectory() {
-        let fileManager = FileManager.default
         guard let contents = try? fileManager.contentsOfDirectory(
             at: shortTermCacheDirectory,
             includingPropertiesForKeys: nil
@@ -350,11 +367,11 @@ final class VideoRepository: VideoRepositoryProtocol {
     
     /// Проверяет лимит краткосрочного кеша и запускает LRU-очистку в фоне
     private func ensureShortTermCacheLimit() {
-        DispatchQueue.global(qos: .utility).async { [shortTermCacheDirectory] in
-            FileCacheLRU.enforceSizeLimit(
-                at: shortTermCacheDirectory,
-                maxSize: Constants.maxShortTermCacheSize,
-                targetPercent: Constants.targetSizePercent
+        DispatchQueue.global(qos: .utility).async { [shortTermCacheDirectory, cacheLimitEnforcer] in
+            _ = cacheLimitEnforcer(
+                shortTermCacheDirectory,
+                Constants.maxShortTermCacheSize,
+                Constants.targetSizePercent
             )
         }
     }
@@ -365,7 +382,7 @@ final class VideoRepository: VideoRepositoryProtocol {
     /// Без обновления даты при чтении часто используемые файлы могут быть
     /// удалены раньше реально «забытых».
     private func touchFile(at url: URL) {
-        try? FileManager.default.setAttributes(
+        try? fileManager.setAttributes(
             [.modificationDate: Date()],
             ofItemAtPath: url.path
         )
