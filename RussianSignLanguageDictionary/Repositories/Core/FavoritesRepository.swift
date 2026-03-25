@@ -58,7 +58,7 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     
     func addFavorite(signId: String) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.sync { [weak self] in
                 self?.addFavorite(signId: signId)
             }
             return
@@ -83,7 +83,7 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     
     func removeFavorite(signId: String) {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.sync { [weak self] in
                 self?.removeFavorite(signId: signId)
             }
             return
@@ -109,7 +109,7 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     
     func clearAllFavorites() {
         guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.sync { [weak self] in
                 self?.clearAllFavorites()
             }
             return
