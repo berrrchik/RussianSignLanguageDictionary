@@ -24,6 +24,7 @@ final class SyncViewModel: ObservableObject {
     private let syncRepository: SyncRepositoryProtocol
     private let cacheService: CacheService
     private let networkMonitor: NetworkMonitorProtocol
+    private let userDefaults: UserDefaults
     
     // MARK: - Initialization
     
@@ -41,11 +42,13 @@ final class SyncViewModel: ObservableObject {
     init(
         syncRepository: SyncRepositoryProtocol,
         cacheService: CacheService,
-        networkMonitor: NetworkMonitorProtocol
+        networkMonitor: NetworkMonitorProtocol,
+        userDefaults: UserDefaults = .standard
     ) {
         self.syncRepository = syncRepository
         self.cacheService = cacheService
         self.networkMonitor = networkMonitor
+        self.userDefaults = userDefaults
         
         // Загружаем дату последней синхронизации из кеша
         loadLastSyncDate()
@@ -59,6 +62,11 @@ final class SyncViewModel: ObservableObject {
     /// Если интернета нет - НЕ показывает overlay синхронизации,
     /// приложение работает на кешированных данных.
     func sync() async {
+        guard !isSyncing else {
+            logger.info("ℹ️ Синхронизация уже выполняется, повторный запуск пропущен")
+            return
+        }
+
         // СНАЧАЛА проверяем интернет, чтобы не показывать overlay зря
         let isConnected = await networkMonitor.checkConnection()
         
@@ -153,14 +161,14 @@ final class SyncViewModel: ObservableObject {
     
     /// Загружает дату последней синхронизации из UserDefaults
     private func loadLastSyncDate() {
-        if let timestamp = UserDefaults.standard.object(forKey: "lastSyncDate") as? Date {
+        if let timestamp = userDefaults.object(forKey: "lastSyncDate") as? Date {
             lastSyncDate = timestamp
         }
     }
     
     /// Сохраняет дату последней синхронизации в UserDefaults
     private func saveLastSyncDate(_ date: Date) {
-        UserDefaults.standard.set(date, forKey: "lastSyncDate")
+        userDefaults.set(date, forKey: "lastSyncDate")
     }
     
     /// Очищает ошибку синхронизации
