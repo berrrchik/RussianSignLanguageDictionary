@@ -3,104 +3,117 @@ import XCTest
 
 @MainActor
 final class CategoriesViewModelTests: XCTestCase {
-    var sut: CategoriesViewModel!
-    var mockRepository: MockSignRepository!
-    var mockNetworkMonitor: MockNetworkMonitor!
-    
+    private var sut: CategoriesViewModel!
+    private var signRepository: SignRepositorySpy!
+    private var networkMonitor: NetworkMonitorSpy!
+
     override func setUp() {
         super.setUp()
-        mockRepository = MockSignRepository()
-        mockNetworkMonitor = MockNetworkMonitor()
+        signRepository = SignRepositorySpy()
+        networkMonitor = NetworkMonitorSpy()
         sut = CategoriesViewModel(
-            signRepository: mockRepository,
-            networkMonitor: mockNetworkMonitor
+            signRepository: signRepository,
+            networkMonitor: networkMonitor
         )
     }
-    
+
     override func tearDown() {
         sut = nil
-        mockRepository = nil
-        mockNetworkMonitor = nil
+        signRepository = nil
+        networkMonitor = nil
         super.tearDown()
     }
-    
-    // MARK: - Initial State Tests
-    
-    func testInitialState() {
+
+    func testInitialStateIsIdle() {
         XCTAssertEqual(sut.categories, [])
         XCTAssertEqual(sut.state, .idle)
+        XCTAssertFalse(sut.isOfflineMode)
+        XCTAssertNil(sut.offlineMessage)
     }
-    
-    // MARK: - Load Categories Tests
-    
-    func testLoadCategories_Success() async {
-        // Given
-        let mockCategories = [
-            Category.mock(id: "alphabet", name: "Алфавит", order: 1),
-            Category.mock(id: "animals", name: "Животные", order: 2)
-        ]
-        mockRepository.mockCategories = mockCategories
-        
-        // When
+
+    func testLoadCategoriesTransitionsToLoadedAndSortsByOrder() async {
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "2", name: "Животные", order: 2),
+            makeCategory(id: "1", name: "Алфавит", order: 1)
+        ])
+        networkMonitor.checkConnectionValue = true
+
         await sut.loadCategories()
-        
-        // Then
-        XCTAssertEqual(sut.categories.count, 2)
-        XCTAssertEqual(sut.categories[0].name, "Алфавит")
+
+        XCTAssertEqual(signRepository.loadCategoriesCallCount, 1)
+        XCTAssertEqual(sut.categories.map(\.id), ["1", "2"])
         XCTAssertEqual(sut.state, .loaded)
+        XCTAssertFalse(sut.isOfflineMode)
+        XCTAssertNil(sut.offlineMessage)
     }
-    
-    func testLoadCategories_SortsByOrder() async {
-        // Given
-        let mockCategories = [
-            Category.mock(id: "animals", name: "Животные", order: 2),
-            Category.mock(id: "alphabet", name: "Алфавит", order: 1)
-        ]
-        mockRepository.mockCategories = mockCategories
-        
-        // When
-        await sut.loadCategories()
-        
-        // Then
-        XCTAssertEqual(sut.categories[0].order, 1)
-        XCTAssertEqual(sut.categories[1].order, 2)
-    }
-    
-    func testLoadCategories_Error() async {
-        // Given
-        mockRepository.shouldFail = true
-        mockRepository.errorToThrow = .fileNotFound
-        
-        // When
-        await sut.loadCategories()
-        
-        // Then
-        XCTAssertTrue(sut.categories.isEmpty)
-        
-        if case .error(let message) = sut.state {
-            XCTAssertFalse(message.isEmpty)
-        } else {
-            XCTFail("Expected error state")
+
+    func testLoadCategoriesPublishesLoadingStateBeforeCompleting() async {
+        let started = expectation(description: "loadCategories started")
+        var continuation: CheckedContinuation<[AppCategory], Never>?
+
+        signRepository.loadCategoriesImplementation = {
+            started.fulfill()
+            return await withCheckedContinuation { checkedContinuation in
+                continuation = checkedContinuation
+            }
         }
-    }
-    
-    func testLoadCategories_SetsLoadingState() async {
-        // Given
-        let mockCategories = [
-            Category.mock(id: "alphabet", name: "Алфавит", order: 1)
-        ]
-        mockRepository.mockCategories = mockCategories
-        
-        // When
-        let task = Task {
-            await sut.loadCategories()
-        }
-        
-        // Then
-        await Task.yield()
-        XCTAssertNotEqual(sut.state, .idle)
-        
+
+        let task = Task { await self.sut.loadCategories() }
+
+        await fulfillment(of: [started], timeout: 1.0)
+        XCTAssertEqual(sut.state, .loading)
+
+        continuation?.resume(returning: [makeCategory(id: "1", name: "Алфавит", order: 1)])
         await task.value
         XCTAssertEqual(sut.state, .loaded)
+    }
+
+    func testLoadCategoriesMapsRepositoryErrors() async {
+        signRepository.loadCategoriesResult = .failure(SignRepositoryError.fileNotFound)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.categories, [])
+        XCTAssertEqual(sut.state, .error("Не удалось загрузить данные"))
+    }
+
+    func testLoadCategoriesFallsBackToUnknownErrorMessage() async {
+        signRepository.loadCategoriesResult = .failure(NSError(domain: "test", code: 7))
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.state, .error("Произошла неизвестная ошибка"))
+    }
+
+    func testRefreshCategoriesReloadsData() async {
+        signRepository.loadCategoriesResult = .success([makeCategory(id: "1", name: "Алфавит", order: 1)])
+
+        await sut.refreshCategories()
+
+        XCTAssertEqual(signRepository.loadCategoriesCallCount, 1)
+        XCTAssertEqual(sut.state, .loaded)
+    }
+
+    func testLoadCategoriesEnablesOfflineModeWhenNetworkUnavailable() async {
+        signRepository.loadCategoriesResult = .success([makeCategory(id: "1", name: "Алфавит", order: 1)])
+        networkMonitor.checkConnectionValue = false
+
+        await sut.loadCategories()
+
+        XCTAssertTrue(sut.isOfflineMode)
+        XCTAssertEqual(sut.offlineMessage, "Работа в офлайн-режиме. Показаны сохранённые данные.")
+    }
+
+    private func makeCategory(id: String, name: String, order: Int) -> AppCategory {
+        AppCategory(
+            id: id,
+            name: name,
+            order: order,
+            signCount: 1,
+            icon: nil,
+            color: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
     }
 }
