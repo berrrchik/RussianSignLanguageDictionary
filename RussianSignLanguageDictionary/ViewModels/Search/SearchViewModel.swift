@@ -29,7 +29,8 @@ final class SearchViewModel: ObservableObject {
     private let signRepository: SignRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
     private let categoryService: CategoryServiceProtocol
-    private var hybridSearchService: HybridSearchService?
+    private let hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
+    private var hybridSearchService: HybridSearchServiceProtocol?
     
     // MARK: - Private Properties
     
@@ -67,7 +68,8 @@ final class SearchViewModel: ObservableObject {
         self.init(
             signRepository: container.resolve(SignRepositoryProtocol.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self),
-            categoryService: container.resolve(CategoryServiceProtocol.self)
+            categoryService: container.resolve(CategoryServiceProtocol.self),
+            hybridSearchServiceBuilder: container.resolve(HybridSearchServiceBuilderProtocol.self)
         )
     }
     
@@ -75,11 +77,13 @@ final class SearchViewModel: ObservableObject {
     init(
         signRepository: SignRepositoryProtocol,
         networkMonitor: NetworkMonitorProtocol,
-        categoryService: CategoryServiceProtocol
+        categoryService: CategoryServiceProtocol,
+        hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
         self.categoryService = categoryService
+        self.hybridSearchServiceBuilder = hybridSearchServiceBuilder
         setupDebouncing()
         preloadFromCache()
 
@@ -182,7 +186,7 @@ final class SearchViewModel: ObservableObject {
     
     // MARK: - Search Steps
     
-    private func executeHybridSearch(_ query: String, service: HybridSearchService) async {
+    private func executeHybridSearch(_ query: String, service: HybridSearchServiceProtocol) async {
         do {
             let results = try await runHybridSearch(query, service: service)
             guard !Task.isCancelled else { isLoading = false; return }
@@ -195,11 +199,15 @@ final class SearchViewModel: ObservableObject {
         }
     }
     
-    private func runHybridSearch(_ query: String, service: HybridSearchService) async throws -> [Sign] {
-        try await service.performHybridSearch(query: query, limit: 50)
+    private func runHybridSearch(_ query: String, service: HybridSearchServiceProtocol) async throws -> [Sign] {
+        try await service.performHybridSearch(
+            query: query,
+            limit: 50,
+            useHighQualityThreshold: false
+        )
     }
     
-    private func runTextSearchFallback(_ query: String, service: HybridSearchService) -> [Sign] {
+    private func runTextSearchFallback(_ query: String, service: HybridSearchServiceProtocol) -> [Sign] {
         service.performTextSearch(query: query, limit: 50)
     }
     
@@ -288,11 +296,9 @@ final class SearchViewModel: ObservableObject {
             )
         }
         
-        hybridSearchService = HybridSearchService(
-            baseURL: APIConfig.apiBaseURL,
+        hybridSearchService = hybridSearchServiceBuilder.make(
             signs: signs,
-            networkMonitor: networkMonitor,
-            sbertService: SBERTSearchService(baseURL: APIConfig.apiBaseURL)
+            networkMonitor: networkMonitor
         )
     }
 }
