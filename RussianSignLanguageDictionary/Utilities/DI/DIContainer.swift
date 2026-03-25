@@ -192,6 +192,7 @@ final class DIContainer {
             String(describing: CacheService.self),
             String(describing: VideoCacheServiceProtocol.self),
             String(describing: CategoryServiceProtocol.self),
+            String(describing: HybridSearchServiceBuilderProtocol.self),
             String(describing: SyncRepositoryProtocol.self),
             String(describing: SignRepositoryProtocol.self),
             String(describing: VideoRepositoryProtocol.self),
@@ -253,6 +254,10 @@ extension DIContainer {
         
         registerSingleton(VideoCacheServiceProtocol.self) {
             VideoCacheService()
+        }
+
+        registerSingleton(HybridSearchServiceBuilderProtocol.self) {
+            HybridSearchServiceBuilder()
         }
         
         // unowned безопасен: DIContainer.shared — static singleton, никогда не деаллоцируется
