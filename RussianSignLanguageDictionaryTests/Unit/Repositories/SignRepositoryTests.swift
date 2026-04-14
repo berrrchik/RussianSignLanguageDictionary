@@ -126,7 +126,7 @@ final class SignRepositoryTests: XCTestCase {
         async let first = sut.loadAllSigns()
         async let second = sut.loadAllSigns()
 
-        wait(for: [started], timeout: 1.0)
+        await fulfillment(of: [started], timeout: 1.0)
         let results = try await [first, second]
 
         XCTAssertEqual(results[0].count, TestFixtures.syncData.signs.count)
@@ -164,7 +164,7 @@ final class SignRepositoryTests: XCTestCase {
         }
 
         _ = try await sut.loadAllSigns()
-        wait(for: [firstExpectation], timeout: 0.2)
+        await fulfillment(of: [firstExpectation], timeout: 0.2)
     }
 
     func testDataUpdatedPublisherEmitsWhenLastUpdatedChanges() async throws {
@@ -177,6 +177,7 @@ final class SignRepositoryTests: XCTestCase {
         )
         try cacheService.save(initialData)
 
+        let fetchStartedExpectation = expectation(description: "background sync fetch started")
         let updateExpectation = expectation(description: "publisher emits for new lastUpdated")
         sut.dataUpdatedPublisher
             .sink { data in
@@ -186,10 +187,15 @@ final class SignRepositoryTests: XCTestCase {
             .store(in: &cancellables)
 
         syncRepository.fetchAllDataImplementation = { _ in
-            updatedData
+            fetchStartedExpectation.fulfill()
+            return updatedData
         }
 
         _ = try await sut.loadAllSigns()
-        wait(for: [updateExpectation], timeout: 1.0)
+        await fulfillment(
+            of: [fetchStartedExpectation, updateExpectation],
+            timeout: 2.0,
+            enforceOrder: false
+        )
     }
 }
