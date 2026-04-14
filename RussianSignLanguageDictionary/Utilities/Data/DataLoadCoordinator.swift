@@ -37,20 +37,17 @@ actor DataLoadCoordinator<T: Sendable> {
         
         logger.debug("🚀 Создание новой задачи загрузки")
         let newTask = Task<T, Error> {
-            defer { Task { await self.clearTask() } }
             return try await work()
         }
         
         activeTask = newTask
+        defer {
+            activeTask = nil
+            logger.debug("🧹 Задача очищена")
+        }
+
         let result = try await newTask.value
         logger.debug("✅ Задача загрузки завершена")
         return result
-    }
-    
-    // MARK: - Private Methods
-    
-    private func clearTask() {
-        activeTask = nil
-        logger.debug("🧹 Задача очищена")
     }
 }

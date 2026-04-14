@@ -3,24 +3,27 @@ import XCTest
 
 final class SBERTSearchServiceTests: XCTestCase {
     private var sut: SBERTSearchService!
+    private var controller: MockURLProtocol.SessionController!
 
     override func setUp() {
         super.setUp()
+        controller = MockURLProtocol.makeSessionController()
         sut = SBERTSearchService(
             baseURL: URL(string: "https://example.com")!,
-            session: MockURLProtocol.makeEphemeralSession()
+            session: MockURLProtocol.makeEphemeralSession(controller: controller)
         )
-        MockURLProtocol.reset()
+        controller.reset()
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         sut = nil
         super.tearDown()
     }
 
     func testSearchSuccessDecodesResults() async throws {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.path, "/search/sbert")
 
@@ -44,7 +47,7 @@ final class SBERTSearchServiceTests: XCTestCase {
     }
 
     func testSearchReturnsServerErrorWhenSuccessFalse() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -77,7 +80,7 @@ final class SBERTSearchServiceTests: XCTestCase {
     }
 
     func testSearchReturnsHTTPErrorForNon200Response() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 503,
@@ -102,7 +105,7 @@ final class SBERTSearchServiceTests: XCTestCase {
     }
 
     func testSearchMapsNetworkError() async {
-        MockURLProtocol.setRequestHandler { _ in
+        controller.setRequestHandler { _ in
             throw URLError(.timedOut)
         }
 
@@ -120,7 +123,7 @@ final class SBERTSearchServiceTests: XCTestCase {
     }
 
     func testSearchReturnsInvalidResponseForInvalidJSON() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -158,7 +161,7 @@ final class SBERTSearchServiceTests: XCTestCase {
     }
 
     func testSearchClampsLimitAndMinSimilarity() async throws {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let body = try self.requestBodyData(from: request)
             let bodyString = try XCTUnwrap(String(data: body, encoding: .utf8))
 

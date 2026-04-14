@@ -2,19 +2,22 @@ import Foundation
 import XCTest
 
 final class MockURLProtocolTests: XCTestCase {
+    private var controller: MockURLProtocol.SessionController!
+
     override func setUp() {
         super.setUp()
-        MockURLProtocol.reset()
+        controller = MockURLProtocol.makeSessionController()
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         super.tearDown()
     }
 
     func testEphemeralSessionUsesStubbedResponse() async throws {
         let expectedBody = #"{"status":"ok"}"#.data(using: .utf8)!
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             XCTAssertEqual(request.url?.absoluteString, "https://example.com/ping")
 
             let response = HTTPURLResponse(
@@ -27,7 +30,7 @@ final class MockURLProtocolTests: XCTestCase {
             return (response, expectedBody)
         }
 
-        let session = MockURLProtocol.makeEphemeralSession()
+        let session = MockURLProtocol.makeEphemeralSession(controller: controller)
         let (data, response) = try await session.data(from: URL(string: "https://example.com/ping")!)
 
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)

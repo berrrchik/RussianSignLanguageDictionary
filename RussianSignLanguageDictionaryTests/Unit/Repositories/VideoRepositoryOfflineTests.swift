@@ -6,23 +6,26 @@ final class VideoRepositoryOfflineTests: XCTestCase {
     private var networkMonitor: MockNetworkMonitor!
     private var videoCacheService: MockVideoCacheService!
     private var tempDirectory: URL!
+    private var controller: MockURLProtocol.SessionController!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         tempDirectory = try createTemporaryDirectory()
         networkMonitor = MockNetworkMonitor()
         videoCacheService = MockVideoCacheService()
+        controller = MockURLProtocol.makeSessionController()
         sut = VideoRepository(
             videoCacheService: videoCacheService,
             networkMonitor: networkMonitor,
-            session: MockURLProtocol.makeEphemeralSession(),
+            session: MockURLProtocol.makeEphemeralSession(controller: controller),
             shortTermCacheDirectory: tempDirectory
         )
-        MockURLProtocol.reset()
+        controller.reset()
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         sut = nil
         networkMonitor = nil
         videoCacheService = nil

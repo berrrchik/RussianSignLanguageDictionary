@@ -5,21 +5,24 @@ final class SyncRepositoryTests: XCTestCase {
     private var sut: SyncRepository!
     private var etagManager: ETagManager!
     private var userDefaults: UserDefaults!
+    private var controller: MockURLProtocol.SessionController!
 
     override func setUp() {
         super.setUp()
         userDefaults = makeIsolatedUserDefaults()
         etagManager = ETagManager(userDefaults: userDefaults)
+        controller = MockURLProtocol.makeSessionController()
         sut = SyncRepository(
             baseURL: URL(string: "https://example.com")!,
-            session: MockURLProtocol.makeEphemeralSession(),
+            session: MockURLProtocol.makeEphemeralSession(controller: controller),
             etagManager: etagManager
         )
-        MockURLProtocol.reset()
+        controller.reset()
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         sut = nil
         etagManager = nil
         userDefaults = nil
@@ -28,7 +31,7 @@ final class SyncRepositoryTests: XCTestCase {
 
     func testCheckForUpdates200DecodesMetadata() async throws {
         let expectedDate = Date(timeIntervalSince1970: 1_700_000_000)
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             XCTAssertEqual(request.value(forHTTPHeaderField: "If-None-Match"), nil)
 
             let response = HTTPURLResponse(
@@ -49,7 +52,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testFetchAllData200SavesETag() async throws {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -72,7 +75,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testFetchAllData304ReturnsCachedData() async throws {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 304,
@@ -92,7 +95,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testFetchAllData304PropagatesCachedDataProviderError() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 304,
@@ -118,7 +121,7 @@ final class SyncRepositoryTests: XCTestCase {
     func testFetchAllDataSendsIfNoneMatchHeaderWhenETagExists() async throws {
         etagManager.saveETag(#""abcdefabcdefabcdefabcdefabcdef12""#, for: .syncData)
 
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             XCTAssertEqual(
                 request.value(forHTTPHeaderField: "If-None-Match"),
                 "abcdefabcdefabcdefabcdefabcdef12"
@@ -140,7 +143,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testCheckForUpdatesMapsURLErrorToSyncError() async {
-        MockURLProtocol.setRequestHandler { _ in
+        controller.setRequestHandler { _ in
             throw URLError(.notConnectedToInternet)
         }
 
@@ -157,7 +160,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testFetchAllDataReturnsDecodingErrorForInvalidJSON() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -183,7 +186,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testCheckForUpdatesReturnsInvalidResponseForNonHTTPResponse() async {
-        MockURLProtocol.setGenericRequestHandler { request in
+        controller.setGenericRequestHandler { request in
             let response = URLResponse(
                 url: try XCTUnwrap(request.url),
                 mimeType: "application/json",
@@ -207,7 +210,7 @@ final class SyncRepositoryTests: XCTestCase {
     }
 
     func testCheckForUpdatesReturnsServerErrorForUnexpectedStatusCode() async {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 500,

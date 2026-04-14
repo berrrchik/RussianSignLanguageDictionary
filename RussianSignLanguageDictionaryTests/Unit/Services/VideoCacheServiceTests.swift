@@ -4,21 +4,24 @@ import XCTest
 final class VideoCacheServiceTests: XCTestCase {
     private var sut: VideoCacheService!
     private var tempDirectory: URL!
+    private var controller: MockURLProtocol.SessionController!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         tempDirectory = try createTemporaryDirectory()
+        controller = MockURLProtocol.makeSessionController()
         let manager = VideoCacheDirectoryManager(cacheDirectory: tempDirectory)
         let downloader = VideoCacheDownloader(
             directoryManager: manager,
-            session: MockURLProtocol.makeEphemeralSession()
+            session: MockURLProtocol.makeEphemeralSession(controller: controller)
         )
         sut = VideoCacheService(directoryManager: manager, downloader: downloader)
-        MockURLProtocol.reset()
+        controller.reset()
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         sut = nil
         tempDirectory = nil
         super.tearDown()
@@ -31,7 +34,7 @@ final class VideoCacheServiceTests: XCTestCase {
 
     func testDownloadAndCacheStoresVideoForLookupByModelAndURL() async throws {
         let video = makeVideo()
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -57,7 +60,7 @@ final class VideoCacheServiceTests: XCTestCase {
     func testClearCacheForSignRemovesAllCachedVideos() async throws {
         let first = makeVideo(id: 1, url: "/signs/test/one.mp4")
         let second = makeVideo(id: 2, url: "/signs/test/two.mp4")
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -80,7 +83,7 @@ final class VideoCacheServiceTests: XCTestCase {
 
     func testClearAllCacheRemovesDownloadedFiles() async throws {
         let video = makeVideo()
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
@@ -100,7 +103,7 @@ final class VideoCacheServiceTests: XCTestCase {
     }
 
     func testGetCacheSizeReflectsDownloadedBytes() async throws {
-        MockURLProtocol.setRequestHandler { request in
+        controller.setRequestHandler { request in
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,

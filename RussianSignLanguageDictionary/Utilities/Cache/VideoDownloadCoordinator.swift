@@ -41,11 +41,15 @@ actor VideoDownloadCoordinator {
         }
         
         // Создаём новую задачу
-        let task = Task<URL, Error> {
-            defer {
-                Task { await self.removeTask(videoId: videoId) }
+        let task = Task<URL, Error> { [weak self] in
+            do {
+                let url = try await downloadTask()
+                await self?.removeTask(videoId: videoId)
+                return url
+            } catch {
+                await self?.removeTask(videoId: videoId)
+                throw error
             }
-            return try await downloadTask()
         }
         
         inFlightDownloads[videoId] = task
