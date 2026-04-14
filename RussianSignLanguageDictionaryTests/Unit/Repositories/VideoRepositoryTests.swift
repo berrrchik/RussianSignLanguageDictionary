@@ -7,8 +7,9 @@ final class VideoRepositoryTests: XCTestCase {
     private var videoCacheService: MockVideoCacheService!
     private var tempDirectory: URL!
     private var session: URLSession!
-    private var lruInvocationCount: Int = 0
+    private var controller: MockURLProtocol.SessionController!
     private var requestCount: Int = 0
+    private var onLRUInvocation: (() -> Void)?
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -16,30 +17,32 @@ final class VideoRepositoryTests: XCTestCase {
         networkMonitor = MockNetworkMonitor()
         networkMonitor.setConnected(true)
         videoCacheService = MockVideoCacheService()
-        session = MockURLProtocol.makeEphemeralSession()
-        lruInvocationCount = 0
+        controller = MockURLProtocol.makeSessionController()
+        session = MockURLProtocol.makeEphemeralSession(controller: controller)
         requestCount = 0
-        MockURLProtocol.reset()
+        onLRUInvocation = nil
+        controller.reset()
         sut = VideoRepository(
             videoCacheService: videoCacheService,
             networkMonitor: networkMonitor,
             session: session,
             shortTermCacheDirectory: tempDirectory,
             cacheLimitEnforcer: { _, _, _ in
-                self.lruInvocationCount += 1
+                self.onLRUInvocation?()
                 return 0
             }
         )
-        lruInvocationCount = 0
     }
 
     override func tearDown() {
-        MockURLProtocol.reset()
+        controller.reset()
+        controller = nil
         sut = nil
         networkMonitor = nil
         videoCacheService = nil
         session = nil
         tempDirectory = nil
+        onLRUInvocation = nil
         super.tearDown()
     }
 
@@ -78,13 +81,30 @@ final class VideoRepositoryTests: XCTestCase {
     }
 
     func testGetVideoURLParallelSameIdUsesSingleDownload() async throws {
-        configureDownloadResponse(data: Data("video-data".utf8), delay: 0.2)
+        let requestStarted = expectation(description: "request started")
+        let releaseRequest = expectation(description: "release request")
+        releaseRequest.assertForOverFulfill = false
+        controller.setRequestHandler { request in
+            self.requestCount += 1
+            requestStarted.fulfill()
+            self.wait(for: [releaseRequest], timeout: 1.0)
+
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data("video-data".utf8))
+        }
         let video = makeVideo(id: 1)
 
-        async let first = sut.getVideoURL(for: video, useFavoritesCache: false)
-        async let second = sut.getVideoURL(for: video, useFavoritesCache: false)
+        let first = Task { try await self.sut.getVideoURL(for: video, useFavoritesCache: false) }
+        await fulfillment(of: [requestStarted], timeout: 1.0)
+        let second = Task { try await self.sut.getVideoURL(for: video, useFavoritesCache: false) }
+        releaseRequest.fulfill()
 
-        let results = try await [first, second]
+        let results = try await [first.value, second.value]
 
         XCTAssertEqual(results[0], results[1])
         XCTAssertEqual(requestCount, 1)
@@ -147,12 +167,16 @@ final class VideoRepositoryTests: XCTestCase {
     }
 
     func testGetVideoURLTriggersLRUCleanupAfterDownload() async throws {
+        let lruExpectation = expectation(description: "LRU cleanup invoked")
+        lruExpectation.assertForOverFulfill = false
+        onLRUInvocation = {
+            lruExpectation.fulfill()
+        }
         configureDownloadResponse(data: Data("video-data".utf8))
 
         _ = try await sut.getVideoURL(for: makeVideo(id: 1), useFavoritesCache: false)
 
-        let lruTriggered = await waitUntil { self.lruInvocationCount > 0 }
-        XCTAssertTrue(lruTriggered)
+        await fulfillment(of: [lruExpectation], timeout: 1.0)
     }
 
     func testGetVideoURLWithInvalidVideoThrowsInvalidURL() async {
@@ -187,12 +211,9 @@ final class VideoRepositoryTests: XCTestCase {
         }
     }
 
-    private func configureDownloadResponse(data: Data, delay: TimeInterval = 0) {
-        MockURLProtocol.setRequestHandler { request in
+    private func configureDownloadResponse(data: Data) {
+        controller.setRequestHandler { request in
             self.requestCount += 1
-            if delay > 0 {
-                Thread.sleep(forTimeInterval: delay)
-            }
 
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
@@ -224,23 +245,5 @@ final class VideoRepositoryTests: XCTestCase {
             videos: video.map { [$0] },
             synonyms: nil
         )
-    }
-
-    private func waitUntil(
-        timeout: TimeInterval = 1.0,
-        pollInterval: UInt64 = 20_000_000,
-        condition: @escaping () -> Bool
-    ) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-
-        while Date() < deadline {
-            if condition() {
-                return true
-            }
-
-            try? await Task.sleep(nanoseconds: pollInterval)
-        }
-
-        return condition()
     }
 }

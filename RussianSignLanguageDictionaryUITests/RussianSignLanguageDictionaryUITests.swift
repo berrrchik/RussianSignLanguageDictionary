@@ -5,10 +5,11 @@ final class RussianSignLanguageDictionaryUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-        func testAppLaunches() throws {
+    func testAppLaunches() throws {
         let app = XCUIApplication()
         app.launch()
 
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5.0))
         XCTAssertEqual(app.state, .runningForeground)
     }
 }

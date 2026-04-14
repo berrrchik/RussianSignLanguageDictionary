@@ -117,17 +117,24 @@ final class SignRepositoryTests: XCTestCase {
     
     func testParallelLoadAllSignsUsesSingleFlight() async throws {
         let started = expectation(description: "fetch started")
+        var releaseFetch: CheckedContinuation<Void, Never>?
         syncRepository.fetchAllDataImplementation = { _ in
             started.fulfill()
-            try await Task.sleep(nanoseconds: 100_000_000)
+            await withCheckedContinuation { continuation in
+                releaseFetch = continuation
+            }
             return TestFixtures.syncData
         }
 
-        async let first = sut.loadAllSigns()
-        async let second = sut.loadAllSigns()
+        let first = Task { try await self.sut.loadAllSigns() }
 
         await fulfillment(of: [started], timeout: 1.0)
-        let results = try await [first, second]
+        let second = Task { try await self.sut.loadAllSigns() }
+        await Task.yield()
+        await Task.yield()
+        releaseFetch?.resume()
+
+        let results = try await [first.value, second.value]
 
         XCTAssertEqual(results[0].count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(results[1].count, TestFixtures.syncData.signs.count)
@@ -136,16 +143,21 @@ final class SignRepositoryTests: XCTestCase {
 
     func testBackgroundSyncIsScheduledOnlyOnce() async throws {
         try cacheService.save(TestFixtures.syncData)
+        let started = expectation(description: "background sync started")
+        var releaseBackgroundSync: CheckedContinuation<Void, Never>?
         syncRepository.fetchAllDataImplementation = { provider in
-            try await Task.sleep(nanoseconds: 100_000_000)
+            started.fulfill()
+            await withCheckedContinuation { continuation in
+                releaseBackgroundSync = continuation
+            }
             return try provider()
         }
 
         _ = try await sut.loadAllSigns()
         _ = try await sut.loadAllSigns()
-        XCTAssertTrue(waitForDebouncedUpdate(interval: 0.05, timeout: 1.0) {
-            self.syncRepository.fetchAllDataCallCount == 1
-        })
+        await fulfillment(of: [started], timeout: 1.0)
+        XCTAssertEqual(syncRepository.fetchAllDataCallCount, 1)
+        releaseBackgroundSync?.resume()
     }
 
     func testDataUpdatedPublisherDoesNotEmitWhenLastUpdatedIsUnchanged() async throws {

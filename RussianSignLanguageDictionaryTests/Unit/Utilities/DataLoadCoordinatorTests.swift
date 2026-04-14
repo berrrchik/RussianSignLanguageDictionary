@@ -98,58 +98,51 @@ final class DataLoadCoordinatorTests: XCTestCase {
     }
     
     func testParallelTasksReuseSameTask() async throws {
-        // Arrange
-        var executionCount = 0
-        let executionCountLock = NSLock()
-        
-        // Act
-        async let result1: String = sut.getOrCreateTask {
-            executionCountLock.lock()
-            executionCount += 1
-            executionCountLock.unlock()
-            
-            // Симулируем долгую операцию
-            try await Task.sleep(nanoseconds: 100_000_000) // 100ms
-            return "Result"
+        let counter = InvocationCounter()
+        let started = expectation(description: "first task started")
+        let releaseFirstTask = expectation(description: "release first task")
+
+        let firstTask = Task {
+            try await self.sut.getOrCreateTask {
+                await counter.increment()
+                started.fulfill()
+                await self.fulfillment(of: [releaseFirstTask], timeout: 1.0)
+                return "Result"
+            }
         }
-        
-        async let result2: String = sut.getOrCreateTask {
-            executionCountLock.lock()
-            executionCount += 1
-            executionCountLock.unlock()
-            
-            try await Task.sleep(nanoseconds: 100_000_000)
-            return "Result"
+
+        await fulfillment(of: [started], timeout: 1.0)
+
+        let secondTask = Task {
+            try await self.sut.getOrCreateTask {
+                XCTFail("Second block should reuse the first task")
+                return "Unexpected"
+            }
         }
-        
-        let results = try await [result1, result2]
-        
-        // Assert
+
+        releaseFirstTask.fulfill()
+        let results = try await [firstTask.value, secondTask.value]
+        let invocationCount = await counter.value
+
         XCTAssertEqual(results[0], results[1])
-        // Должна быть выполнена только одна задача, вторая ждёт результат первой
-        XCTAssertEqual(executionCount, 1)
+        XCTAssertEqual(invocationCount, 1)
     }
     
     func testSequentialTasksExecuteSeparately() async throws {
-        // Arrange
-        var executionCount = 0
-        
-        // Act
+        let counter = InvocationCounter()
+
         _ = try await sut.getOrCreateTask {
-            executionCount += 1
+            await counter.increment()
             return "First"
         }
-        
-        // Ждём чтобы задача очистилась
-        try await Task.sleep(nanoseconds: 10_000_000) // 10ms
-        
+
         _ = try await sut.getOrCreateTask {
-            executionCount += 1
+            await counter.increment()
             return "Second"
         }
-        
-        // Assert
-        XCTAssertEqual(executionCount, 2)
+
+        let invocationCount = await counter.value
+        XCTAssertEqual(invocationCount, 2)
     }
 
     func testTaskResetsAfterError() async {
@@ -198,4 +191,14 @@ final class DataLoadCoordinatorTests: XCTestCase {
         XCTAssertEqual(result.categories.count, 0)
         XCTAssertEqual(result.lessons.count, 0)
     }
+}
+
+private actor InvocationCounter {
+    private var count = 0
+
+    func increment() {
+        count += 1
+    }
+
+    var value: Int { count }
 }

@@ -191,11 +191,15 @@ final class SearchViewModelTests: XCTestCase {
         )
         self.sut = sut
 
+        let firstSearchStarted = expectation(description: "First search started")
         let secondSearchStarted = expectation(description: "Second search started")
+        var releaseFirstSearch: CheckedContinuation<[Sign], Never>?
         hybridSearchService.hybridSearchImplementation = { query, _, _ in
             if query == "прив" {
-                try await Task.sleep(nanoseconds: 200_000_000)
-                return [signs[0]]
+                firstSearchStarted.fulfill()
+                return await withCheckedContinuation { continuation in
+                    releaseFirstSearch = continuation
+                }
             }
 
             secondSearchStarted.fulfill()
@@ -203,12 +207,15 @@ final class SearchViewModelTests: XCTestCase {
         }
 
         sut.searchQuery = "прив"
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        await fulfillment(of: [firstSearchStarted], timeout: 2.0)
         sut.searchQuery = "ал"
 
         await fulfillment(of: [secondSearchStarted], timeout: 2.0)
-
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        releaseFirstSearch?.resume(returning: [signs[0]])
+        let didApplyLatestResults = await waitUntil {
+            sut.searchResults.map(\.id) == [signs[2].id]
+        }
+        XCTAssertTrue(didApplyLatestResults)
         XCTAssertEqual(sut.searchResults.map(\.id), [signs[2].id])
     }
 

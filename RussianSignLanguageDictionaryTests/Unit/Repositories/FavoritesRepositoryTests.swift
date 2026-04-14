@@ -153,8 +153,7 @@ final class FavoritesRepositoryTests: XCTestCase {
         }
 
         await fulfillment(of: [completed], timeout: 1.0)
-        let added = await waitUntil { self.sut.isFavorite(signId: "sign-1") }
-        XCTAssertTrue(added)
+        XCTAssertTrue(self.sut.isFavorite(signId: "sign-1"))
     }
 
     func testBackgroundThreadRemoveFavoriteMarshalsToMainThread() async {
@@ -168,8 +167,7 @@ final class FavoritesRepositoryTests: XCTestCase {
         }
 
         await fulfillment(of: [completed], timeout: 1.0)
-        let removed = await waitUntil { !self.sut.isFavorite(signId: "sign-1") }
-        XCTAssertTrue(removed)
+        XCTAssertFalse(self.sut.isFavorite(signId: "sign-1"))
     }
 
     private func makeSign(id: String, videos: [SignVideo]?) -> Sign {
