@@ -5,19 +5,27 @@ final class VideoDownloadCoordinatorTests: XCTestCase {
     func testGetOrCreateTaskReturnsSameTaskForSameVideoId() async throws {
         let coordinator = VideoDownloadCoordinator()
         let counter = InvocationCounter()
+        let started = expectation(description: "download started")
+        var releaseDownload: CheckedContinuation<Void, Never>?
 
-        async let first: URL = coordinator.getOrCreateTask(videoId: 1) {
+        let firstTask = await coordinator.getOrCreateTask(videoId: 1) {
             await counter.increment()
-            try await Task.sleep(nanoseconds: 100_000_000)
+            started.fulfill()
+            await withCheckedContinuation { continuation in
+                releaseDownload = continuation
+            }
             return URL(fileURLWithPath: "/tmp/video-1.mp4")
-        }.task.value
+        }
 
-        async let second: URL = coordinator.getOrCreateTask(videoId: 1) {
+        await fulfillment(of: [started], timeout: 1.0)
+
+        let secondTask = await coordinator.getOrCreateTask(videoId: 1) {
             await counter.increment()
             return URL(fileURLWithPath: "/tmp/video-1-second.mp4")
-        }.task.value
+        }
 
-        let results = try await [first, second]
+        releaseDownload?.resume()
+        let results = try await [firstTask.task.value, secondTask.task.value]
         let invocationCount = await counter.value
 
         XCTAssertEqual(results[0], results[1])
@@ -79,8 +87,6 @@ final class VideoDownloadCoordinatorTests: XCTestCase {
             _ = try await first.task.value
             XCTFail("Expected failure")
         } catch {}
-
-        try? await Task.sleep(nanoseconds: 50_000_000)
 
         let second = await coordinator.getOrCreateTask(videoId: 9) {
             await counter.increment()
