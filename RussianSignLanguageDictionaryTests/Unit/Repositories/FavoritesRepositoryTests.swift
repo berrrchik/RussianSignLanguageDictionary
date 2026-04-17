@@ -144,29 +144,39 @@ final class FavoritesRepositoryTests: XCTestCase {
     }
 
     func testBackgroundThreadAddFavoriteMarshalsToMainThread() async {
-        let completed = expectation(description: "background add completed")
-        let sut = self.sut!
+        let completed = expectation(description: "favorite added on main thread")
+        let cancellable = sut.$favoritesPublisher.sink { favorites in
+            if favorites == ["sign-1"] {
+                completed.fulfill()
+            }
+        }
 
-        DispatchQueue.global().async {
-            sut.addFavorite(signId: "sign-1")
-            completed.fulfill()
+        let repository = sut!
+        await runOffMainThread {
+            repository.addFavorite(signId: "sign-1")
         }
 
         await fulfillment(of: [completed], timeout: 1.0)
+        cancellable.cancel()
         XCTAssertTrue(self.sut.isFavorite(signId: "sign-1"))
     }
 
     func testBackgroundThreadRemoveFavoriteMarshalsToMainThread() async {
         sut.addFavorite(signId: "sign-1")
-        let completed = expectation(description: "background remove completed")
-        let sut = self.sut!
+        let completed = expectation(description: "favorite removed on main thread")
+        let cancellable = sut.$favoritesPublisher.sink { favorites in
+            if favorites.isEmpty {
+                completed.fulfill()
+            }
+        }
 
-        DispatchQueue.global().async {
-            sut.removeFavorite(signId: "sign-1")
-            completed.fulfill()
+        let repository = sut!
+        await runOffMainThread {
+            repository.removeFavorite(signId: "sign-1")
         }
 
         await fulfillment(of: [completed], timeout: 1.0)
+        cancellable.cancel()
         XCTAssertFalse(self.sut.isFavorite(signId: "sign-1"))
     }
 
@@ -208,5 +218,15 @@ final class FavoritesRepositoryTests: XCTestCase {
         }
 
         return condition()
+    }
+
+    private func runOffMainThread(_ work: @escaping () -> Void) async {
+        let queue = DispatchQueue(label: "FavoritesRepositoryTests.background")
+        await withCheckedContinuation { continuation in
+            queue.async {
+                work()
+                continuation.resume()
+            }
+        }
     }
 }

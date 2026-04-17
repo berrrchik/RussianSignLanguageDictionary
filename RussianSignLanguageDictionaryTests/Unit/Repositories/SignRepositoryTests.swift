@@ -118,6 +118,7 @@ final class SignRepositoryTests: XCTestCase {
     func testParallelLoadAllSignsUsesSingleFlight() async throws {
         let started = expectation(description: "fetch started")
         var releaseFetch: CheckedContinuation<Void, Never>?
+        let startGate = AsyncStartGate()
         syncRepository.fetchAllDataImplementation = { _ in
             started.fulfill()
             await withCheckedContinuation { continuation in
@@ -126,12 +127,24 @@ final class SignRepositoryTests: XCTestCase {
             return TestFixtures.syncData
         }
 
-        let first = Task { try await self.sut.loadAllSigns() }
+        let firstReady = expectation(description: "first task ready")
+        let secondReady = expectation(description: "second task ready")
 
+        let first = Task {
+            firstReady.fulfill()
+            await startGate.wait()
+            return try await self.sut.loadAllSigns()
+        }
+
+        let second = Task {
+            secondReady.fulfill()
+            await startGate.wait()
+            return try await self.sut.loadAllSigns()
+        }
+
+        await fulfillment(of: [firstReady, secondReady], timeout: 1.0)
+        await startGate.open()
         await fulfillment(of: [started], timeout: 1.0)
-        let second = Task { try await self.sut.loadAllSigns() }
-        await Task.yield()
-        await Task.yield()
         releaseFetch?.resume()
 
         let results = try await [first.value, second.value]
@@ -209,5 +222,25 @@ final class SignRepositoryTests: XCTestCase {
             timeout: 2.0,
             enforceOrder: false
         )
+    }
+}
+
+private actor AsyncStartGate {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !isOpen else { return }
+        isOpen = true
+        let pendingContinuations = continuations
+        continuations.removeAll()
+        pendingContinuations.forEach { $0.resume() }
     }
 }
