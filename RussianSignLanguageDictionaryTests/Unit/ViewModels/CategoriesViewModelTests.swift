@@ -104,6 +104,28 @@ final class CategoriesViewModelTests: XCTestCase {
         XCTAssertEqual(sut.offlineMessage, "Работа в офлайн-режиме. Показаны сохранённые данные.")
     }
 
+    func testRepositoryUpdatesReplaceCategoriesUsingSnapshotOrder() async {
+        signRepository.dataUpdatedSubject.send(
+            SyncData(
+                categories: [
+                    makeCategory(id: "2", name: "Животные", order: 2),
+                    makeCategory(id: "1", name: "Алфавит", order: 1)
+                ],
+                signs: [],
+                lessons: [],
+                lastUpdated: Date()
+            )
+        )
+
+        let didUpdate = await waitUntil {
+            self.sut.categories.map(\.id) == ["1", "2"]
+        }
+
+        XCTAssertTrue(didUpdate)
+        XCTAssertEqual(sut.categories.map(\.id), ["1", "2"])
+        XCTAssertEqual(sut.state, .loaded)
+    }
+
     private func makeCategory(id: String, name: String, order: Int) -> AppCategory {
         AppCategory(
             id: id,
@@ -115,5 +137,23 @@ final class CategoriesViewModelTests: XCTestCase {
             createdAt: nil,
             updatedAt: nil
         )
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        pollInterval: UInt64 = 20_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+
+        return condition()
     }
 }

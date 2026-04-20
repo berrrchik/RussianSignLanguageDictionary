@@ -6,7 +6,6 @@ final class SearchViewModelTests: XCTestCase {
     var sut: SearchViewModel!
     var signRepository: SignRepositorySpy!
     var networkMonitor: NetworkMonitorSpy!
-    var categoryService: CategoryServiceSpy!
     var hybridSearchService: HybridSearchServiceSpy!
     var hybridSearchServiceBuilder: HybridSearchServiceBuilderSpy!
     
@@ -17,13 +16,11 @@ final class SearchViewModelTests: XCTestCase {
         signRepository.cachedSignsValue = nil
         networkMonitor = NetworkMonitorSpy()
         networkMonitor.checkConnectionValue = true
-        categoryService = CategoryServiceSpy()
         hybridSearchService = HybridSearchServiceSpy()
         hybridSearchServiceBuilder = HybridSearchServiceBuilderSpy(service: hybridSearchService)
         sut = SearchViewModel(
             signRepository: signRepository,
             networkMonitor: networkMonitor,
-            categoryService: categoryService,
             hybridSearchServiceBuilder: hybridSearchServiceBuilder
         )
     }
@@ -32,7 +29,6 @@ final class SearchViewModelTests: XCTestCase {
         sut = nil
         signRepository = nil
         networkMonitor = nil
-        categoryService = nil
         hybridSearchService = nil
         hybridSearchServiceBuilder = nil
         super.tearDown()
@@ -49,10 +45,12 @@ final class SearchViewModelTests: XCTestCase {
     func testLoadAllSignsLoadsInitialResults() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
 
         await sut.loadAllSigns()
 
         XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+        XCTAssertEqual(sut.categoryNamesById["category-1"], "Категория 1")
         XCTAssertTrue(sut.isReady)
         XCTAssertNil(sut.errorMessage)
     }
@@ -60,12 +58,12 @@ final class SearchViewModelTests: XCTestCase {
     func testDebouncePerformsSearchAfterQueryUpdate() async {
         let signs = makeSigns()
         signRepository.cachedSignsValue = signs
+        signRepository.loadCategoriesResult = .success(makeCategories())
         hybridSearchService.hybridSearchResult = .success([signs[0]])
 
         let sut = SearchViewModel(
             signRepository: signRepository,
             networkMonitor: networkMonitor,
-            categoryService: categoryService,
             hybridSearchServiceBuilder: hybridSearchServiceBuilder
         )
         self.sut = sut
@@ -82,6 +80,7 @@ final class SearchViewModelTests: XCTestCase {
     func testEmptyQueryShowsFullList() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
         await sut.loadAllSigns()
 
         await sut.performSearch(query: "")
@@ -92,6 +91,7 @@ final class SearchViewModelTests: XCTestCase {
     func testGroupedResultsUsesSingleSectionForActiveSearch() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
         hybridSearchService.hybridSearchResult = .success([signs[0], signs[1]])
         await sut.loadAllSigns()
         sut.searchQuery = "прив"
@@ -107,6 +107,7 @@ final class SearchViewModelTests: XCTestCase {
     func testGroupedResultsAppliesCategoryFilter() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
 
         await sut.loadAllSigns()
         sut.selectedCategoryId = "category-2"
@@ -117,6 +118,7 @@ final class SearchViewModelTests: XCTestCase {
     func testGroupedResultsRespectsDescendingSortOrder() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
 
         await sut.loadAllSigns()
         sut.sortOrder = .descending
@@ -127,6 +129,7 @@ final class SearchViewModelTests: XCTestCase {
     func testClearSearchResetsQueryAndResults() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
         hybridSearchService.hybridSearchResult = .success([signs[0]])
 
         await sut.loadAllSigns()
@@ -147,11 +150,11 @@ final class SearchViewModelTests: XCTestCase {
     func testPreloadFromCacheInitializesResultsAndReadyState() {
         let signs = makeSigns()
         signRepository.cachedSignsValue = signs
+        signRepository.loadCategoriesResult = .success(makeCategories())
 
         let sut = SearchViewModel(
             signRepository: signRepository,
             networkMonitor: networkMonitor,
-            categoryService: categoryService,
             hybridSearchServiceBuilder: hybridSearchServiceBuilder
         )
 
@@ -171,6 +174,7 @@ final class SearchViewModelTests: XCTestCase {
     func testLoadAllSignsEnablesOfflineModeWhenNetworkUnavailable() async {
         let signs = makeSigns()
         signRepository.loadAllSignsResult = .success(signs)
+        signRepository.loadCategoriesResult = .success(makeCategories())
         networkMonitor.checkConnectionValue = false
 
         await sut.loadAllSigns()
@@ -182,11 +186,11 @@ final class SearchViewModelTests: XCTestCase {
     func testPerformSearchCancelsPreviousTaskOnQueryChange() async {
         let signs = makeSigns()
         signRepository.cachedSignsValue = signs
+        signRepository.loadCategoriesResult = .success(makeCategories())
 
         let sut = SearchViewModel(
             signRepository: signRepository,
             networkMonitor: networkMonitor,
-            categoryService: categoryService,
             hybridSearchServiceBuilder: hybridSearchServiceBuilder
         )
         self.sut = sut
@@ -219,11 +223,67 @@ final class SearchViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchResults.map(\.id), [signs[2].id])
     }
 
+    func testRepositoryUpdatesRefreshPreparedCategoryNames() async {
+        signRepository.dataUpdatedSubject.send(
+            SyncData(
+                categories: [
+                    AppCategory(
+                        id: "category-1",
+                        name: "Обновлённая категория",
+                        order: 1,
+                        signCount: 1,
+                        icon: nil,
+                        color: nil,
+                        createdAt: nil,
+                        updatedAt: nil
+                    )
+                ],
+                signs: [makeSign(id: "1", word: "Привет", categoryId: "category-1")],
+                lessons: [],
+                lastUpdated: Date()
+            )
+        )
+
+        let didUpdate = await waitUntil {
+            self.sut.searchResults.map(\.id) == ["1"]
+                && self.sut.categoryNamesById["category-1"] == "Обновлённая категория"
+        }
+
+        XCTAssertTrue(didUpdate)
+        XCTAssertEqual(sut.searchResults.map(\.id), ["1"])
+        XCTAssertEqual(sut.categoryNamesById["category-1"], "Обновлённая категория")
+    }
+
     private func makeSigns() -> [Sign] {
         [
             makeSign(id: "1", word: "Привет", categoryId: "category-1"),
             makeSign(id: "2", word: "Приветствие", categoryId: "category-1"),
             makeSign(id: "3", word: "Алоха", categoryId: "category-2")
+        ]
+    }
+
+    private func makeCategories() -> [AppCategory] {
+        [
+            AppCategory(
+                id: "category-1",
+                name: "Категория 1",
+                order: 1,
+                signCount: 2,
+                icon: nil,
+                color: nil,
+                createdAt: nil,
+                updatedAt: nil
+            ),
+            AppCategory(
+                id: "category-2",
+                name: "Категория 2",
+                order: 2,
+                signCount: 1,
+                icon: nil,
+                color: nil,
+                createdAt: nil,
+                updatedAt: nil
+            )
         ]
     }
 
