@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import os.log
 
 @MainActor
@@ -10,6 +11,7 @@ final class SignDetailViewModel: ObservableObject {
     @Published private(set) var isLoadingVideo: Bool = false
     @Published private(set) var videoErrorMessage: String?
     @Published var isFavorite: Bool = false
+    @Published private(set) var categoryName: String
     
     // MARK: - Synonym Navigation Properties
     
@@ -21,6 +23,7 @@ final class SignDetailViewModel: ObservableObject {
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.signDetail", category: "SignDetailViewModel")
+    private var cancellables = Set<AnyCancellable>()
     
     let sign: Sign
     let visitedSignIds: Set<String>
@@ -92,6 +95,14 @@ final class SignDetailViewModel: ObservableObject {
         self.favoritesRepository = favoritesRepository
         self.visitedSignIds = visitedSignIds.union([sign.id])
         self.isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+        self.categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: [:])
+
+        signRepository.dataUpdatedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] updatedData in
+                self?.applyCategoryName(from: updatedData.categories)
+            }
+            .store(in: &cancellables)
         
         // Логируем просмотр жеста при создании ViewModel (пользователь открыл жест)
         // НЕ в loadVideo(), т.к. видео может не загрузиться, но просмотр жеста уже произошёл
@@ -178,6 +189,15 @@ final class SignDetailViewModel: ObservableObject {
     func checkFavoriteStatus() {
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
     }
+
+    func loadCategoryName() async {
+        do {
+            let categories = try await signRepository.loadCategories()
+            applyCategoryName(from: categories)
+        } catch {
+            logger.warning("⚠️ Не удалось загрузить название категории: \(error.localizedDescription)")
+        }
+    }
     
     func cleanupVideo() {
         videoURL = nil
@@ -215,6 +235,13 @@ final class SignDetailViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    private func applyCategoryName(from categories: [Category]) {
+        let categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(
+            from: CategoryDisplayDataHelper.sortedCategories(categories)
+        )
+        categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: categoryNamesById)
+    }
     
     private func preloadNextVideo() {
         guard let nextVideo = nextVideo else { return }
@@ -238,4 +265,3 @@ final class SignDetailViewModel: ObservableObject {
         }
     }
 }
-

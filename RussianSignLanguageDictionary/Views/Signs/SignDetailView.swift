@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SignDetailView: View {
     @StateObject private var viewModel: SignDetailViewModel
-    @Environment(\.dependencies) private var deps
     
     // MARK: - Init
     
@@ -138,7 +137,7 @@ struct SignDetailView: View {
         HStack {
             Image(systemName: "folder.fill")
                 .font(.caption)
-            Text(deps.categoryService.name(for: viewModel.sign.categoryId))
+            Text(viewModel.categoryName)
                 .font(.subheadline)
         }
         .padding(.horizontal, LayoutConstants.SignDetail.categoryBadgeHorizontalPadding)
@@ -162,8 +161,10 @@ struct SignDetailView: View {
     // MARK: - Private Methods
     
     private func loadData() async {
-        await viewModel.loadVideo()
+        async let videoLoad: Void = viewModel.loadVideo()
+        async let categoryLoad: Void = viewModel.loadCategoryName()
         viewModel.checkFavoriteStatus()
+        _ = await (videoLoad, categoryLoad)
     }
 }
 

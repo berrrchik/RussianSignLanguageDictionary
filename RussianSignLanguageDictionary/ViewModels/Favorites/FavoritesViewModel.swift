@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import os.log
 
 @MainActor
@@ -9,6 +10,7 @@ final class FavoritesViewModel: ObservableObject {
     // MARK: - Published Properties
     
     @Published private(set) var favoriteSigns: [Sign] = []
+    @Published private(set) var categoryNamesById: [String: String] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
     @Published var sortOption: SortOption = .dateAddedDesc {
@@ -30,6 +32,7 @@ final class FavoritesViewModel: ObservableObject {
     
     let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Init
     
@@ -49,6 +52,17 @@ final class FavoritesViewModel: ObservableObject {
     ) {
         self.favoritesRepository = favoritesRepository
         self.signRepository = signRepository
+
+        signRepository.dataUpdatedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] updatedData in
+                self?.applyFavoriteData(
+                    allSigns: updatedData.signs,
+                    categories: updatedData.categories,
+                    favoriteIds: favoritesRepository.getFavorites()
+                )
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -61,29 +75,16 @@ final class FavoritesViewModel: ObservableObject {
         
         guard !favoriteIds.isEmpty else {
             favoriteSigns = []
+            categoryNamesById = [:]
             isLoading = false
             return
         }
         
         do {
-
-            let allSigns = try await signRepository.loadAllSigns()
-            
-            let signsById = Dictionary(uniqueKeysWithValues: allSigns.map { ($0.id, $0) })
-            
-            let loadedSigns = favoriteIds.compactMap { id in
-                signsById[id]
-            }
-            
-            favoriteSigns = loadedSigns
-            sortFavorites()
-            
-            let failedCount = favoriteIds.count - loadedSigns.count
-            if failedCount > 0 {
-                errorMessage = "Не удалось загрузить \(failedCount) жестов"
-                let missingIds = Set(favoriteIds).subtracting(loadedSigns.map { $0.id })
-                logger.warning("⚠️ Missing signs: \(missingIds)")
-            }
+            async let loadedSignsTask = signRepository.loadAllSigns()
+            async let loadedCategoriesTask = signRepository.loadCategories()
+            let (allSigns, categories) = try await (loadedSignsTask, loadedCategoriesTask)
+            applyFavoriteData(allSigns: allSigns, categories: categories, favoriteIds: favoriteIds)
         } catch {
             errorMessage = ErrorMessageMapper.message(for: error)
             logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
@@ -100,6 +101,7 @@ final class FavoritesViewModel: ObservableObject {
     func clearAllFavorites() {
         favoritesRepository.clearAllFavorites()
         favoriteSigns = []
+        categoryNamesById = [:]
     }
     
     func isFavorite(signId: String) -> Bool {
@@ -113,6 +115,26 @@ final class FavoritesViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    private func applyFavoriteData(allSigns: [Sign], categories: [Category], favoriteIds: [String]) {
+        let signsById = Dictionary(uniqueKeysWithValues: allSigns.map { ($0.id, $0) })
+        let loadedSigns = favoriteIds.compactMap { signsById[$0] }
+
+        favoriteSigns = loadedSigns
+        categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(
+            from: CategoryDisplayDataHelper.sortedCategories(categories)
+        )
+        sortFavorites()
+
+        let failedCount = favoriteIds.count - loadedSigns.count
+        if failedCount > 0 {
+            errorMessage = "Не удалось загрузить \(failedCount) жестов"
+            let missingIds = Set(favoriteIds).subtracting(loadedSigns.map { $0.id })
+            logger.warning("⚠️ Missing signs: \(missingIds)")
+        } else {
+            errorMessage = nil
+        }
+    }
     
     private func sortFavorites() {
         switch sortOption {
@@ -127,4 +149,3 @@ final class FavoritesViewModel: ObservableObject {
         }
     }
 }
-
