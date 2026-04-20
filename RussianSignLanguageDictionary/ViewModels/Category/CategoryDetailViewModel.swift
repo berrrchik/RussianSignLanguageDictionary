@@ -1,10 +1,12 @@
 import Foundation
+import Combine
 
 @MainActor
 final class CategoryDetailViewModel: ObservableObject {
     // MARK: - Published Properties
     
     @Published private(set) var signs: [Sign] = []
+    @Published private(set) var categoryNamesById: [String: String] = [:]
     @Published private(set) var state: ViewState = .idle
     
     // MARK: - Properties
@@ -23,6 +25,7 @@ final class CategoryDetailViewModel: ObservableObject {
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Init
     
@@ -39,6 +42,17 @@ final class CategoryDetailViewModel: ObservableObject {
     init(category: Category, signRepository: SignRepositoryProtocol) {
         self.category = category
         self.signRepository = signRepository
+        self.categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(from: [category])
+
+        signRepository.dataUpdatedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] updatedData in
+                self?.applyLoadedData(
+                    signs: updatedData.signs.filter { $0.categoryId == category.id },
+                    categories: updatedData.categories
+                )
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -48,9 +62,10 @@ final class CategoryDetailViewModel: ObservableObject {
         state = .loading
         
         do {
-            let loadedSigns = try await signRepository.getSigns(byCategory: category.id)
-            signs = loadedSigns
-            state = .loaded
+            async let loadedSignsTask = signRepository.getSigns(byCategory: category.id)
+            async let loadedCategoriesTask = signRepository.loadCategories()
+            let (loadedSigns, loadedCategories) = try await (loadedSignsTask, loadedCategoriesTask)
+            applyLoadedData(signs: loadedSigns, categories: loadedCategories)
         } catch let error as SignRepositoryError {
             state = .error(errorMessage(for: error))
         } catch {
@@ -65,9 +80,15 @@ final class CategoryDetailViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    private func applyLoadedData(signs: [Sign], categories: [Category]) {
+        self.signs = signs
+        let sortedCategories = CategoryDisplayDataHelper.sortedCategories(categories)
+        categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(from: sortedCategories)
+        state = .loaded
+    }
     
     private func errorMessage(for error: SignRepositoryError) -> String {
         return ErrorMessageMapper.message(for: error)
     }
 }
-

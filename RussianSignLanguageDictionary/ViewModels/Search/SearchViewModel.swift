@@ -17,6 +17,8 @@ final class SearchViewModel: ObservableObject {
     
     @Published var searchQuery: String = ""
     @Published private(set) var searchResults: [Sign] = []
+    @Published private(set) var categories: [Category] = []
+    @Published private(set) var categoryNamesById: [String: String] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var isOfflineMode: Bool = false
@@ -28,7 +30,6 @@ final class SearchViewModel: ObservableObject {
     
     private let signRepository: SignRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
-    private let categoryService: CategoryServiceProtocol
     private let hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
     private var hybridSearchService: HybridSearchServiceProtocol?
     
@@ -68,7 +69,6 @@ final class SearchViewModel: ObservableObject {
         self.init(
             signRepository: container.resolve(SignRepositoryProtocol.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self),
-            categoryService: container.resolve(CategoryServiceProtocol.self),
             hybridSearchServiceBuilder: container.resolve(HybridSearchServiceBuilderProtocol.self)
         )
     }
@@ -77,20 +77,17 @@ final class SearchViewModel: ObservableObject {
     init(
         signRepository: SignRepositoryProtocol,
         networkMonitor: NetworkMonitorProtocol,
-        categoryService: CategoryServiceProtocol,
         hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
-        self.categoryService = categoryService
         self.hybridSearchServiceBuilder = hybridSearchServiceBuilder
         setupDebouncing()
         preloadFromCache()
-
-        NotificationCenter.default.publisher(for: .signsDidUpdate)
+        signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.reloadSigns()
+            .sink { [weak self] updatedData in
+                self?.handleUpdatedData(updatedData)
             }
             .store(in: &cancellables)
     }
@@ -99,8 +96,9 @@ final class SearchViewModel: ObservableObject {
     
     func loadAllSigns() async {
         let hasActiveSearch = !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let needsInitialLoad = !hasLoadedInitialData || allSigns.isEmpty || categories.isEmpty
         
-        guard !hasLoadedInitialData || allSigns.isEmpty else {
+        guard needsInitialLoad else {
             if hasActiveSearch {
                 return
             }
@@ -117,8 +115,11 @@ final class SearchViewModel: ObservableObject {
         offlineMessage = nil
         
         do {
-            let signs = try await signRepository.loadAllSigns()
-            updateSearchData(with: signs)
+            async let loadedSignsTask = signRepository.loadAllSigns()
+            async let loadedCategoriesTask = signRepository.loadCategories()
+            let (signs, loadedCategories) = try await (loadedSignsTask, loadedCategoriesTask)
+
+            applyLoadedData(signs: signs, categories: loadedCategories)
             hasLoadedInitialData = true
             
             PerformanceService.incrementMetric(trace, name: "signs_loaded", by: Int64(signs.count))
@@ -140,25 +141,6 @@ final class SearchViewModel: ObservableObject {
             errorMessage = errorMessage(for: error)
             isLoading = false
             PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
-        }
-    }
-    
-    private func reloadSigns() {
-        Task { @MainActor in
-            do {
-                let signs = try await signRepository.loadAllSigns()
-                updateSearchData(with: signs)
-                
-                if !searchQuery.isEmpty {
-                    await performSearch(query: searchQuery)
-                } else {
-                    searchResults = signs
-                }
-                
-                logger.info("🔄 UI обновлён (\(signs.count) жестов)")
-            } catch {
-                logger.warning("⚠️ Не удалось обновить UI: \(error.localizedDescription)")
-            }
         }
     }
     
@@ -236,10 +218,6 @@ final class SearchViewModel: ObservableObject {
     
     var isReady: Bool { hasLoadedInitialData }
     
-    var categories: [Category] {
-        categoryService.allCategories()
-    }
-    
     var groupedResults: [SignSection] {
         var filtered = searchResults
         
@@ -278,6 +256,26 @@ final class SearchViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func applyLoadedData(signs: [Sign], categories: [Category]) {
+        updateSearchData(with: signs)
+        self.categories = CategoryDisplayDataHelper.sortedCategories(categories)
+        categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(from: self.categories)
+    }
+
+    private func handleUpdatedData(_ updatedData: SyncData) {
+        applyLoadedData(signs: updatedData.signs, categories: updatedData.categories)
+
+        if !searchQuery.isEmpty {
+            Task { @MainActor in
+                await performSearch(query: searchQuery)
+            }
+        } else {
+            searchResults = allSigns
+        }
+
+        logger.info("🔄 UI обновлён (\(self.allSigns.count) жестов, \(self.categories.count) категорий)")
     }
     
     private func errorMessage(for error: Error) -> String {

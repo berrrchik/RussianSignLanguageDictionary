@@ -66,9 +66,7 @@ struct CategoryDetailView: View {
         AlphabeticScrollbarTableView(
             sections: viewModel.groupedSigns,
             favoritesRepository: deps.favoritesRepository,
-            getCategoryName: { categoryId in
-                deps.categoryService.name(for: categoryId)
-            },
+            categoryNamesById: viewModel.categoryNamesById,
             onSignSelected: { sign in
                 selectedSign = sign
             }

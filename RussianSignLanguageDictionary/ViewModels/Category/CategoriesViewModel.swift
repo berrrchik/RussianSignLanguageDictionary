@@ -47,11 +47,11 @@ final class CategoriesViewModel: ObservableObject {
     ) {
         self.signRepository = signRepository
         self.networkMonitor = networkMonitor
-        
-        NotificationCenter.default.publisher(for: .categoriesDidUpdate)
+
+        signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.reloadCategories()
+            .sink { [weak self] updatedData in
+                self?.applyCategories(updatedData.categories)
             }
             .store(in: &cancellables)
     }
@@ -65,7 +65,7 @@ final class CategoriesViewModel: ObservableObject {
         
         do {
             let loadedCategories = try await signRepository.loadCategories()
-            categories = loadedCategories.sorted { $0.order < $1.order }
+            applyCategories(loadedCategories)
             state = .loaded
             
             let isConnected = await networkMonitor.checkConnection()
@@ -84,20 +84,13 @@ final class CategoriesViewModel: ObservableObject {
         await loadCategories()
     }
     
-    private func reloadCategories() {
-        Task { @MainActor in
-            do {
-                let loadedCategories = try await signRepository.loadCategories()
-                categories = loadedCategories.sorted { $0.order < $1.order }
-                state = .loaded
-                logger.info("🔄 UI обновлён (\(self.categories.count) категорий)")
-            } catch {
-                logger.warning("⚠️ Не удалось обновить UI: \(error.localizedDescription)")
-            }
-        }
-    }
-    
     // MARK: - Private Methods
+
+    private func applyCategories(_ categories: [Category]) {
+        self.categories = CategoryDisplayDataHelper.sortedCategories(categories)
+        state = .loaded
+        logger.info("🔄 UI обновлён (\(self.categories.count) категорий)")
+    }
     
     private func errorMessage(for error: SignRepositoryError) -> String {
         return ErrorMessageMapper.message(for: error)
