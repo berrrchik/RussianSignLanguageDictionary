@@ -1,10 +1,12 @@
 import Foundation
+import Combine
 @testable import RussianSignLanguageDictionary
 
 final class SignRepositoryStub: SignRepositoryProtocol {
     var signs: [Sign]
     var categories: [AppCategory]
     var cachedSignsValue: [Sign]?
+    private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
 
     init(
         signs: [Sign] = [TestFixtures.sign],
@@ -14,6 +16,10 @@ final class SignRepositoryStub: SignRepositoryProtocol {
         self.signs = signs
         self.categories = categories
         self.cachedSignsValue = cachedSigns
+    }
+
+    var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
+        dataUpdatedSubject.eraseToAnyPublisher()
     }
 
     func loadAllSigns() async throws -> [Sign] {

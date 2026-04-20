@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 @testable import RussianSignLanguageDictionary
 
 final class SignRepositorySpy: SignRepositoryProtocol {
@@ -7,6 +8,8 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     private(set) var getSignCallArguments: [String] = []
     private(set) var getSignsByCategoryArguments: [String] = []
     private(set) var searchQueries: [String] = []
+
+    let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
 
     var loadAllSignsResult: Result<[Sign], Error> = .success([])
     var loadCategoriesResult: Result<[AppCategory], Error> = .success([])
@@ -17,6 +20,10 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     var loadAllSignsImplementation: (() async throws -> [Sign])?
     var loadCategoriesImplementation: (() async throws -> [AppCategory])?
     var getSignImplementation: ((String) async throws -> Sign?)?
+
+    var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
+        dataUpdatedSubject.eraseToAnyPublisher()
+    }
 
     func loadAllSigns() async throws -> [Sign] {
         loadAllSignsCallCount += 1

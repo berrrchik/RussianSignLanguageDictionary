@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 #if DEBUG
 /// Mock реализация SignRepositoryProtocol для превью и тестов
@@ -16,6 +17,8 @@ final class MockSignRepository: SignRepositoryProtocol {
     
     /// Тип ошибки для симуляции
     var errorToThrow: SignRepositoryError = .fileNotFound
+
+    private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
     
     // MARK: - Init
     
@@ -24,6 +27,10 @@ final class MockSignRepository: SignRepositoryProtocol {
     }
     
     // MARK: - SignRepositoryProtocol
+
+    var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
+        dataUpdatedSubject.eraseToAnyPublisher()
+    }
     
     func loadAllSigns() async throws -> [Sign] {
         if shouldFail {
@@ -91,4 +98,3 @@ extension MockSignRepository {
     }()
 }
 #endif
-

@@ -1,7 +1,11 @@
 import Foundation
+import Combine
 
 /// Протокол репозитория для работы с данными о жестах из JSON Bundle
 protocol SignRepositoryProtocol {
+    /// Публикует обновлённый snapshot после фоновой синхронизации.
+    var dataUpdatedPublisher: AnyPublisher<SyncData, Never> { get }
+
     /// Загружает все жесты из JSON файла
     /// - Returns: Массив всех жестов
     /// - Throws: SignRepositoryError в случае ошибки
@@ -34,4 +38,3 @@ protocol SignRepositoryProtocol {
     /// - Returns: Закэшированный массив жестов, либо nil если кэш пуст.
     func cachedSigns() -> [Sign]?
 }
-
