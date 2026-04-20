@@ -98,6 +98,26 @@ final class SignDetailViewModelTests: XCTestCase {
         XCTAssertEqual(favoritesRepository.addFavoriteCalls, [])
     }
 
+    func testLoadCategoryNameUsesRepositoryCategories() async {
+        signRepository.loadCategoriesResult = .success([
+            AppCategory(
+                id: "category-1",
+                name: "Категория 1",
+                order: 1,
+                signCount: 1,
+                icon: nil,
+                color: nil,
+                createdAt: nil,
+                updatedAt: nil
+            )
+        ])
+        let sut = makeSut()
+
+        await sut.loadCategoryName()
+
+        XCTAssertEqual(sut.categoryName, "Категория 1")
+    }
+
     func testVideoNavigationUpdatesIndexAndAvailabilityFlags() {
         let sut = makeSut(sign: makeSignWithMultipleVideos())
 

@@ -30,10 +30,14 @@ final class FavoritesViewModelTests: XCTestCase {
             makeSign(id: "sign-1", word: "Буква"),
             makeSign(id: "sign-2", word: "Арбуз")
         ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
 
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
+        XCTAssertEqual(sut.categoryNamesById["category-1"], "Категория 1")
         XCTAssertFalse(sut.isLoading)
         XCTAssertNil(sut.errorMessage)
     }
@@ -52,6 +56,9 @@ final class FavoritesViewModelTests: XCTestCase {
         favoritesRepository.favorites = ["sign-1", "missing"]
         signRepository.loadAllSignsResult = .success([
             makeSign(id: "sign-1", word: "Привет")
+        ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
         ])
 
         await sut.loadFavorites()
@@ -79,6 +86,9 @@ final class FavoritesViewModelTests: XCTestCase {
             makeSign(id: "sign-1", word: "Привет"),
             makeSign(id: "sign-2", word: "Пока")
         ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
 
@@ -91,6 +101,9 @@ final class FavoritesViewModelTests: XCTestCase {
     func testClearAllFavoritesClearsRepositoryAndState() async {
         favoritesRepository.favorites = ["sign-1"]
         signRepository.loadAllSignsResult = .success([makeSign(id: "sign-1", word: "Привет")])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
 
@@ -113,6 +126,9 @@ final class FavoritesViewModelTests: XCTestCase {
             makeSign(id: "sign-1", word: "Яблоко"),
             makeSign(id: "sign-2", word: "Арбуз")
         ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
         sut.sortOption = .alphabeticalAsc
@@ -125,6 +141,9 @@ final class FavoritesViewModelTests: XCTestCase {
         signRepository.loadAllSignsResult = .success([
             makeSign(id: "sign-1", word: "Арбуз"),
             makeSign(id: "sign-2", word: "Яблоко")
+        ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
         ])
 
         await sut.loadFavorites()
@@ -139,6 +158,9 @@ final class FavoritesViewModelTests: XCTestCase {
             makeSign(id: "sign-1", word: "Арбуз"),
             makeSign(id: "sign-2", word: "Яблоко")
         ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
         sut.sortOption = .dateAddedAsc
@@ -152,11 +174,35 @@ final class FavoritesViewModelTests: XCTestCase {
             makeSign(id: "sign-1", word: "Арбуз"),
             makeSign(id: "sign-2", word: "Яблоко")
         ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
 
         await sut.loadFavorites()
         sut.sortOption = .dateAddedDesc
 
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
+    }
+
+    func testRepositoryUpdatesRefreshCategoryNamesForFavorites() async {
+        favoritesRepository.favorites = ["sign-1"]
+        signRepository.dataUpdatedSubject.send(
+            SyncData(
+                categories: [makeCategory(id: "category-1", name: "Обновлённая", order: 1)],
+                signs: [makeSign(id: "sign-1", word: "Привет")],
+                lessons: [],
+                lastUpdated: Date()
+            )
+        )
+
+        let didUpdate = await waitUntil {
+            self.sut.favoriteSigns.map(\.id) == ["sign-1"]
+                && self.sut.categoryNamesById["category-1"] == "Обновлённая"
+        }
+
+        XCTAssertTrue(didUpdate)
+        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1"])
+        XCTAssertEqual(sut.categoryNamesById["category-1"], "Обновлённая")
     }
 
     private func makeSign(id: String, word: String) -> Sign {
@@ -168,5 +214,36 @@ final class FavoritesViewModelTests: XCTestCase {
             videos: [TestFixtures.video],
             synonyms: nil
         )
+    }
+
+    private func makeCategory(id: String, name: String, order: Int) -> AppCategory {
+        AppCategory(
+            id: id,
+            name: name,
+            order: order,
+            signCount: 1,
+            icon: nil,
+            color: nil,
+            createdAt: nil,
+            updatedAt: nil
+        )
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 1.0,
+        pollInterval: UInt64 = 20_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+
+        return condition()
     }
 }
