@@ -191,7 +191,6 @@ final class DIContainer {
             String(describing: NetworkMonitorProtocol.self),
             String(describing: CacheService.self),
             String(describing: VideoCacheServiceProtocol.self),
-            String(describing: CategoryServiceProtocol.self),
             String(describing: HybridSearchServiceBuilderProtocol.self),
             String(describing: SyncRepositoryProtocol.self),
             String(describing: SignRepositoryProtocol.self),
@@ -258,15 +257,6 @@ extension DIContainer {
 
         registerSingleton(HybridSearchServiceBuilderProtocol.self) {
             HybridSearchServiceBuilder()
-        }
-        
-        // unowned безопасен: DIContainer.shared — static singleton, никогда не деаллоцируется
-        registerSingleton(CategoryServiceProtocol.self) { [unowned self] in
-            // CategoryService помечен @MainActor, поэтому создаём его на main actor.
-            // Это безопасно, т.к. configureAppDependencies() вызывается в App.init() на main thread.
-            return MainActor.assumeIsolated {
-                CategoryService(signRepository: self.resolve(SignRepositoryProtocol.self))
-            }
         }
         
         // 2. Репозитории (singleton)

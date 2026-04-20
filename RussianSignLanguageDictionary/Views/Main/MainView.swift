@@ -107,9 +107,8 @@ struct MainView: View {
 
         TrackingPermissionService.requestTrackingPermission()
 
-        async let categoriesLoad: Void = deps.categoryService.loadCategories()
         async let signsLoad: Void = { _ = try? await deps.signRepository.loadAllSigns() }()
-        _ = await (categoriesLoad, signsLoad)
+        _ = await signsLoad
 
         isInitialized = true
     }

@@ -17,37 +17,6 @@ final class NetworkMonitorStub: NetworkMonitorProtocol {
     }
 }
 
-@MainActor
-final class CategoryServiceStub: CategoryServiceProtocol {
-    let categories: [AppCategory]
-
-    init(categories: [AppCategory] = [TestFixtures.category]) {
-        self.categories = categories
-    }
-
-    func loadCategories() async {}
-
-    func name(for categoryId: String) -> String {
-        categories.first(where: { $0.id == categoryId })?.name ?? categoryId
-    }
-
-    func category(for categoryId: String) -> AppCategory? {
-        categories.first(where: { $0.id == categoryId })
-    }
-
-    func icon(for categoryId: String) -> String? {
-        categories.first(where: { $0.id == categoryId })?.icon
-    }
-
-    func color(for categoryId: String) -> String? {
-        categories.first(where: { $0.id == categoryId })?.color
-    }
-
-    func allCategories() -> [AppCategory] {
-        categories
-    }
-}
-
 final class VideoCacheServiceStub: VideoCacheServiceProtocol {
     let cachedURL: URL?
     let cacheSize: Int

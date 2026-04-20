@@ -22,7 +22,6 @@ struct AppDependencies {
     let videoRepository: VideoRepositoryProtocol
     let favoritesRepository: FavoritesRepositoryProtocol
     let lessonRepository: LessonRepositoryProtocol
-    let categoryService: CategoryServiceProtocol
     let networkMonitor: NetworkMonitorProtocol
     
     /// Production-зависимости, резолвятся из DIContainer
@@ -34,7 +33,6 @@ struct AppDependencies {
             videoRepository: container.resolve(VideoRepositoryProtocol.self),
             favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
             lessonRepository: container.resolve(LessonRepositoryProtocol.self),
-            categoryService: container.resolve(CategoryServiceProtocol.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
     }
@@ -63,13 +61,13 @@ extension EnvironmentValues {
 #if DEBUG
 extension AppDependencies {
     /// Mock-зависимости для SwiftUI Preview
+    @MainActor
     static var preview: AppDependencies {
         AppDependencies(
             signRepository: PreviewData.signRepository,
             videoRepository: PreviewData.videoRepository,
             favoritesRepository: PreviewData.favoritesRepository,
             lessonRepository: PreviewData.lessonRepository,
-            categoryService: PreviewData.categoryService,
             networkMonitor: PreviewData.networkMonitor
         )
     }

@@ -1,37 +1,6 @@
 import Foundation
 @testable import RussianSignLanguageDictionary
 
-@MainActor
-final class CategoryServiceFake: CategoryServiceProtocol {
-    private var categoriesById: [String: AppCategory]
-
-    init(categories: [AppCategory] = [TestFixtures.category]) {
-        self.categoriesById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
-    }
-
-    func loadCategories() async {}
-
-    func name(for categoryId: String) -> String {
-        categoriesById[categoryId]?.name ?? categoryId
-    }
-
-    func category(for categoryId: String) -> AppCategory? {
-        categoriesById[categoryId]
-    }
-
-    func icon(for categoryId: String) -> String? {
-        categoriesById[categoryId]?.icon
-    }
-
-    func color(for categoryId: String) -> String? {
-        categoriesById[categoryId]?.color
-    }
-
-    func allCategories() -> [AppCategory] {
-        categoriesById.values.sorted { $0.order < $1.order }
-    }
-}
-
 final class VideoCacheServiceFake: VideoCacheServiceProtocol {
     private var cachedVideos: [String: URL]
 

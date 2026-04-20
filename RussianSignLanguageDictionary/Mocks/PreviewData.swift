@@ -22,9 +22,6 @@ enum PreviewData {
     /// Mock монитор сети
     static let networkMonitor = MockNetworkMonitor()
     
-    /// Mock сервис категорий
-    static let categoryService = MockCategoryService.shared
-    
     // MARK: - Models - Single Objects
     
     /// Тестовый жест с дефолтными значениями

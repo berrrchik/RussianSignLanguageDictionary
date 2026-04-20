@@ -19,48 +19,6 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
     }
 }
 
-@MainActor
-final class CategoryServiceSpy: CategoryServiceProtocol {
-    private(set) var loadCategoriesCallCount = 0
-    private(set) var nameRequests: [String] = []
-    private(set) var categoryRequests: [String] = []
-    private(set) var iconRequests: [String] = []
-    private(set) var colorRequests: [String] = []
-    private(set) var allCategoriesCallCount = 0
-
-    var categories: [AppCategory] = []
-    var namesById: [String: String] = [:]
-
-    func loadCategories() async {
-        loadCategoriesCallCount += 1
-    }
-
-    func name(for categoryId: String) -> String {
-        nameRequests.append(categoryId)
-        return namesById[categoryId] ?? categories.first(where: { $0.id == categoryId })?.name ?? categoryId
-    }
-
-    func category(for categoryId: String) -> AppCategory? {
-        categoryRequests.append(categoryId)
-        return categories.first(where: { $0.id == categoryId })
-    }
-
-    func icon(for categoryId: String) -> String? {
-        iconRequests.append(categoryId)
-        return categories.first(where: { $0.id == categoryId })?.icon
-    }
-
-    func color(for categoryId: String) -> String? {
-        colorRequests.append(categoryId)
-        return categories.first(where: { $0.id == categoryId })?.color
-    }
-
-    func allCategories() -> [AppCategory] {
-        allCategoriesCallCount += 1
-        return categories
-    }
-}
-
 final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
     private(set) var isVideoCachedRequests: [SignVideo] = []
     private(set) var isURLCachedRequests: [URL] = []
