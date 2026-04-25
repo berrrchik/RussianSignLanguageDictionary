@@ -3,33 +3,50 @@ import SwiftUI
 struct MainView: View {
     // MARK: - Properties
     
-    @Environment(\.dependencies) private var deps
-    @StateObject private var syncViewModel = SyncViewModel()
-    @State private var isInitialized = false
-    @State private var showSplashOverlay = true
+    @StateObject private var syncViewModel: SyncViewModel
+    @StateObject private var appStatusViewModel: AppStatusViewModel
     @State private var showSyncError = false
+
+    @MainActor
+    init() {
+        _syncViewModel = StateObject(wrappedValue: SyncViewModel())
+        _appStatusViewModel = StateObject(wrappedValue: AppStatusViewModel())
+    }
+
+    @MainActor
+    init(
+        syncViewModel: SyncViewModel,
+        appStatusViewModel: AppStatusViewModel
+    ) {
+        _syncViewModel = StateObject(wrappedValue: syncViewModel)
+        _appStatusViewModel = StateObject(wrappedValue: appStatusViewModel)
+    }
     
     // MARK: - Body
     
     var body: some View {
         ZStack {
-            if isInitialized {
+            if syncViewModel.startupStatus.isReady {
                 tabView
+                    .environmentObject(appStatusViewModel)
             }
-            if showSplashOverlay {
+
+            switch syncViewModel.startupStatus {
+            case .idle, .loading:
                 StartupSplashScreen()
-                    .transition(.opacity)
                     .zIndex(1)
+            case .blocked(let reason):
+                ErrorView(
+                    message: ErrorMessageMapper.message(for: .noData(reason)),
+                    retryAction: retryInitialization
+                )
+                .zIndex(1)
+            case .ready, .readyUsingCachedData:
+                EmptyView()
             }
         }
         .task {
             await initializeApp()
-        }
-        .onChange(of: isInitialized) { _, newValue in
-            guard newValue else { return }
-            withAnimation(.easeOut(duration: 0.4)) {
-                showSplashOverlay = false
-            }
         }
         .overlay {
             if syncViewModel.isSyncing {
@@ -103,14 +120,14 @@ struct MainView: View {
     // MARK: - Initialization
     
     private func initializeApp() async {
-        guard !isInitialized else { return }
-
         TrackingPermissionService.requestTrackingPermission()
+        await syncViewModel.initializeApp()
+    }
 
-        async let signsLoad: Void = { _ = try? await deps.signRepository.loadAllSigns() }()
-        _ = await signsLoad
-
-        isInitialized = true
+    private func retryInitialization() {
+        Task {
+            await syncViewModel.initializeApp(force: true)
+        }
     }
 }
 
@@ -118,8 +135,20 @@ struct MainView: View {
 
 #if DEBUG
 struct MainView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
-        MainView()
+        MainView(
+            syncViewModel: SyncViewModel(
+                syncRepository: MockSyncRepository(),
+                signRepository: PreviewData.signRepository,
+                cacheService: CacheService(),
+                networkMonitor: PreviewData.networkMonitor
+            ),
+            appStatusViewModel: AppStatusViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor
+            )
+        )
             .environment(\.dependencies, .preview)
     }
 }

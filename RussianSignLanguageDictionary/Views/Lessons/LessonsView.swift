@@ -16,6 +16,11 @@ struct LessonsView: View {
                 }
             }
             .navigationTitle("Обучение")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    OfflineStatusToolbarItem()
+                }
+            }
             .onAppear {
                 AnalyticsService.logScreenView(screenName: "lessons", screenClass: "LessonsView")
             }
@@ -78,9 +83,14 @@ struct LessonsView: View {
 
 #if DEBUG
 struct LessonsView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
         LessonsView()
             .environment(\.dependencies, .preview)
+            .environmentObject(AppStatusViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor
+            ))
     }
 }
 #endif

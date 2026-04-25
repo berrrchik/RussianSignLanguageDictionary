@@ -11,8 +11,12 @@ struct FavoritesView: View {
             contentView
                 .navigationTitle("Избранное")
                 .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        OfflineStatusToolbarItem()
+                    }
+
                     if !viewModel.favoriteSigns.isEmpty {
-                        ToolbarItem(placement: .navigationBarTrailing) {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button {
                                 showClearAlert = true
                             } label: {
@@ -97,9 +101,14 @@ struct FavoritesView: View {
 
 #if DEBUG
 struct FavoritesView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
         FavoritesView()
             .environment(\.dependencies, .preview)
+            .environmentObject(AppStatusViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor
+            ))
     }
 }
 #endif

@@ -9,6 +9,11 @@ struct SearchView: View {
         NavigationStack {
             contentView
             .navigationTitle("Поиск")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    OfflineStatusToolbarItem()
+                }
+            }
             .searchable(
                 text: $viewModel.searchQuery,
                 placement: .navigationBarDrawer(displayMode: .always),
@@ -173,9 +178,14 @@ struct SearchView: View {
 
 #if DEBUG
 struct SearchView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
         SearchView()
             .environment(\.dependencies, .preview)
+            .environmentObject(AppStatusViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor
+            ))
     }
 }
 #endif
