@@ -251,8 +251,10 @@ extension DIContainer {
             CacheService()
         }
         
-        registerSingleton(VideoCacheServiceProtocol.self) {
-            VideoCacheService()
+        registerSingleton(VideoCacheServiceProtocol.self) { [unowned self] in
+            VideoCacheService(
+                networkMonitor: self.resolve(NetworkMonitorProtocol.self)
+            )
         }
 
         registerSingleton(HybridSearchServiceBuilderProtocol.self) {

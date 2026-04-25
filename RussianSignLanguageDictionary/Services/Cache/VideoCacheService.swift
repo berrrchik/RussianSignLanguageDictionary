@@ -32,11 +32,15 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     ///   - downloader: Загрузчик видео (опционально, создаётся по умолчанию)
     init(
         directoryManager: VideoCacheDirectoryManager? = nil,
-        downloader: VideoCacheDownloader? = nil
+        downloader: VideoCacheDownloader? = nil,
+        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
     ) {
         let manager = directoryManager ?? VideoCacheDirectoryManager()
         self.directoryManager = manager
-        self.downloader = downloader ?? VideoCacheDownloader(directoryManager: manager)
+        self.downloader = downloader ?? VideoCacheDownloader(
+            directoryManager: manager,
+            networkMonitor: networkMonitor
+        )
         logger.info("✅ VideoCacheService инициализирован")
     }
     

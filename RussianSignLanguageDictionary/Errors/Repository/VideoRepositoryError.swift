@@ -6,16 +6,13 @@ enum VideoRepositoryError: Error {
     /// URL видео недействителен или отсутствует
     case invalidURL
     
-    /// Не удалось загрузить видео
-    case downloadFailed
-    
-    /// Видео не найдено в кеше (для избранных жестов в офлайн-режиме)
-    case videoNotCached
-    
     /// Нет подключения к интернету (для не избранных жестов)
     /// Краткосрочный кеш AVPlayer не сохраняется между запусками приложения,
     /// поэтому для просмотра видео не избранных жестов требуется интернет
     case noInternetConnection
+
+    /// Видео или сервер временно недоступны
+    case videoUnavailable
     
     // MARK: - Factory Methods
     
@@ -26,12 +23,12 @@ enum VideoRepositoryError: Error {
         switch error {
         case .invalidURL:
             return .invalidURL
-        case .downloadFailed:
-            return .downloadFailed
-        case .fileNotFound:
-            return .videoNotCached
+        case .noInternetConnection, .fileNotFound:
+            return .noInternetConnection
+        case .videoUnavailable:
+            return .videoUnavailable
         case .cacheDirectoryNotAvailable, .sessionNotConfigured:
-            return .downloadFailed
+            return .videoUnavailable
         }
     }
 }
@@ -43,11 +40,9 @@ extension VideoRepositoryError: Equatable {
         switch (lhs, rhs) {
         case (.invalidURL, .invalidURL):
             return true
-        case (.downloadFailed, .downloadFailed):
-            return true
-        case (.videoNotCached, .videoNotCached):
-            return true
         case (.noInternetConnection, .noInternetConnection):
+            return true
+        case (.videoUnavailable, .videoUnavailable):
             return true
         default:
             return false

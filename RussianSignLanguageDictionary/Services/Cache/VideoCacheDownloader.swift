@@ -16,15 +16,20 @@ final class VideoCacheDownloader {
     
     /// Менеджер директории кеша
     private let directoryManager: VideoCacheDirectoryManager
+
+    /// Монитор сети для быстрой проверки офлайн-состояния
+    private let networkMonitor: NetworkMonitorProtocol
     
     // MARK: - Initialization
     
     init(
         directoryManager: VideoCacheDirectoryManager,
+        networkMonitor: NetworkMonitorProtocol,
         session: URLSession? = nil
     ) {
         self.directoryManager = directoryManager
-        self.downloadSession = session ?? Self.createDefaultSession()
+        self.networkMonitor = networkMonitor
+        self.downloadSession = session ?? VideoSessionFactory.makeSession()
         logger.info("✅ VideoCacheDownloader инициализирован")
     }
     
@@ -46,14 +51,26 @@ final class VideoCacheDownloader {
         guard let fileURL = directoryManager.cacheFileURL(for: id) else {
             throw VideoCacheError.cacheDirectoryNotAvailable
         }
+
+        guard await networkMonitor.checkConnection() else {
+            logger.warning("⚠️ Нет интернета для загрузки видео \(id) в кеш")
+            throw VideoCacheError.noInternetConnection
+        }
         
         logger.info("📥 Загрузка видео \(id) с сервера в кеш...")
-        
-        let (tempURL, response) = try await downloadSession.download(from: url)
-        
+
+        let tempURL: URL
+        let response: URLResponse
+
+        do {
+            (tempURL, response) = try await downloadSession.download(from: url)
+        } catch {
+            throw mapDownloadError(error)
+        }
+
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
-            throw VideoCacheError.downloadFailed
+            throw VideoCacheError.videoUnavailable
         }
         
         // Перемещаем временный файл в кеш
@@ -122,13 +139,23 @@ final class VideoCacheDownloader {
             await preloadVideo(video)
         }
     }
-    
-    // MARK: - Session Configuration
-    
-    private static func createDefaultSession() -> URLSession {
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 300
-        return URLSession(configuration: configuration)
+
+    private func mapDownloadError(_ error: Error) -> VideoCacheError {
+        if let cacheError = error as? VideoCacheError {
+            return cacheError
+        }
+
+        guard let urlError = error as? URLError else {
+            return .videoUnavailable
+        }
+
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return .noInternetConnection
+        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
+            return .videoUnavailable
+        default:
+            return .videoUnavailable
+        }
     }
 }

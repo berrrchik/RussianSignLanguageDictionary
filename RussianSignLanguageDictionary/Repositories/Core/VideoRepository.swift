@@ -69,14 +69,14 @@ final class VideoRepository: VideoRepositoryProtocol {
         videoCacheService: VideoCacheServiceProtocol,
         networkMonitor: NetworkMonitorProtocol,
         fileManager: FileManager = .default,
-        session: URLSession = .shared,
+        session: URLSession? = nil,
         shortTermCacheDirectory: URL? = nil,
         cacheLimitEnforcer: @escaping CacheLimitEnforcer = FileCacheLRU.enforceSizeLimit
     ) {
         self.videoCacheService = videoCacheService
         self.networkMonitor = networkMonitor
         self.fileManager = fileManager
-        self.session = session
+        self.session = session ?? VideoSessionFactory.makeSession()
         self.cacheLimitEnforcer = cacheLimitEnforcer
         
         // Настройка NSCache (хранит маппинг video_id → локальный file URL)
@@ -176,6 +176,8 @@ final class VideoRepository: VideoRepositoryProtocol {
             logger.warning("⚠️ Lesson video: нет интернета для загрузки видео урока \(lesson.id)")
             throw VideoRepositoryError.noInternetConnection
         }
+
+        try await verifyRemoteVideoAvailability(at: url, lessonId: lesson.id)
         
         return url
     }
@@ -229,7 +231,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         if !isConnected {
             logger.warning("⚠️ Видео \(videoId) не найдено в кеше и нет интернета")
             PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
-            throw VideoRepositoryError.videoNotCached
+            throw VideoRepositoryError.noInternetConnection
         }
         
         // Загружаем и сохраняем видео в файловый кеш
@@ -252,7 +254,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         } catch {
             logger.error("❌ Ошибка загрузки видео \(videoId): \(error.localizedDescription)")
             PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
-            throw VideoRepositoryError.downloadFailed
+            throw mapVideoError(error)
         }
     }
     
@@ -276,7 +278,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         
         // 2. Получаем или создаём задачу загрузки через actor (не блокирует поток!)
         let (task, isExisting) = await downloadCoordinator.getOrCreateTask(videoId: video.id) { [weak self] in
-            guard let self = self else { throw VideoRepositoryError.downloadFailed }
+            guard let self = self else { throw VideoRepositoryError.videoUnavailable }
             return try await self.downloadAndCacheVideo(url: url, video: video)
         }
         
@@ -328,13 +330,39 @@ final class VideoRepository: VideoRepositoryProtocol {
                 context: ["videoId": "\(video.id)", "url": url.absoluteString],
                 subsystem: "com.rsl.videoRepository"
             )
-            throw VideoRepositoryError.downloadFailed
+            throw mapVideoError(error)
         }
     }
     
     private func downloadToTemp(from url: URL) async throws -> URL {
-        let (tempURL, _) = try await session.download(from: url)
+        let (tempURL, response) = try await session.download(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw VideoRepositoryError.videoUnavailable
+        }
         return tempURL
+    }
+
+    private func verifyRemoteVideoAvailability(at url: URL, lessonId: String) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+
+        do {
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw VideoRepositoryError.videoUnavailable
+            }
+
+            switch httpResponse.statusCode {
+            case 200...299, 405, 501:
+                return
+            default:
+                logger.warning("⚠️ Lesson video: fast check failed for \(lessonId), status \(httpResponse.statusCode)")
+                throw VideoRepositoryError.videoUnavailable
+            }
+        } catch {
+            throw mapVideoError(error)
+        }
     }
     
     private func moveToCache(tempURL: URL, videoId: Int) throws -> URL {
@@ -386,5 +414,28 @@ final class VideoRepository: VideoRepositoryProtocol {
             [.modificationDate: Date()],
             ofItemAtPath: url.path
         )
+    }
+
+    private func mapVideoError(_ error: Error) -> VideoRepositoryError {
+        if let repositoryError = error as? VideoRepositoryError {
+            return repositoryError
+        }
+
+        if let cacheError = error as? VideoCacheError {
+            return VideoRepositoryError.from(cacheError)
+        }
+
+        guard let urlError = error as? URLError else {
+            return .videoUnavailable
+        }
+
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return .noInternetConnection
+        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
+            return .videoUnavailable
+        default:
+            return .videoUnavailable
+        }
     }
 }

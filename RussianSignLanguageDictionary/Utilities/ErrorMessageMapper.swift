@@ -49,13 +49,11 @@ enum ErrorMessageMapper {
     static func message(for error: VideoRepositoryError) -> String {
         switch error {
         case .invalidURL:
-            return "Неверный URL видео"
-        case .downloadFailed:
-            return "Не удалось загрузить видео"
-        case .videoNotCached:
-            return "Видео недоступно в офлайн-режиме. Добавьте жест в избранное для просмотра без интернета."
+            return "Неверный адрес видео."
         case .noInternetConnection:
-            return "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
+            return "Нет интернета."
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
         }
     }
     
@@ -97,12 +95,14 @@ enum ErrorMessageMapper {
         switch error {
         case .invalidURL:
             return "Невалидный URL видео"
+        case .noInternetConnection:
+            return "Нет интернета."
         case .cacheDirectoryNotAvailable:
             return "Директория кеша недоступна"
         case .sessionNotConfigured:
             return "Внутренняя ошибка: сессия загрузки не настроена"
-        case .downloadFailed:
-            return "Не удалось загрузить видео"
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
         case .fileNotFound:
             return "Файл видео не найден в кеше"
         }

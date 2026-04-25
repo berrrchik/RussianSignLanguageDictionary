@@ -8,6 +8,8 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     
     /// Флаг доступности интернета (можно изменять для тестирования)
     var isConnectedValue: Bool = true
+    private(set) var isConnectedCallCount = 0
+    private(set) var checkConnectionCallCount = 0
     private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
 
     var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
@@ -29,12 +31,14 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     /// Проверяет доступность интернета (mock версия)
     /// - Returns: Значение isConnectedValue
     func isConnected() -> Bool {
+        isConnectedCallCount += 1
         return isConnectedValue
     }
     
     /// Проверяет доступность интернета асинхронно (mock версия)
     /// - Returns: Значение isConnectedValue
     func checkConnection() async -> Bool {
+        checkConnectionCallCount += 1
         return isConnectedValue
     }
     
