@@ -22,6 +22,7 @@ final class SignRepository: SignRepositoryProtocol {
         subsystem: "com.rsl.SignRepository",
         category: "LoadCoordinator"
     )
+    private let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.idle)
     
     /// Защита от множественных фоновых синхронизаций
     private var backgroundSyncTask: Task<Void, Never>?
@@ -31,6 +32,16 @@ final class SignRepository: SignRepositoryProtocol {
     private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
     
     // MARK: - Initialization
@@ -87,6 +98,7 @@ final class SignRepository: SignRepositoryProtocol {
     private func loadDataWithSync() async throws -> SyncData {
         if let cached = memoryCache.get() {
             logger.debug("📦 Данные из memory cache (быстрый путь)")
+            updateDataStatus(.availableLocally(.memoryCache))
             scheduleBackgroundSyncIfNeeded()
             return cached
         }
@@ -101,12 +113,14 @@ final class SignRepository: SignRepositoryProtocol {
     private func performDataLoad() async throws -> SyncData {
         let trace = PerformanceService.startTrace("signs_data_load")
         defer { PerformanceService.stopTrace(trace) }
+        updateDataStatus(.loading)
         
         logger.info("🔍 Проверка локального кеша...")
         
         // Попытка загрузить из дискового кеша
         if let diskCached = try? cacheService.load() {
             memoryCache.set(diskCached)
+            updateDataStatus(.availableLocally(.diskCache))
             logger.info("✅ Загружено из дискового кеша: \(diskCached.signs.count) жестов, \(diskCached.categories.count) категорий")
             PerformanceService.addAttribute(trace, name: "source", value: "disk_cache")
             PerformanceService.incrementMetric(trace, name: "signs_count", by: Int64(diskCached.signs.count))
@@ -125,6 +139,7 @@ final class SignRepository: SignRepositoryProtocol {
     private func loadFromServer(trace: Trace? = nil) async throws -> SyncData {
         guard await networkMonitor.checkConnection() else {
             logger.error("❌ Первый запуск без интернета — данные недоступны")
+            updateDataStatus(.noData(.noInternet))
             if let trace = trace {
                 PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
             }
@@ -139,6 +154,7 @@ final class SignRepository: SignRepositoryProtocol {
             }
             
             saveToAllCaches(syncData)
+            updateDataStatus(.updated)
             logger.info("✅ Первая загрузка завершена успешно")
             
             if let trace = trace {
@@ -150,6 +166,7 @@ final class SignRepository: SignRepositoryProtocol {
             
         } catch {
             logger.error("❌ Ошибка загрузки с сервера: \(error.localizedDescription)")
+            updateDataStatus(.noData(await dataStatusReason(for: error)))
             if let trace = trace {
                 PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
             }
@@ -171,6 +188,8 @@ final class SignRepository: SignRepositoryProtocol {
     }
     
     private func performBackgroundSync() async {
+        defer { backgroundSyncTask = nil }
+
         guard !Task.isCancelled else {
             logger.debug("🛑 Фоновая синхронизация отменена до старта")
             return
@@ -178,6 +197,7 @@ final class SignRepository: SignRepositoryProtocol {
         
         guard await networkMonitor.checkConnection() else {
             logger.debug("📴 Нет интернета для фоновой синхронизации")
+            updateDataStatus(.usingCachedData(.noInternet))
             return
         }
         
@@ -199,12 +219,14 @@ final class SignRepository: SignRepositoryProtocol {
             
             guard currentData?.lastUpdated != syncData.lastUpdated else {
                 logger.info("ℹ️ Данные не изменились")
+                updateDataStatus(.upToDate)
                 return
             }
             
             logger.info("🆕 Обнаружены изменения!")
             saveToAllCaches(syncData)
             dataUpdatedSubject.send(syncData)
+            updateDataStatus(.updated)
             logger.info("✅ Фоновая синхронизация завершена с обновлением UI")
             
         } catch {
@@ -212,6 +234,7 @@ final class SignRepository: SignRepositoryProtocol {
                 logger.debug("🛑 Фоновая синхронизация отменена")
                 return
             }
+            updateDataStatus(.usingCachedData(await dataStatusReason(for: error)))
             logger.warning("⚠️ Фоновая синхронизация не удалась: \(error.localizedDescription)")
         }
     }
@@ -227,5 +250,25 @@ final class SignRepository: SignRepositoryProtocol {
         } catch {
             logger.warning("⚠️ Ошибка сохранения в дисковый кеш: \(error.localizedDescription)")
         }
+    }
+
+    private func updateDataStatus(_ status: RepositoryDataStatus) {
+        guard dataStatusSubject.value != status else { return }
+        dataStatusSubject.send(status)
+    }
+
+    private func dataStatusReason(for error: Error) async -> DataStatusReason {
+        if let syncError = error as? SyncError {
+            switch syncError {
+            case .noInternet:
+                return .noInternet
+            case .serverUnavailable, .serverError, .decodingError, .invalidResponse:
+                return .serverUnavailable
+            case .networkError:
+                return await networkMonitor.checkConnection() ? .serverUnavailable : .noInternet
+            }
+        }
+
+        return await networkMonitor.checkConnection() ? .serverUnavailable : .noInternet
     }
 }

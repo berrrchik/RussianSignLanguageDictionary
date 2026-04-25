@@ -6,6 +6,12 @@ protocol SignRepositoryProtocol {
     /// Публикует обновлённый snapshot после фоновой синхронизации.
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> { get }
 
+    /// Публикует нормализованный статус доступности данных.
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> { get }
+
+    /// Возвращает текущее состояние доступности данных.
+    var currentDataStatus: RepositoryDataStatus { get }
+
     /// Загружает все жесты из JSON файла
     /// - Returns: Массив всех жестов
     /// - Throws: SignRepositoryError в случае ошибки
