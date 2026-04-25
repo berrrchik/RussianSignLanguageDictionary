@@ -43,6 +43,22 @@ final class SignRepositoryOfflineTests: XCTestCase {
             XCTFail("Expected noDataAvailable")
         } catch let error as SignRepositoryError {
             XCTAssertEqual(error, .noDataAvailable)
+            XCTAssertEqual(sut.currentDataStatus, .noData(.noInternet))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testFirstLaunchWithServerUnavailableWithoutCachePublishesBlockingServerStatus() async {
+        networkMonitor.setConnectivityStatus(.connected)
+        syncRepository.fetchAllDataResult = .failure(SyncError.serverUnavailable)
+
+        do {
+            _ = try await sut.loadAllSigns()
+            XCTFail("Expected noDataAvailable")
+        } catch let error as SignRepositoryError {
+            XCTAssertEqual(error, .noDataAvailable)
+            XCTAssertEqual(sut.currentDataStatus, .noData(.serverUnavailable))
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

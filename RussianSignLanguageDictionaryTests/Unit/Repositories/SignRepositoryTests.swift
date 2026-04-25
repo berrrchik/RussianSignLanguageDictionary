@@ -44,6 +44,7 @@ final class SignRepositoryTests: XCTestCase {
         
         XCTAssertEqual(signs.count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(syncRepository.fetchAllDataCallCount, 1)
+        XCTAssertEqual(sut.currentDataStatus, .updated)
     }
     
     func testLoadAllSignsSavesDataToMemoryAndDiskCaches() async throws {
@@ -62,6 +63,28 @@ final class SignRepositoryTests: XCTestCase {
         XCTAssertEqual(signs.count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(sut.cachedSigns()?.count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(syncRepository.fetchAllDataCallCount, 0)
+    }
+
+    func testLoadAllSignsPublishesDiskCacheThenNoInternetFallbackStatus() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        networkMonitor.setConnectivityStatus(.disconnected)
+
+        let fallbackExpectation = expectation(description: "publishes cached no internet fallback")
+        var statuses: [RepositoryDataStatus] = []
+        sut.dataStatusPublisher
+            .sink { status in
+                statuses.append(status)
+                if status == .usingCachedData(.noInternet) {
+                    fallbackExpectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        _ = try await sut.loadAllSigns()
+
+        await fulfillment(of: [fallbackExpectation], timeout: 1.0)
+        XCTAssertTrue(statuses.contains(.availableLocally(.diskCache)))
+        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.noInternet))
     }
 
     func testLoadAllSignsUsesMemoryCacheOnSubsequentCalls() async throws {
@@ -222,6 +245,26 @@ final class SignRepositoryTests: XCTestCase {
             timeout: 2.0,
             enforceOrder: false
         )
+    }
+
+    func testBackgroundSyncPublishesServerUnavailableCachedStatus() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        networkMonitor.setConnectivityStatus(.connected)
+        syncRepository.fetchAllDataResult = .failure(SyncError.serverUnavailable)
+
+        let fallbackExpectation = expectation(description: "publishes cached server unavailable fallback")
+        sut.dataStatusPublisher
+            .sink { status in
+                if status == .usingCachedData(.serverUnavailable) {
+                    fallbackExpectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        _ = try await sut.loadAllSigns()
+
+        await fulfillment(of: [fallbackExpectation], timeout: 1.0)
+        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.serverUnavailable))
     }
 }
 
