@@ -5,23 +5,32 @@ final class VideoCacheServiceTests: XCTestCase {
     private var sut: VideoCacheService!
     private var tempDirectory: URL!
     private var controller: MockURLProtocol.SessionController!
+    private var networkMonitor: MockNetworkMonitor!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         tempDirectory = try createTemporaryDirectory()
+        networkMonitor = MockNetworkMonitor()
+        networkMonitor.setConnected(true)
         controller = MockURLProtocol.makeSessionController()
         let manager = VideoCacheDirectoryManager(cacheDirectory: tempDirectory)
         let downloader = VideoCacheDownloader(
             directoryManager: manager,
+            networkMonitor: networkMonitor,
             session: MockURLProtocol.makeEphemeralSession(controller: controller)
         )
-        sut = VideoCacheService(directoryManager: manager, downloader: downloader)
+        sut = VideoCacheService(
+            directoryManager: manager,
+            downloader: downloader,
+            networkMonitor: networkMonitor
+        )
         controller.reset()
     }
 
     override func tearDown() {
         controller.reset()
         controller = nil
+        networkMonitor = nil
         sut = nil
         tempDirectory = nil
         super.tearDown()
@@ -121,6 +130,23 @@ final class VideoCacheServiceTests: XCTestCase {
     func testEnsureCacheLimitDoesNotCrashOnEmptyCache() {
         sut.ensureCacheLimit()
         XCTAssertEqual(sut.getCacheSize(), 0)
+    }
+
+    func testDownloadAndCacheFastFailsOfflineWithoutRequest() async {
+        networkMonitor.simulateNoInternet()
+        controller.setRequestHandler { _ in
+            XCTFail("Network request should not start while offline")
+            throw URLError(.badServerResponse)
+        }
+
+        do {
+            _ = try await sut.downloadAndCache(video: makeVideo())
+            XCTFail("Expected no internet error")
+        } catch let error as VideoCacheError {
+            XCTAssertEqual(error, .noInternetConnection)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 
     private func makeVideo(id: Int = 1, url: String = "/signs/test/video_1.mp4") -> SignVideo {

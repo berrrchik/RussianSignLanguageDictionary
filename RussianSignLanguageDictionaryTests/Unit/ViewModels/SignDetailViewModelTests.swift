@@ -72,8 +72,20 @@ final class SignDetailViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoadingVideo)
         XCTAssertEqual(
             sut.videoErrorMessage,
-            "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
+            "Нет интернета."
         )
+    }
+
+    func testLoadVideoMapsServerFailureToShortStableMessage() async {
+        videoRepository.cachedVideoURLValue = nil
+        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.videoUnavailable)
+        favoritesRepository.favoriteLookup["sign-1"] = false
+        let sut = makeSut()
+
+        await sut.loadVideo()
+
+        XCTAssertEqual(sut.videoErrorMessage, "Видео сейчас недоступно.")
+        XCTAssertFalse(sut.isLoadingVideo)
     }
 
     func testToggleFavoriteAddsFavoriteWhenCurrentlyNotFavorite() {

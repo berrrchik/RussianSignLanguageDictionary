@@ -62,9 +62,9 @@ final class VideoRepositoryOfflineTests: XCTestCase {
 
         do {
             _ = try await sut.getVideoURL(for: makeVideo(), useFavoritesCache: true)
-            XCTFail("Expected video not cached error")
+            XCTFail("Expected no internet error")
         } catch let error as VideoRepositoryError {
-            XCTAssertEqual(error, .videoNotCached)
+            XCTAssertEqual(error, .noInternetConnection)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

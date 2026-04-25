@@ -80,6 +80,19 @@ final class VideoRepositoryTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
     }
 
+    func testGetVideoURLShortTermCacheHitWinsOverNetworkAndConnectivityCheck() async throws {
+        let video = makeVideo(id: 1)
+        let fileURL = tempDirectory.appendingPathComponent("video_1.mp4")
+        try Data("cached".utf8).write(to: fileURL)
+        networkMonitor.setConnected(false)
+
+        let url = try await sut.getVideoURL(for: video, useFavoritesCache: false)
+
+        XCTAssertEqual(url, fileURL)
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(networkMonitor.checkConnectionCallCount, 0)
+    }
+
     func testGetVideoURLParallelSameIdUsesSingleDownload() async throws {
         let requestStarted = expectation(description: "request started")
         let releaseRequest = expectation(description: "release request")
@@ -121,6 +134,8 @@ final class VideoRepositoryTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+
+        XCTAssertEqual(requestCount, 0)
     }
 
     func testGetVideoURLWithFavoritesCacheUsesCachedVideoOffline() async throws {
@@ -132,19 +147,65 @@ final class VideoRepositoryTests: XCTestCase {
         let url = try await sut.getVideoURL(for: video, useFavoritesCache: true)
 
         XCTAssertEqual(url, favoritesURL)
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(networkMonitor.checkConnectionCallCount, 0)
     }
 
-    func testGetVideoURLWithFavoritesCacheWithoutInternetAndWithoutCacheThrowsVideoNotCached() async {
+    func testGetVideoURLWithFavoritesCacheWithoutInternetAndWithoutCacheThrowsNoInternetConnection() async {
         networkMonitor.setConnected(false)
 
         do {
             _ = try await sut.getVideoURL(for: makeVideo(id: 1), useFavoritesCache: true)
-            XCTFail("Expected video not cached error")
+            XCTFail("Expected no internet error")
         } catch let error as VideoRepositoryError {
-            XCTAssertEqual(error, .videoNotCached)
+            XCTAssertEqual(error, .noInternetConnection)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    func testGetVideoURLMapsServerTimeoutToVideoUnavailable() async {
+        controller.setRequestHandler { request in
+            self.requestCount += 1
+            throw URLError(.timedOut, userInfo: [NSURLErrorKey: try XCTUnwrap(request.url)])
+        }
+
+        do {
+            _ = try await sut.getVideoURL(for: makeVideo(id: 1), useFavoritesCache: false)
+            XCTFail("Expected video unavailable error")
+        } catch let error as VideoRepositoryError {
+            XCTAssertEqual(error, .videoUnavailable)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testGetLessonVideoURLPerformsFastAvailabilityCheck() async throws {
+        let lesson = Lesson(
+            id: "lesson-1",
+            title: "Lesson",
+            description: "Description",
+            videoUrl: "/lessons/lesson.mp4",
+            order: 1,
+            createdAt: nil,
+            updatedAt: nil
+        )
+        controller.setRequestHandler { request in
+            self.requestCount += 1
+            XCTAssertEqual(request.httpMethod, "HEAD")
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data())
+        }
+
+        let url = try await sut.getVideoURL(for: lesson)
+
+        XCTAssertEqual(url, try XCTUnwrap(APIConfig.videoURL(forPath: lesson.videoUrl)))
+        XCTAssertEqual(requestCount, 1)
     }
 
     func testPreloadVideoStoresShortTermCachedFile() async throws {
