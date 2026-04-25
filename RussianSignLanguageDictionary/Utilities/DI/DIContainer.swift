@@ -289,7 +289,6 @@ extension DIContainer {
         
         registerSingleton(FavoritesRepositoryProtocol.self) { [unowned self] in
             FavoritesRepository(
-                signRepository: self.resolve(SignRepositoryProtocol.self),
                 videoCacheService: self.resolve(VideoCacheServiceProtocol.self)
             )
         }
