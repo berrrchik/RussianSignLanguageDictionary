@@ -84,6 +84,7 @@ struct SignDetailView: View {
         VStack(alignment: .leading, spacing: LayoutConstants.SignDetail.elementSpacing) {
             signHeader
             categoryBadge
+            favoriteOfflineBadge
             
             if let synonyms = viewModel.sign.synonyms, !synonyms.isEmpty {
                 if viewModel.isLoadingSynonym {
@@ -145,6 +146,23 @@ struct SignDetailView: View {
         .background(Color.accentColor.opacity(LayoutConstants.Opacity.accent))
         .cornerRadius(LayoutConstants.SignDetail.badgeCornerRadius)
     }
+
+    @ViewBuilder
+    private var favoriteOfflineBadge: some View {
+        if viewModel.isFavorite, let status = viewModel.favoriteOfflineStatus {
+            HStack(spacing: 6) {
+                Image(systemName: favoriteStatusIcon(for: status))
+                    .font(.caption)
+                Text(status.displayText)
+                    .font(.caption)
+            }
+            .foregroundColor(favoriteStatusColor(for: status))
+            .padding(.horizontal, LayoutConstants.SignDetail.categoryBadgeHorizontalPadding)
+            .padding(.vertical, LayoutConstants.SignDetail.categoryBadgeVerticalPadding)
+            .background(favoriteStatusColor(for: status).opacity(0.12))
+            .cornerRadius(LayoutConstants.SignDetail.badgeCornerRadius)
+        }
+    }
     
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -165,6 +183,28 @@ struct SignDetailView: View {
         async let categoryLoad: Void = viewModel.loadCategoryName()
         viewModel.checkFavoriteStatus()
         _ = await (videoLoad, categoryLoad)
+    }
+
+    private func favoriteStatusColor(for status: FavoriteOfflineStatus) -> Color {
+        switch status {
+        case .pending:
+            return .orange
+        case .readyOffline:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+
+    private func favoriteStatusIcon(for status: FavoriteOfflineStatus) -> String {
+        switch status {
+        case .pending:
+            return "arrow.triangle.2.circlepath"
+        case .readyOffline:
+            return "checkmark.circle.fill"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
     }
 }
 

@@ -67,6 +67,7 @@ struct CategoryDetailView: View {
             sections: viewModel.groupedSigns,
             favoritesRepository: deps.favoritesRepository,
             categoryNamesById: viewModel.categoryNamesById,
+            favoriteOfflineStatusProvider: nil,
             onSignSelected: { sign in
                 selectedSign = sign
             }

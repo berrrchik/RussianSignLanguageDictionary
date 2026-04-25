@@ -4,7 +4,7 @@ import UIKit
 struct AlphabeticScrollbarTableView: UIViewRepresentable {
     let sections: [SearchViewModel.SignSection]
     let favoritesRepository: FavoritesRepositoryProtocol?
-    let categoryNamesById: [String: String]
+    let getCategoryName: (String) -> String
     let onSignSelected: (Sign) -> Void
     
     func makeUIView(context: Context) -> UITableView {
@@ -27,12 +27,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     func updateUIView(_ uiView: UITableView, context: Context) {
         context.coordinator.sections = sections
         context.coordinator.favoritesRepository = favoritesRepository
-        context.coordinator.categoryNamesById = categoryNamesById
+        context.coordinator.getCategoryName = getCategoryName
         context.coordinator.tableView = uiView
-
-        // SwiftUI может вызывать `updateUIView` до того, как UIKit-вью окажется в `window`.
-        // В этот момент принудительный `reloadData()` может приводить к предупреждению
-        // "UITableView was told to layout its visible cells ... without being in the view hierarchy".
         if uiView.window != nil {
             uiView.reloadData()
         } else {
@@ -53,7 +49,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         Coordinator(
             sections: sections,
             favoritesRepository: favoritesRepository,
-            categoryNamesById: categoryNamesById,
+            getCategoryName: getCategoryName,
             onSignSelected: onSignSelected
         )
     }
@@ -61,26 +57,47 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
         var sections: [SearchViewModel.SignSection]
         var favoritesRepository: FavoritesRepositoryProtocol?
-        var categoryNamesById: [String: String]
+        var getCategoryName: (String) -> String
         let onSignSelected: (Sign) -> Void
         weak var tableView: UITableView?
+        private var notificationObserver: NSObjectProtocol?
         
         init(
             sections: [SearchViewModel.SignSection],
             favoritesRepository: FavoritesRepositoryProtocol?,
-            categoryNamesById: [String: String],
+            getCategoryName: @escaping (String) -> String,
             onSignSelected: @escaping (Sign) -> Void
         ) {
             self.sections = sections
             self.favoritesRepository = favoritesRepository
-            self.categoryNamesById = categoryNamesById
+            self.getCategoryName = getCategoryName
             self.onSignSelected = onSignSelected
             super.init()
+            
+            notificationObserver = NotificationCenter.default.addObserver(
+                forName: .categoriesDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.reloadVisibleCells()
+            }
         }
         
         func cleanup() {
             sections.removeAll()
             favoritesRepository = nil
+            if let observer = notificationObserver {
+                NotificationCenter.default.removeObserver(observer)
+                notificationObserver = nil
+            }
+        }
+        
+        private func reloadVisibleCells() {
+            guard let tableView = tableView else { return }
+            guard tableView.window != nil else { return }
+            if let visibleIndexPaths = tableView.indexPathsForVisibleRows {
+                tableView.reloadRows(at: visibleIndexPaths, with: .none)
+            }
         }
         
         // MARK: - UITableViewDataSource
@@ -105,10 +122,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             }
             let sign = sections[indexPath.section].signs[indexPath.row]
             let isFavorite = favoritesRepository?.isFavorite(signId: sign.id) ?? false
-            let categoryName = CategoryDisplayDataHelper.name(
-                for: sign.categoryId,
-                in: categoryNamesById
-            )
+            let categoryName = getCategoryName(sign.categoryId)
             
             cell.configure(with: sign, categoryName: categoryName, isFavorite: isFavorite)
             

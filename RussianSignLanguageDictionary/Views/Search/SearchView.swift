@@ -98,6 +98,7 @@ struct SearchView: View {
             sections: viewModel.groupedResults,
             favoritesRepository: deps.favoritesRepository,
             categoryNamesById: viewModel.categoryNamesById,
+            favoriteOfflineStatusProvider: nil,
             onSignSelected: { sign in
                 selectedSign = sign
             }

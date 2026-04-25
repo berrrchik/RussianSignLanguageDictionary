@@ -39,7 +39,7 @@ struct FavoritesView: View {
                     SignDetailView(sign: sign)
                 }
                 .overlay(alignment: .bottom) {
-                    if let errorMessage = viewModel.errorMessage {
+                    if let errorMessage = viewModel.errorMessage, !viewModel.favoriteSigns.isEmpty {
                         Text(errorMessage)
                             .font(.caption)
                             .foregroundColor(.white)
@@ -66,6 +66,12 @@ struct FavoritesView: View {
         ZStack {
             if viewModel.isLoading && viewModel.favoriteSigns.isEmpty {
                 LoadingView(message: "Загрузка избранного...")
+            } else if let errorMessage = viewModel.errorMessage, viewModel.favoriteSigns.isEmpty {
+                ErrorView(message: errorMessage, retryAction: {
+                    Task {
+                        await viewModel.loadFavorites()
+                    }
+                })
             } else if viewModel.favoriteSigns.isEmpty {
                 emptyStateView
             } else {
@@ -81,6 +87,9 @@ struct FavoritesView: View {
             sections: viewModel.groupedFavorites,
             favoritesRepository: deps.favoritesRepository,
             categoryNamesById: viewModel.categoryNamesById,
+            favoriteOfflineStatusProvider: { signId in
+                viewModel.offlineStatus(for: signId)
+            },
             onSignSelected: { sign in
                 selectedSign = sign
             }
