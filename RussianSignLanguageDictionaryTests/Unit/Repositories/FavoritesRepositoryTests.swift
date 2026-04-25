@@ -1,20 +1,18 @@
+import Combine
 import XCTest
 @testable import RussianSignLanguageDictionary
 
 final class FavoritesRepositoryTests: XCTestCase {
     private var sut: FavoritesRepository!
     private var userDefaults: UserDefaults!
-    private var signRepository: MockSignRepository!
     private var videoCacheService: MockVideoCacheService!
 
     override func setUp() {
         super.setUp()
         userDefaults = makeIsolatedUserDefaults()
-        signRepository = MockSignRepository()
         videoCacheService = MockVideoCacheService()
         sut = FavoritesRepository(
             userDefaults: userDefaults,
-            signRepository: signRepository,
             videoCacheService: videoCacheService
         )
     }
@@ -22,13 +20,13 @@ final class FavoritesRepositoryTests: XCTestCase {
     override func tearDown() {
         sut = nil
         userDefaults = nil
-        signRepository = nil
         videoCacheService = nil
         super.tearDown()
     }
 
     func testGetFavoritesInitiallyEmpty() {
         XCTAssertEqual(sut.getFavorites(), [])
+        XCTAssertEqual(sut.getFavoriteEntries(), [])
     }
 
     func testAddFavoritePersistsWithoutDuplicatesAndPreservesInsertionOrder() {
@@ -37,15 +35,61 @@ final class FavoritesRepositoryTests: XCTestCase {
         sut.addFavorite(signId: "sign-1")
 
         XCTAssertEqual(sut.getFavorites(), ["sign-1", "sign-2"])
+        XCTAssertEqual(sut.getFavoriteEntries().map(\.signId), ["sign-1", "sign-2"])
     }
 
-    func testRemoveFavoriteRemovesOnlyRequestedId() {
-        sut.addFavorite(signId: "sign-1")
-        sut.addFavorite(signId: "sign-2")
+    func testAddFavoriteWithSnapshotPersistsSnapshotAndPendingStatus() {
+        let sign = makeSign(id: "sign-1", videos: [makeVideo(id: 1)])
+
+        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+
+        let entry = sut.getFavoriteEntry(signId: "sign-1")
+        XCTAssertEqual(entry?.snapshot?.sign, sign)
+        XCTAssertEqual(entry?.snapshot?.categoryName, "Категория 1")
+        XCTAssertEqual(entry?.offlineStatus, .pending)
+    }
+
+    func testUpdateOfflineStatusPersistsAcrossRepositoryInstances() {
+        sut.addFavorite(sign: makeSign(id: "sign-1", videos: [makeVideo(id: 1), makeVideo(id: 2)]), categoryName: "Категория 1")
+        sut.updateOfflineStatus(
+            signId: "sign-1",
+            status: .readyOffline,
+            downloadedVideoIds: [1, 2],
+            requiredVideoIds: [1, 2]
+        )
+
+        let secondRepository = FavoritesRepository(
+            userDefaults: userDefaults,
+            videoCacheService: videoCacheService
+        )
+
+        let entry = secondRepository.getFavoriteEntry(signId: "sign-1")
+        XCTAssertEqual(entry?.offlineStatus, .readyOffline)
+        XCTAssertEqual(entry?.downloadedVideos.map(\.videoId), [1, 2])
+        XCTAssertEqual(entry?.requiredVideoIds, [1, 2])
+    }
+
+    func testLegacyFavoriteIdsMigrateIntoFavoriteEntries() {
+        let legacyDefaults = makeIsolatedUserDefaults()
+        legacyDefaults.set(["sign-1", "sign-2"], forKey: "com.rsl.favorites")
+
+        let migratedRepository = FavoritesRepository(
+            userDefaults: legacyDefaults,
+            videoCacheService: videoCacheService
+        )
+
+        let entries = migratedRepository.getFavoriteEntries()
+        XCTAssertEqual(entries.map(\.signId), ["sign-1", "sign-2"])
+        XCTAssertEqual(entries.map(\.offlineStatus), [.pending, .pending])
+    }
+
+    func testRemoveFavoriteClearsCachedVideosUsingStoredSnapshot() {
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        sut.addFavorite(sign: makeSign(id: "sign-1", videos: videos), categoryName: "Категория 1")
 
         sut.removeFavorite(signId: "sign-1")
 
-        XCTAssertEqual(sut.getFavorites(), ["sign-2"])
+        XCTAssertEqual(videoCacheService.clearCacheCallCount, 1)
         XCTAssertFalse(sut.isFavorite(signId: "sign-1"))
     }
 
@@ -57,18 +101,6 @@ final class FavoritesRepositoryTests: XCTestCase {
 
         XCTAssertEqual(sut.getFavorites(), [])
         XCTAssertEqual(videoCacheService.clearAllCacheCallCount, 1)
-    }
-
-    func testFavoritesPersistAcrossRepositoryInstances() {
-        sut.addFavorite(signId: "sign-1")
-
-        let secondRepository = FavoritesRepository(
-            userDefaults: userDefaults,
-            signRepository: signRepository,
-            videoCacheService: videoCacheService
-        )
-
-        XCTAssertEqual(secondRepository.getFavorites(), ["sign-1"])
     }
 
     func testFavoritesPublisherEmitsUpdatedFavorites() async {
@@ -83,64 +115,6 @@ final class FavoritesRepositoryTests: XCTestCase {
 
         await fulfillment(of: [expected], timeout: 1.0)
         cancellable.cancel()
-    }
-
-    func testAddFavoritePreloadsVideosWhenSignExists() async {
-        signRepository.mockSigns = [makeSign(id: "sign-1", videos: [makeVideo(id: 1), makeVideo(id: 2)])]
-
-        sut.addFavorite(signId: "sign-1")
-
-        let preloaded = await waitUntil {
-            self.videoCacheService.preloadVideoCallCount == 2
-        }
-        XCTAssertTrue(preloaded)
-        XCTAssertEqual(videoCacheService.lastPreloadedVideos.map(\.id), [1, 2])
-    }
-
-    func testAddFavoriteSkipsPreloadWhenSignMissing() async {
-        signRepository.mockSigns = []
-
-        sut.addFavorite(signId: "missing-sign")
-
-        let noPreload = await waitUntil {
-            self.videoCacheService.preloadVideoCallCount == 0
-        }
-        XCTAssertTrue(noPreload)
-    }
-
-    func testAddFavoriteSkipsPreloadWhenSignHasNoVideos() async {
-        signRepository.mockSigns = [makeSign(id: "sign-1", videos: nil)]
-
-        sut.addFavorite(signId: "sign-1")
-
-        let noPreload = await waitUntil {
-            self.videoCacheService.preloadVideoCallCount == 0
-        }
-        XCTAssertTrue(noPreload)
-    }
-
-    func testRemoveFavoriteClearsCachedVideosForKnownSign() async {
-        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
-        signRepository.mockSigns = [makeSign(id: "sign-1", videos: videos)]
-        sut.addFavorite(signId: "sign-1")
-
-        sut.removeFavorite(signId: "sign-1")
-
-        let cleared = await waitUntil {
-            self.videoCacheService.clearCacheCallCount > 0
-        }
-        XCTAssertTrue(cleared)
-    }
-
-    func testRemoveFavoriteDoesNotClearCacheWhenSignMissing() async {
-        signRepository.mockSigns = []
-
-        sut.removeFavorite(signId: "sign-1")
-
-        let noCleanup = await waitUntil {
-            self.videoCacheService.clearCacheCallCount == 0
-        }
-        XCTAssertTrue(noCleanup)
     }
 
     func testBackgroundThreadAddFavoriteMarshalsToMainThread() async {
@@ -200,24 +174,6 @@ final class FavoritesRepositoryTests: XCTestCase {
             createdAt: nil,
             updatedAt: nil
         )
-    }
-
-    private func waitUntil(
-        timeout: TimeInterval = 1.0,
-        pollInterval: UInt64 = 20_000_000,
-        condition: @escaping () -> Bool
-    ) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-
-        while Date() < deadline {
-            if condition() {
-                return true
-            }
-
-            try? await Task.sleep(nanoseconds: pollInterval)
-        }
-
-        return condition()
     }
 
     private func runOffMainThread(_ work: @escaping () -> Void) async {

@@ -19,6 +19,7 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
             ],
             favoritesRepository: nil,
             categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: nil,
             onSignSelected: { _ in }
         )
         let coordinator = tableViewWrapper.makeCoordinator()
