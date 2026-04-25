@@ -11,6 +11,7 @@ final class FavoritesViewModel: ObservableObject {
     
     @Published private(set) var favoriteSigns: [Sign] = []
     @Published private(set) var categoryNamesById: [String: String] = [:]
+    @Published private(set) var offlineStatusBySignId: [String: FavoriteOfflineStatus] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
     @Published var sortOption: SortOption = .dateAddedDesc {
@@ -59,7 +60,7 @@ final class FavoritesViewModel: ObservableObject {
                 self?.applyFavoriteData(
                     allSigns: updatedData.signs,
                     categories: updatedData.categories,
-                    favoriteIds: favoritesRepository.getFavorites()
+                    entries: favoritesRepository.getFavoriteEntries()
                 )
             }
             .store(in: &cancellables)
@@ -70,38 +71,49 @@ final class FavoritesViewModel: ObservableObject {
     func loadFavorites() async {
         isLoading = true
         errorMessage = nil
-        
-        let favoriteIds = favoritesRepository.getFavorites()
-        
-        guard !favoriteIds.isEmpty else {
+
+        let entries = favoritesRepository.getFavoriteEntries()
+
+        guard !entries.isEmpty else {
             favoriteSigns = []
             categoryNamesById = [:]
+            offlineStatusBySignId = [:]
             isLoading = false
             return
         }
-        
+
         do {
             async let loadedSignsTask = signRepository.loadAllSigns()
             async let loadedCategoriesTask = signRepository.loadCategories()
             let (allSigns, categories) = try await (loadedSignsTask, loadedCategoriesTask)
-            applyFavoriteData(allSigns: allSigns, categories: categories, favoriteIds: favoriteIds)
+            applyFavoriteData(allSigns: allSigns, categories: categories, entries: entries)
         } catch {
-            errorMessage = ErrorMessageMapper.message(for: error)
-            logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
+            if applySnapshotFallback(entries: entries) {
+                logger.warning("⚠️ Основная загрузка избранного не удалась, показаны snapshot данные")
+            } else {
+                errorMessage = ErrorMessageMapper.message(for: error)
+                logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
+            }
         }
-        
+
         isLoading = false
     }
     
     func removeFavorite(signId: String) {
         favoritesRepository.removeFavorite(signId: signId)
         favoriteSigns.removeAll { $0.id == signId }
+        offlineStatusBySignId.removeValue(forKey: signId)
+        if favoriteSigns.isEmpty {
+            errorMessage = nil
+        }
     }
     
     func clearAllFavorites() {
         favoritesRepository.clearAllFavorites()
         favoriteSigns = []
         categoryNamesById = [:]
+        offlineStatusBySignId = [:]
+        errorMessage = nil
     }
     
     func isFavorite(signId: String) -> Bool {
@@ -113,27 +125,99 @@ final class FavoritesViewModel: ObservableObject {
     var groupedFavorites: [SearchViewModel.SignSection] {
         SignGroupingHelper.groupByFirstLetter(favoriteSigns)
     }
+
+    func offlineStatus(for signId: String) -> FavoriteOfflineStatus? {
+        offlineStatusBySignId[signId]
+    }
     
     // MARK: - Private Methods
 
-    private func applyFavoriteData(allSigns: [Sign], categories: [Category], favoriteIds: [String]) {
+    private func applyFavoriteData(allSigns: [Sign], categories: [Category], entries: [FavoriteEntry]) {
         let signsById = Dictionary(uniqueKeysWithValues: allSigns.map { ($0.id, $0) })
-        let loadedSigns = favoriteIds.compactMap { signsById[$0] }
-
-        favoriteSigns = loadedSigns
-        categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(
+        let categoryNames = CategoryDisplayDataHelper.categoryNamesById(
             from: CategoryDisplayDataHelper.sortedCategories(categories)
         )
+        var loadedSigns: [Sign] = []
+        var resolvedCategoryNames: [String: String] = [:]
+        var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
+        var snapshotFallbackCount = 0
+        var missingIds: [String] = []
+
+        for entry in entries {
+            resolvedStatuses[entry.signId] = entry.offlineStatus
+
+            if let liveSign = signsById[entry.signId] {
+                loadedSigns.append(liveSign)
+                resolvedCategoryNames[liveSign.categoryId] = CategoryDisplayDataHelper.name(
+                    for: liveSign.categoryId,
+                    in: categoryNames
+                )
+                favoritesRepository.updateFavoriteSnapshot(
+                    sign: liveSign,
+                    categoryName: CategoryDisplayDataHelper.name(for: liveSign.categoryId, in: categoryNames)
+                )
+                continue
+            }
+
+            if let snapshot = entry.snapshot {
+                loadedSigns.append(snapshot.sign)
+                resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
+                snapshotFallbackCount += 1
+                continue
+            }
+
+            missingIds.append(entry.signId)
+        }
+
+        favoriteSigns = loadedSigns
+        categoryNamesById = resolvedCategoryNames
+        offlineStatusBySignId = resolvedStatuses
         sortFavorites()
 
-        let failedCount = favoriteIds.count - loadedSigns.count
-        if failedCount > 0 {
-            errorMessage = "Не удалось загрузить \(failedCount) жестов"
-            let missingIds = Set(favoriteIds).subtracting(loadedSigns.map { $0.id })
-            logger.warning("⚠️ Missing signs: \(missingIds)")
+        if !missingIds.isEmpty {
+            errorMessage = "Не удалось загрузить \(missingIds.count) жестов"
+            logger.warning("⚠️ Missing signs: \(Set(missingIds))")
+        } else if snapshotFallbackCount > 0 {
+            errorMessage = "Часть избранного показана из сохранённых данных."
         } else {
             errorMessage = nil
         }
+    }
+
+    private func applySnapshotFallback(entries: [FavoriteEntry]) -> Bool {
+        var loadedSigns: [Sign] = []
+        var resolvedCategoryNames: [String: String] = [:]
+        var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
+        var missingCount = 0
+
+        for entry in entries {
+            resolvedStatuses[entry.signId] = entry.offlineStatus
+
+            guard let snapshot = entry.snapshot else {
+                missingCount += 1
+                continue
+            }
+
+            loadedSigns.append(snapshot.sign)
+            resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
+        }
+
+        guard !loadedSigns.isEmpty else {
+            return false
+        }
+
+        favoriteSigns = loadedSigns
+        categoryNamesById = resolvedCategoryNames
+        offlineStatusBySignId = resolvedStatuses
+        sortFavorites()
+
+        if missingCount > 0 {
+            errorMessage = "Часть избранного показана из сохранённых данных."
+        } else {
+            errorMessage = "Показаны сохранённые избранные данные."
+        }
+
+        return true
     }
     
     private func sortFavorites() {

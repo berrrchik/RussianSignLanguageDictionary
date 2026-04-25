@@ -11,6 +11,7 @@ final class SignDetailViewModel: ObservableObject {
     @Published private(set) var isLoadingVideo: Bool = false
     @Published private(set) var videoErrorMessage: String?
     @Published var isFavorite: Bool = false
+    @Published private(set) var favoriteOfflineStatus: FavoriteOfflineStatus?
     @Published private(set) var categoryName: String
     
     // MARK: - Synonym Navigation Properties
@@ -24,6 +25,7 @@ final class SignDetailViewModel: ObservableObject {
     
     private let logger = Logger(subsystem: "com.rsl.signDetail", category: "SignDetailViewModel")
     private var cancellables = Set<AnyCancellable>()
+    private var favoritePreparationTask: Task<Void, Never>?
     
     let sign: Sign
     let visitedSignIds: Set<String>
@@ -95,6 +97,7 @@ final class SignDetailViewModel: ObservableObject {
         self.favoritesRepository = favoritesRepository
         self.visitedSignIds = visitedSignIds.union([sign.id])
         self.isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+        self.favoriteOfflineStatus = favoritesRepository.getFavoriteEntry(signId: sign.id)?.offlineStatus
         self.categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: [:])
 
         signRepository.dataUpdatedPublisher
@@ -177,10 +180,24 @@ final class SignDetailViewModel: ObservableObject {
     
     func toggleFavorite() {
         if isFavorite {
+            favoritePreparationTask?.cancel()
             favoritesRepository.removeFavorite(signId: sign.id)
+            favoriteOfflineStatus = nil
             AnalyticsService.logSignUnfavorited(signId: sign.id, word: sign.word)
         } else {
-            favoritesRepository.addFavorite(signId: sign.id)
+            favoritesRepository.addFavorite(sign: sign, categoryName: categoryName)
+            let requiredVideoIds = sign.videosArray.map(\.id)
+            let initialStatus: FavoriteOfflineStatus = requiredVideoIds.isEmpty ? .readyOffline : .pending
+            favoritesRepository.updateOfflineStatus(
+                signId: sign.id,
+                status: initialStatus,
+                downloadedVideoIds: [],
+                requiredVideoIds: requiredVideoIds
+            )
+            favoriteOfflineStatus = initialStatus
+            if !requiredVideoIds.isEmpty {
+                startOfflinePreparation(requiredVideoIds: requiredVideoIds)
+            }
             AnalyticsService.logSignFavorited(signId: sign.id, word: sign.word)
         }
         isFavorite.toggle()
@@ -188,12 +205,16 @@ final class SignDetailViewModel: ObservableObject {
     
     func checkFavoriteStatus() {
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
+        favoriteOfflineStatus = favoritesRepository.getFavoriteEntry(signId: sign.id)?.offlineStatus
     }
 
     func loadCategoryName() async {
         do {
             let categories = try await signRepository.loadCategories()
             applyCategoryName(from: categories)
+            if isFavorite {
+                favoritesRepository.updateFavoriteSnapshot(sign: sign, categoryName: categoryName)
+            }
         } catch {
             logger.warning("⚠️ Не удалось загрузить название категории: \(error.localizedDescription)")
         }
@@ -241,6 +262,48 @@ final class SignDetailViewModel: ObservableObject {
             from: CategoryDisplayDataHelper.sortedCategories(categories)
         )
         categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: categoryNamesById)
+    }
+
+    private func startOfflinePreparation(requiredVideoIds: [Int]) {
+        favoritePreparationTask?.cancel()
+        favoritePreparationTask = Task { [weak self] in
+            guard let self else { return }
+            let videos = sign.videosArray
+            var downloadedVideoIds: [Int] = []
+
+            for video in videos {
+                guard !Task.isCancelled else { return }
+
+                do {
+                    _ = try await videoRepository.getVideoURL(for: video, useFavoritesCache: true)
+                    downloadedVideoIds.append(video.id)
+                } catch {
+                    await MainActor.run {
+                        guard self.favoritesRepository.isFavorite(signId: self.sign.id) else { return }
+                        self.favoritesRepository.updateOfflineStatus(
+                            signId: self.sign.id,
+                            status: .failed,
+                            downloadedVideoIds: downloadedVideoIds,
+                            requiredVideoIds: requiredVideoIds
+                        )
+                        self.favoriteOfflineStatus = .failed
+                        self.logger.warning("⚠️ Не удалось подготовить офлайн-видео для \(self.sign.id): \(error.localizedDescription)")
+                    }
+                    return
+                }
+            }
+
+            await MainActor.run {
+                guard self.favoritesRepository.isFavorite(signId: self.sign.id) else { return }
+                self.favoritesRepository.updateOfflineStatus(
+                    signId: self.sign.id,
+                    status: .readyOffline,
+                    downloadedVideoIds: downloadedVideoIds,
+                    requiredVideoIds: requiredVideoIds
+                )
+                self.favoriteOfflineStatus = .readyOffline
+            }
+        }
     }
     
     private func preloadNextVideo() {
