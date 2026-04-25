@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Mock реализация NetworkMonitorProtocol для тестирования
 /// Позволяет симулировать наличие или отсутствие интернета
@@ -7,6 +8,15 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     
     /// Флаг доступности интернета (можно изменять для тестирования)
     var isConnectedValue: Bool = true
+    private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
+
+    var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
+        connectivitySubject.eraseToAnyPublisher()
+    }
+
+    var connectivityStatus: ConnectivityStatus {
+        connectivitySubject.value
+    }
     
     // MARK: - Initialization
     
@@ -34,15 +44,16 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     /// - Parameter connected: true если интернет доступен, false если нет
     func setConnected(_ connected: Bool) {
         isConnectedValue = connected
+        connectivitySubject.send(connected ? .connected : .disconnected)
     }
     
     /// Симулирует потерю интернета
     func simulateNoInternet() {
-        isConnectedValue = false
+        setConnected(false)
     }
     
     /// Симулирует восстановление интернета
     func simulateInternetRestored() {
-        isConnectedValue = true
+        setConnected(true)
     }
 }

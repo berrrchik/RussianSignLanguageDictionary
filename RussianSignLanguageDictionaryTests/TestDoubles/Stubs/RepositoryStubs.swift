@@ -7,6 +7,7 @@ final class SignRepositoryStub: SignRepositoryProtocol {
     var categories: [AppCategory]
     var cachedSignsValue: [Sign]?
     private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    private let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.updated)
 
     init(
         signs: [Sign] = [TestFixtures.sign],
@@ -20,6 +21,14 @@ final class SignRepositoryStub: SignRepositoryProtocol {
 
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject.eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
 
     func loadAllSigns() async throws -> [Sign] {

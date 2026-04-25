@@ -19,6 +19,7 @@ final class MockSignRepository: SignRepositoryProtocol {
     var errorToThrow: SignRepositoryError = .fileNotFound
 
     private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    private let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.updated)
     
     // MARK: - Init
     
@@ -30,6 +31,14 @@ final class MockSignRepository: SignRepositoryProtocol {
 
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject.eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
     
     func loadAllSigns() async throws -> [Sign] {
@@ -77,6 +86,10 @@ final class MockSignRepository: SignRepositoryProtocol {
 
     func cachedSigns() -> [Sign]? {
         shouldFail ? nil : mockSigns
+    }
+
+    func setDataStatus(_ status: RepositoryDataStatus) {
+        dataStatusSubject.send(status)
     }
 }
 

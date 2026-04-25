@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 @testable import RussianSignLanguageDictionary
 
 final class NetworkMonitorSpy: NetworkMonitorProtocol {
@@ -7,6 +8,15 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
 
     var isConnectedValue = true
     var checkConnectionValue = true
+    private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
+
+    var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
+        connectivitySubject.eraseToAnyPublisher()
+    }
+
+    var connectivityStatus: ConnectivityStatus {
+        connectivitySubject.value
+    }
 
     func isConnected() -> Bool {
         isConnectedCallCount += 1
@@ -16,6 +26,12 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
     func checkConnection() async -> Bool {
         checkConnectionCallCount += 1
         return checkConnectionValue
+    }
+
+    func setConnectivityStatus(_ status: ConnectivityStatus) {
+        connectivitySubject.send(status)
+        isConnectedValue = status == .connected
+        checkConnectionValue = status == .connected
     }
 }
 

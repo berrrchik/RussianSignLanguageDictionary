@@ -10,6 +10,7 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     private(set) var searchQueries: [String] = []
 
     let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.idle)
 
     var loadAllSignsResult: Result<[Sign], Error> = .success([])
     var loadCategoriesResult: Result<[AppCategory], Error> = .success([])
@@ -23,6 +24,14 @@ final class SignRepositorySpy: SignRepositoryProtocol {
 
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject.eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
 
     func loadAllSigns() async throws -> [Sign] {
@@ -61,6 +70,10 @@ final class SignRepositorySpy: SignRepositoryProtocol {
 
     func cachedSigns() -> [Sign]? {
         cachedSignsValue
+    }
+
+    func setCurrentDataStatus(_ status: RepositoryDataStatus) {
+        dataStatusSubject.send(status)
     }
 }
 
