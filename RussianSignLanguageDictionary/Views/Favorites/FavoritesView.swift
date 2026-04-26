@@ -10,6 +10,7 @@ struct FavoritesView: View {
         NavigationStack {
             contentView
                 .navigationTitle("Избранное")
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         OfflineStatusToolbarItem()

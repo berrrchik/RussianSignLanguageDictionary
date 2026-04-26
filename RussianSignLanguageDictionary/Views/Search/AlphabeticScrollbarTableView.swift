@@ -4,7 +4,8 @@ import UIKit
 struct AlphabeticScrollbarTableView: UIViewRepresentable {
     let sections: [SearchViewModel.SignSection]
     let favoritesRepository: FavoritesRepositoryProtocol?
-    let getCategoryName: (String) -> String
+    let categoryNamesById: [String: String]
+    let favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
     let onSignSelected: (Sign) -> Void
     
     func makeUIView(context: Context) -> UITableView {
@@ -19,6 +20,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         tableView.sectionIndexTrackingBackgroundColor = .clear
         
         tableView.contentInsetAdjustmentBehavior = .never
+        tableView.sectionHeaderTopPadding = 0
         context.coordinator.tableView = tableView
         
         return tableView
@@ -27,7 +29,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     func updateUIView(_ uiView: UITableView, context: Context) {
         context.coordinator.sections = sections
         context.coordinator.favoritesRepository = favoritesRepository
-        context.coordinator.getCategoryName = getCategoryName
+        context.coordinator.categoryNamesById = categoryNamesById
+        context.coordinator.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
         context.coordinator.tableView = uiView
         if uiView.window != nil {
             uiView.reloadData()
@@ -49,7 +52,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         Coordinator(
             sections: sections,
             favoritesRepository: favoritesRepository,
-            getCategoryName: getCategoryName,
+            categoryNamesById: categoryNamesById,
+            favoriteOfflineStatusProvider: favoriteOfflineStatusProvider,
             onSignSelected: onSignSelected
         )
     }
@@ -57,47 +61,30 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
         var sections: [SearchViewModel.SignSection]
         var favoritesRepository: FavoritesRepositoryProtocol?
-        var getCategoryName: (String) -> String
+        var categoryNamesById: [String: String]
+        var favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
         let onSignSelected: (Sign) -> Void
         weak var tableView: UITableView?
-        private var notificationObserver: NSObjectProtocol?
         
         init(
             sections: [SearchViewModel.SignSection],
             favoritesRepository: FavoritesRepositoryProtocol?,
-            getCategoryName: @escaping (String) -> String,
+            categoryNamesById: [String: String],
+            favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?,
             onSignSelected: @escaping (Sign) -> Void
         ) {
             self.sections = sections
             self.favoritesRepository = favoritesRepository
-            self.getCategoryName = getCategoryName
+            self.categoryNamesById = categoryNamesById
+            self.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
             self.onSignSelected = onSignSelected
             super.init()
-            
-            notificationObserver = NotificationCenter.default.addObserver(
-                forName: .categoriesDidUpdate,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.reloadVisibleCells()
-            }
         }
         
         func cleanup() {
             sections.removeAll()
             favoritesRepository = nil
-            if let observer = notificationObserver {
-                NotificationCenter.default.removeObserver(observer)
-                notificationObserver = nil
-            }
-        }
-        
-        private func reloadVisibleCells() {
-            guard let tableView = tableView else { return }
-            guard tableView.window != nil else { return }
-            if let visibleIndexPaths = tableView.indexPathsForVisibleRows {
-                tableView.reloadRows(at: visibleIndexPaths, with: .none)
-            }
+            favoriteOfflineStatusProvider = nil
         }
         
         // MARK: - UITableViewDataSource
@@ -122,9 +109,18 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             }
             let sign = sections[indexPath.section].signs[indexPath.row]
             let isFavorite = favoritesRepository?.isFavorite(signId: sign.id) ?? false
-            let categoryName = getCategoryName(sign.categoryId)
+            let categoryName = CategoryDisplayDataHelper.name(
+                for: sign.categoryId,
+                in: categoryNamesById
+            )
+            let offlineStatus = favoriteOfflineStatusProvider?(sign.id)
             
-            cell.configure(with: sign, categoryName: categoryName, isFavorite: isFavorite)
+            cell.configure(
+                with: sign,
+                categoryName: categoryName,
+                isFavorite: isFavorite,
+                offlineStatus: offlineStatus
+            )
             
             return cell
         }
@@ -150,7 +146,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         // MARK: - UITableViewDelegate
         
         func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-            tableView.deselectRow(at: indexPath, animated: true)
+            tableView.deselectRow(at: indexPath, animated: false)
             
             guard indexPath.section < sections.count,
                   indexPath.row < sections[indexPath.section].signs.count else {
@@ -158,10 +154,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             }
             
             let sign = sections[indexPath.section].signs[indexPath.row]
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.onSignSelected(sign)
-            }
+            onSignSelected(sign)
         }
         
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {

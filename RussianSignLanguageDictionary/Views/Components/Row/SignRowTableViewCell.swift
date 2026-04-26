@@ -12,7 +12,7 @@ final class SignRowTableViewCell: UITableViewCell {
     
     private let signWordLabel = UILabel()
     private let categoryLabel = UILabel()
-    private let offlineStatusLabel = UILabel()
+    private let offlineStatusIcon = UIImageView()
     private let categoryContainer = UIView()
     private let favoriteIcon = UIImageView()
     private let iconView = UIView()
@@ -34,8 +34,10 @@ final class SignRowTableViewCell: UITableViewCell {
         super.prepareForReuse()
         signWordLabel.text = nil
         categoryLabel.text = nil
-        offlineStatusLabel.text = nil
-        offlineStatusLabel.isHidden = true
+        offlineStatusIcon.image = nil
+        offlineStatusIcon.tintColor = nil
+        offlineStatusIcon.isHidden = true
+        offlineStatusIcon.accessibilityIdentifier = nil
         favoriteIcon.isHidden = true
     }
     
@@ -46,7 +48,7 @@ final class SignRowTableViewCell: UITableViewCell {
     ///   - sign: Жест для отображения
     ///   - categoryName: Название категории
     ///   - isFavorite: Находится ли жест в избранном
-    ///   - offlineStatus: Статус офлайн-подготовки, если нужно показать в списке
+    ///   - offlineStatus: Статус офлайн-подготовки для отображения индикатора в списке
     func configure(
         with sign: Sign,
         categoryName: String,
@@ -56,9 +58,17 @@ final class SignRowTableViewCell: UITableViewCell {
         signWordLabel.text = sign.word
         categoryLabel.text = categoryName
         favoriteIcon.isHidden = !isFavorite
-        offlineStatusLabel.text = offlineStatus?.displayText
-        offlineStatusLabel.textColor = offlineStatusColor(for: offlineStatus)
-        offlineStatusLabel.isHidden = offlineStatus == nil
+        if let symbolName = offlineStatusSymbolName(for: offlineStatus) {
+            offlineStatusIcon.image = UIImage(systemName: symbolName)
+            offlineStatusIcon.tintColor = offlineStatusColor(for: offlineStatus)
+            offlineStatusIcon.isHidden = false
+            offlineStatusIcon.accessibilityIdentifier = "offline-status-\(symbolName)"
+        } else {
+            offlineStatusIcon.image = nil
+            offlineStatusIcon.tintColor = nil
+            offlineStatusIcon.isHidden = true
+            offlineStatusIcon.accessibilityIdentifier = nil
+        }
     }
     
     // MARK: - UI Setup
@@ -67,7 +77,7 @@ final class SignRowTableViewCell: UITableViewCell {
         setupIconView()
         setupSignWordLabel()
         setupCategoryBadge()
-        setupOfflineStatusLabel()
+        setupOfflineStatusIcon()
         setupFavoriteIcon()
         setupConstraints()
         
@@ -125,12 +135,11 @@ final class SignRowTableViewCell: UITableViewCell {
         contentView.addSubview(favoriteIcon)
     }
 
-    private func setupOfflineStatusLabel() {
-        offlineStatusLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        offlineStatusLabel.translatesAutoresizingMaskIntoConstraints = false
-        offlineStatusLabel.numberOfLines = 1
-        offlineStatusLabel.isHidden = true
-        contentView.addSubview(offlineStatusLabel)
+    private func setupOfflineStatusIcon() {
+        offlineStatusIcon.translatesAutoresizingMaskIntoConstraints = false
+        offlineStatusIcon.contentMode = .scaleAspectFit
+        offlineStatusIcon.isHidden = true
+        contentView.addSubview(offlineStatusIcon)
     }
     
     private func setupConstraints() {
@@ -144,19 +153,18 @@ final class SignRowTableViewCell: UITableViewCell {
             // Sign Word Label
             signWordLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             signWordLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
-            signWordLabel.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
+            
+            offlineStatusIcon.leadingAnchor.constraint(equalTo: signWordLabel.trailingAnchor, constant: 6),
+            offlineStatusIcon.centerYAnchor.constraint(equalTo: signWordLabel.centerYAnchor),
+            offlineStatusIcon.widthAnchor.constraint(equalToConstant: 16),
+            offlineStatusIcon.heightAnchor.constraint(equalToConstant: 16),
             
             // Category Container
             categoryContainer.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             categoryContainer.topAnchor.constraint(equalTo: signWordLabel.bottomAnchor, constant: 4),
             categoryContainer.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
             categoryContainer.heightAnchor.constraint(equalToConstant: 24),
-
-            // Offline Status Label
-            offlineStatusLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
-            offlineStatusLabel.topAnchor.constraint(equalTo: categoryContainer.bottomAnchor, constant: 4),
-            offlineStatusLabel.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
-            offlineStatusLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+            categoryContainer.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
             
             // Category Label
             categoryLabel.leadingAnchor.constraint(equalTo: categoryContainer.leadingAnchor, constant: 10),
@@ -171,17 +179,28 @@ final class SignRowTableViewCell: UITableViewCell {
             favoriteIcon.heightAnchor.constraint(equalToConstant: 24)
         ])
     }
-
+    
     private func offlineStatusColor(for status: FavoriteOfflineStatus?) -> UIColor {
         switch status {
-        case .pending:
-            return .systemOrange
         case .readyOffline:
             return .systemGreen
         case .failed:
             return .systemRed
+        case .pending:
+            return .systemOrange
         case nil:
             return .secondaryLabel
+        }
+    }
+
+    private func offlineStatusSymbolName(for status: FavoriteOfflineStatus?) -> String? {
+        switch status {
+        case .readyOffline:
+            return "arrow.down.to.line.compact"
+        case .failed:
+            return "exclamationmark.circle"
+        case .pending, nil:
+            return nil
         }
     }
 }
