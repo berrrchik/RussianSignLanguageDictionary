@@ -124,3 +124,10 @@ GoogleService-Info.plist
 # Local Ruby/Bundler artifacts
 .bundle/
 vendor/
+# Added by code-review-graph
+.code-review-graph/
+.claude/
+.cursorrules
+.mcp.json
+.opencode.json
+.windsurfrules
