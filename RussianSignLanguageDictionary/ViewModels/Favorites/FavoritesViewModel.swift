@@ -157,8 +157,7 @@ final class FavoritesViewModel: ObservableObject {
         var loadedSigns: [Sign] = []
         var resolvedCategoryNames: [String: String] = [:]
         var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
-        var snapshotFallbackCount = 0
-        var missingIds: [String] = []
+        var removedIds: [String] = []
 
         for entry in entries {
             resolvedStatuses[entry.signId] = entry.offlineStatus
@@ -176,14 +175,9 @@ final class FavoritesViewModel: ObservableObject {
                 continue
             }
 
-            if let snapshot = entry.snapshot {
-                loadedSigns.append(snapshot.sign)
-                resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
-                snapshotFallbackCount += 1
-                continue
-            }
-
-            missingIds.append(entry.signId)
+            favoritesRepository.removeFavorite(signId: entry.signId)
+            resolvedStatuses.removeValue(forKey: entry.signId)
+            removedIds.append(entry.signId)
         }
 
         favoriteSigns = loadedSigns
@@ -191,14 +185,10 @@ final class FavoritesViewModel: ObservableObject {
         offlineStatusBySignId = resolvedStatuses
         sortFavorites()
 
-        if !missingIds.isEmpty {
-            errorMessage = "Не удалось загрузить \(missingIds.count) жестов"
-            logger.warning("⚠️ Missing signs: \(Set(missingIds))")
-        } else if snapshotFallbackCount > 0 {
-            errorMessage = "Часть избранного показана из сохранённых данных."
-        } else {
-            errorMessage = nil
+        if !removedIds.isEmpty {
+            logger.warning("⚠️ Removed missing favorites from local storage: \(Set(removedIds))")
         }
+        errorMessage = nil
     }
 
     private func applySnapshotFallback(entries: [FavoriteEntry]) -> Bool {
@@ -228,11 +218,7 @@ final class FavoritesViewModel: ObservableObject {
         offlineStatusBySignId = resolvedStatuses
         sortFavorites()
 
-        if missingCount > 0 {
-            errorMessage = "Часть избранного показана из сохранённых данных."
-        } else {
-            errorMessage = "Показаны сохранённые избранные данные."
-        }
+        errorMessage = nil
 
         return true
     }

@@ -11,8 +11,6 @@ final class CategoriesViewModel: ObservableObject {
     
     @Published private(set) var categories: [Category] = []
     @Published private(set) var state: ViewState = .idle
-    @Published private(set) var isOfflineMode: Bool = false
-    @Published private(set) var offlineMessage: String?
     
     // MARK: - ViewState
     
@@ -26,7 +24,6 @@ final class CategoriesViewModel: ObservableObject {
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol
-    private let networkMonitor: NetworkMonitorProtocol
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Init
@@ -35,18 +32,13 @@ final class CategoriesViewModel: ObservableObject {
     convenience init() {
         let container = DIContainer.shared
         self.init(
-            signRepository: container.resolve(SignRepositoryProtocol.self),
-            networkMonitor: container.resolve(NetworkMonitorProtocol.self)
+            signRepository: container.resolve(SignRepositoryProtocol.self)
         )
     }
     
     /// Полный init для тестов и preview (constructor injection)
-    init(
-        signRepository: SignRepositoryProtocol,
-        networkMonitor: NetworkMonitorProtocol
-    ) {
+    init(signRepository: SignRepositoryProtocol) {
         self.signRepository = signRepository
-        self.networkMonitor = networkMonitor
 
         signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
@@ -54,29 +46,22 @@ final class CategoriesViewModel: ObservableObject {
                 self?.applyCategories(updatedData.categories)
             }
             .store(in: &cancellables)
+
     }
     
     // MARK: - Public Methods
     
     func loadCategories() async {
         state = .loading
-        isOfflineMode = false
-        offlineMessage = nil
         
         do {
             let loadedCategories = try await signRepository.loadCategories()
             applyCategories(loadedCategories)
             state = .loaded
-            
-            let isConnected = await networkMonitor.checkConnection()
-            if !isConnected {
-                isOfflineMode = true
-                offlineMessage = "Работа в офлайн-режиме. Показаны сохранённые данные."
-            }
         } catch let error as SignRepositoryError {
             state = .error(errorMessage(for: error))
         } catch {
-            state = .error("Произошла неизвестная ошибка")
+            state = .error(ErrorMessageMapper.message(for: error))
         }
     }
     

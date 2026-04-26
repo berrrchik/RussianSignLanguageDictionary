@@ -153,7 +153,7 @@ struct SignDetailView: View {
             HStack(spacing: 6) {
                 Image(systemName: favoriteStatusIcon(for: status))
                     .font(.caption)
-                Text(status.displayText)
+                Text(ErrorMessageMapper.message(for: status))
                     .font(.caption)
             }
             .foregroundColor(favoriteStatusColor(for: status))

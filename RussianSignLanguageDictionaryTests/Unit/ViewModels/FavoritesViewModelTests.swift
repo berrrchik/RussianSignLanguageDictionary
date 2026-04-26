@@ -68,10 +68,10 @@ final class FavoritesViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1"])
         XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .readyOffline)
-        XCTAssertEqual(sut.errorMessage, "Показаны сохранённые избранные данные.")
+        XCTAssertNil(sut.errorMessage)
     }
 
-    func testLoadFavoritesUsesSnapshotForMissingLiveSignInsteadOfDroppingListItem() async {
+    func testLoadFavoritesRemovesMissingLiveSignsFromFavorites() async {
         favoritesRepository.entries = [
             FavoriteEntry(
                 signId: "sign-1",
@@ -89,10 +89,11 @@ final class FavoritesViewModelTests: XCTestCase {
 
         await sut.loadFavorites()
 
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1", "sign-2"])
-        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .failed)
+        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2"])
+        XCTAssertNil(sut.offlineStatus(for: "sign-1"))
         XCTAssertEqual(sut.offlineStatus(for: "sign-2"), .pending)
-        XCTAssertEqual(sut.errorMessage, "Часть избранного показана из сохранённых данных.")
+        XCTAssertNil(sut.errorMessage)
+        XCTAssertEqual(favoritesRepository.removeFavoriteCalls, ["sign-1"])
     }
 
     func testLoadFavoritesReturnsEmptyStateWhenFavoritesListIsEmpty() async {

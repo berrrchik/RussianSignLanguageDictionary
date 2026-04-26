@@ -265,7 +265,7 @@ final class SignDetailViewModelTests: XCTestCase {
 
         sut.navigateToSign("synonym-2")
         let didShowRetryableError = await waitUntil {
-            sut.synonymError?.contains("Не удалось загрузить жест") == true
+            sut.synonymError == "Не удалось загрузить данные"
         }
         XCTAssertTrue(didShowRetryableError)
 

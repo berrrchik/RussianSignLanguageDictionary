@@ -52,7 +52,10 @@ struct LessonDetailView: View {
         } else if let errorMessage = viewModel.videoErrorMessage {
             videoPlaceholder
                 .overlay {
-                    ErrorView(message: errorMessage)
+                    ErrorView(
+                        message: errorMessage,
+                        retryAction: { Task { await viewModel.loadVideo() } }
+                    )
                 }
         } else if let videoURL = viewModel.videoURL {
             VideoPlayerView(videoURL: videoURL, orientation: .horizontal)

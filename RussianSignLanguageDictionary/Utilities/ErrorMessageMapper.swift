@@ -26,6 +26,17 @@ enum ErrorMessageMapper {
             return "Сервер недоступен. Показаны сохранённые данные."
         }
     }
+
+    static func message(for status: FavoriteOfflineStatus) -> String {
+        switch status {
+        case .pending:
+            return "Подготавливается для офлайн."
+        case .readyOffline:
+            return "Доступно офлайн."
+        case .failed:
+            return "Не удалось подготовить офлайн."
+        }
+    }
     
     // MARK: - SignRepositoryError Mapping
     

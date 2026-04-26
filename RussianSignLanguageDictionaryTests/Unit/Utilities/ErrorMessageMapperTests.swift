@@ -128,6 +128,10 @@ final class ErrorMessageMapperTests: XCTestCase {
         )
     }
 
+    func testMapsFavoriteOfflineStatus() {
+        XCTAssertEqual(ErrorMessageMapper.message(for: FavoriteOfflineStatus.pending), "Подготавливается для офлайн.")
+    }
+
     func testGenericMessageUsesTypedOverloadsWhenPossible() {
         XCTAssertEqual(
             ErrorMessageMapper.message(for: SignRepositoryError.fileNotFound as Error),

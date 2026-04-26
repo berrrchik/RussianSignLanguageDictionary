@@ -244,7 +244,7 @@ final class SignDetailViewModel: ObservableObject {
                     isLoadingSynonym = false
                 }
             } catch {
-                synonymError = "Не удалось загрузить жест: \(error.localizedDescription)"
+                synonymError = ErrorMessageMapper.message(for: error)
                 isLoadingSynonym = false
             }
         }

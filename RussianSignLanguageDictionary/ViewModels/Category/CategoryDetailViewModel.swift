@@ -69,7 +69,7 @@ final class CategoryDetailViewModel: ObservableObject {
         } catch let error as SignRepositoryError {
             state = .error(errorMessage(for: error))
         } catch {
-            state = .error("Произошла неизвестная ошибка")
+            state = .error(ErrorMessageMapper.message(for: error))
         }
     }
     

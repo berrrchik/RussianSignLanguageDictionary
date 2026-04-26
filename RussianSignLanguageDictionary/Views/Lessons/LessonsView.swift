@@ -12,7 +12,11 @@ struct LessonsView: View {
                 case .loaded:
                     lessonsContent
                 case .error(let message):
-                    ErrorView(message: message)
+                    ErrorView(message: message, retryAction: {
+                        Task {
+                            await viewModel.loadLessons()
+                        }
+                    })
                 }
             }
             .navigationTitle("Обучение")

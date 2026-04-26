@@ -183,18 +183,6 @@ final class SearchViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoading)
     }
 
-    func testLoadAllSignsEnablesOfflineModeWhenNetworkUnavailable() async {
-        let signs = makeSigns()
-        signRepository.loadAllSignsResult = .success(signs)
-        signRepository.loadCategoriesResult = .success(makeCategories())
-        networkMonitor.checkConnectionValue = false
-
-        await sut.loadAllSigns()
-
-        XCTAssertTrue(sut.isOfflineMode)
-        XCTAssertNotNil(sut.offlineMessage)
-    }
-
     func testPerformSearchCancelsPreviousTaskOnQueryChange() async {
         let signs = makeSigns()
         signRepository.cachedSignsValue = signs

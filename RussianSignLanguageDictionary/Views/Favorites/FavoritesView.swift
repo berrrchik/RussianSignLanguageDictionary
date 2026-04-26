@@ -39,18 +39,6 @@ struct FavoritesView: View {
                 .navigationDestination(item: $selectedSign) { sign in
                     SignDetailView(sign: sign)
                 }
-                .overlay(alignment: .bottom) {
-                    if let errorMessage = viewModel.errorMessage, !viewModel.favoriteSigns.isEmpty {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, LayoutConstants.Toast.horizontalPadding)
-                            .padding(.vertical, LayoutConstants.Toast.verticalPadding)
-                            .background(Color.orange)
-                            .cornerRadius(LayoutConstants.Toast.cornerRadius)
-                            .padding(.bottom, LayoutConstants.Toast.bottomPadding)
-                    }
-                }
                 .onAppear {
                     AnalyticsService.logScreenView(screenName: "favorites", screenClass: "FavoritesView")
                 }
@@ -64,20 +52,18 @@ struct FavoritesView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        ZStack {
-            if viewModel.isLoading && viewModel.favoriteSigns.isEmpty {
-                LoadingView(message: "Загрузка избранного...")
-            } else if let errorMessage = viewModel.errorMessage, viewModel.favoriteSigns.isEmpty {
-                ErrorView(message: errorMessage, retryAction: {
-                    Task {
-                        await viewModel.loadFavorites()
-                    }
-                })
-            } else if viewModel.favoriteSigns.isEmpty {
-                emptyStateView
-            } else {
-                favoritesListView
-            }
+        if viewModel.isLoading && viewModel.favoriteSigns.isEmpty {
+            LoadingView(message: "Загрузка избранного...")
+        } else if let errorMessage = viewModel.errorMessage, viewModel.favoriteSigns.isEmpty {
+            ErrorView(message: errorMessage, retryAction: {
+                Task {
+                    await viewModel.loadFavorites()
+                }
+            })
+        } else if viewModel.favoriteSigns.isEmpty {
+            emptyStateView
+        } else {
+            favoritesListView
         }
     }
     
