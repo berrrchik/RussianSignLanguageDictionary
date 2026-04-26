@@ -55,6 +55,16 @@ final class SignRepositoryFake: SignRepositoryProtocol {
     func cachedSigns() -> [Sign]? {
         cachedSignsStorage
     }
+
+    func cachedData() -> SyncData? {
+        guard let cachedSignsStorage else { return nil }
+        return SyncData(
+            categories: Array(categoriesById.values).sorted { $0.order < $1.order },
+            signs: cachedSignsStorage,
+            lessons: [],
+            lastUpdated: Date()
+        )
+    }
 }
 
 final class FavoritesRepositoryFake: FavoritesRepositoryProtocol {
@@ -69,6 +79,18 @@ final class FavoritesRepositoryFake: FavoritesRepositoryProtocol {
     }
 
     func getFavoriteEntries() -> [FavoriteEntry] {
+        entries
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() -> [FavoriteEntry] {
         entries
     }
 

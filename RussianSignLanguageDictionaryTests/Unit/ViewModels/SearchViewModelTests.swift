@@ -14,6 +14,7 @@ final class SearchViewModelTests: XCTestCase {
         signRepository = SignRepositorySpy()
         signRepository.loadAllSignsResult = .success([])
         signRepository.cachedSignsValue = nil
+        signRepository.cachedDataValue = nil
         networkMonitor = NetworkMonitorSpy()
         networkMonitor.checkConnectionValue = true
         hybridSearchService = HybridSearchServiceSpy()
@@ -147,10 +148,15 @@ final class SearchViewModelTests: XCTestCase {
         XCTAssertNil(sut.errorMessage)
     }
 
-    func testPreloadFromCacheInitializesResultsAndReadyState() {
+    func testPreloadFromCachedDataInitializesResultsCategoryNamesAndSkipsReload() async {
         let signs = makeSigns()
-        signRepository.cachedSignsValue = signs
-        signRepository.loadCategoriesResult = .success(makeCategories())
+        let categories = makeCategories()
+        signRepository.cachedDataValue = SyncData(
+            categories: categories,
+            signs: signs,
+            lessons: [],
+            lastUpdated: Date()
+        )
 
         let sut = SearchViewModel(
             signRepository: signRepository,
@@ -159,7 +165,13 @@ final class SearchViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(sut.searchResults.map(\.id), signs.map(\.id))
+        XCTAssertEqual(sut.categoryNamesById["category-1"], "Категория 1")
         XCTAssertTrue(sut.isReady)
+
+        await sut.loadAllSigns()
+
+        XCTAssertEqual(signRepository.loadAllSignsCallCount, 0)
+        XCTAssertEqual(signRepository.loadCategoriesCallCount, 0)
     }
 
     func testLoadAllSignsMapsErrorMessage() async {

@@ -237,6 +237,13 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Private Methods
 
     private func preloadFromCache() {
+        if let cachedData = signRepository.cachedData(), !cachedData.signs.isEmpty {
+            applyLoadedData(signs: cachedData.signs, categories: cachedData.categories)
+            searchResults = cachedData.signs
+            hasLoadedInitialData = true
+            return
+        }
+
         guard let cached = signRepository.cachedSigns(), !cached.isEmpty else { return }
         // Обязательно через updateSearchData — иначе hybridSearchService остаётся nil
         // и loadAllSigns() выходит по раннему guard без построения гибридного поиска.

@@ -55,6 +55,16 @@ final class SignRepositoryStub: SignRepositoryProtocol {
     func cachedSigns() -> [Sign]? {
         cachedSignsValue
     }
+
+    func cachedData() -> SyncData? {
+        guard let cachedSignsValue else { return nil }
+        return SyncData(
+            categories: categories,
+            signs: cachedSignsValue,
+            lessons: [],
+            lastUpdated: Date()
+        )
+    }
 }
 
 final class VideoRepositoryStub: VideoRepositoryProtocol {

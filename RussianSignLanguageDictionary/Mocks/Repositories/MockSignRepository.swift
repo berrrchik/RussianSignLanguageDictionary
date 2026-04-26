@@ -88,6 +88,16 @@ final class MockSignRepository: SignRepositoryProtocol {
         shouldFail ? nil : mockSigns
     }
 
+    func cachedData() -> SyncData? {
+        guard !shouldFail else { return nil }
+        return SyncData(
+            categories: mockCategories,
+            signs: mockSigns,
+            lessons: [],
+            lastUpdated: Date()
+        )
+    }
+
     func setDataStatus(_ status: RepositoryDataStatus) {
         dataStatusSubject.send(status)
     }

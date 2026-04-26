@@ -18,6 +18,7 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     var getSignsByCategoryResult: Result<[Sign], Error> = .success([])
     var searchSignsResult: Result<[Sign], Error> = .success([])
     var cachedSignsValue: [Sign]?
+    var cachedDataValue: SyncData?
     var loadAllSignsImplementation: (() async throws -> [Sign])?
     var loadCategoriesImplementation: (() async throws -> [AppCategory])?
     var getSignImplementation: ((String) async throws -> Sign?)?
@@ -70,6 +71,10 @@ final class SignRepositorySpy: SignRepositoryProtocol {
 
     func cachedSigns() -> [Sign]? {
         cachedSignsValue
+    }
+
+    func cachedData() -> SyncData? {
+        cachedDataValue
     }
 
     func setCurrentDataStatus(_ status: RepositoryDataStatus) {
@@ -143,6 +148,7 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
     private(set) var isFavoriteCalls: [String] = []
     private(set) var getFavoritesCallCount = 0
     private(set) var getFavoriteEntriesCallCount = 0
+    private(set) var reconcileOfflineStateCallCount = 0
     private(set) var clearAllFavoritesCallCount = 0
     private(set) var updateFavoriteSnapshotCalls: [(sign: Sign, categoryName: String)] = []
     private(set) var updateOfflineStatusCalls: [(signId: String, status: FavoriteOfflineStatus, downloadedVideoIds: [Int], requiredVideoIds: [Int])] = []
@@ -159,6 +165,19 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
 
     func getFavoriteEntries() -> [FavoriteEntry] {
         getFavoriteEntriesCallCount += 1
+        return entries
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() -> [FavoriteEntry] {
+        reconcileOfflineStateCallCount += 1
         return entries
     }
 
@@ -233,7 +252,7 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
 
     func isFavorite(signId: String) -> Bool {
         isFavoriteCalls.append(signId)
-        return favoriteLookup[signId] ?? false
+        return favoriteLookup[signId] ?? entries.contains { $0.signId == signId }
     }
 
     func clearAllFavorites() {

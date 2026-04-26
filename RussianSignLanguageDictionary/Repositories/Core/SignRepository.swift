@@ -92,6 +92,10 @@ final class SignRepository: SignRepositoryProtocol {
     func cachedSigns() -> [Sign]? {
         memoryCache.get()?.signs
     }
+
+    func cachedData() -> SyncData? {
+        memoryCache.get()
+    }
     
     // MARK: - Data Loading
     
