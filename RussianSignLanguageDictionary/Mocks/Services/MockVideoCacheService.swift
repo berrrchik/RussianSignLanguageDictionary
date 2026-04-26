@@ -62,6 +62,12 @@ final class MockVideoCacheService: VideoCacheServiceProtocol {
         cachedVideos[url.absoluteString] = localURL
         return localURL
     }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        let localURL = URL(fileURLWithPath: "/tmp/favorites_\(video.id).mp4")
+        cachedVideos[video.url] = localURL
+        return localURL
+    }
     
     func preloadVideo(_ video: SignVideo) async {
         preloadVideoCallCount += 1

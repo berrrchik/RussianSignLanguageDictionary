@@ -15,6 +15,10 @@ final class NetworkMonitorStub: NetworkMonitorProtocol {
         connectivitySubject.eraseToAnyPublisher()
     }
 
+    var connectionRestoredPublisher: AnyPublisher<Void, Never> {
+        Empty<Void, Never>().eraseToAnyPublisher()
+    }
+
     var connectivityStatus: ConnectivityStatus {
         connectivitySubject.value
     }
@@ -62,6 +66,10 @@ final class VideoCacheServiceStub: VideoCacheServiceProtocol {
 
     func downloadAndCache(url: URL) async throws -> URL {
         cachedURL ?? URL(fileURLWithPath: "/tmp/url-cache-stub.mp4")
+    }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        cachedURL ?? URL(fileURLWithPath: "/tmp/promoted-video-stub.mp4")
     }
 
     func preloadVideo(_ video: SignVideo) async {}

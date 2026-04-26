@@ -22,6 +22,18 @@ final class MockFavoritesRepository: FavoritesRepositoryProtocol {
     func getFavoriteEntries() -> [FavoriteEntry] {
         entries
     }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() -> [FavoriteEntry] {
+        entries
+    }
     
     func addFavorite(signId: String) {
         guard !entries.contains(where: { $0.signId == signId }) else { return }

@@ -11,9 +11,14 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     private(set) var isConnectedCallCount = 0
     private(set) var checkConnectionCallCount = 0
     private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
+    private let connectionRestoredSubject = PassthroughSubject<Void, Never>()
 
     var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
         connectivitySubject.eraseToAnyPublisher()
+    }
+
+    var connectionRestoredPublisher: AnyPublisher<Void, Never> {
+        connectionRestoredSubject.eraseToAnyPublisher()
     }
 
     var connectivityStatus: ConnectivityStatus {
@@ -47,8 +52,14 @@ final class MockNetworkMonitor: NetworkMonitorProtocol {
     /// Устанавливает состояние подключения для тестирования
     /// - Parameter connected: true если интернет доступен, false если нет
     func setConnected(_ connected: Bool) {
+        let previousStatus = connectivitySubject.value
         isConnectedValue = connected
-        connectivitySubject.send(connected ? .connected : .disconnected)
+        let newStatus: ConnectivityStatus = connected ? .connected : .disconnected
+        connectivitySubject.send(newStatus)
+
+        if previousStatus != .connected, newStatus == .connected {
+            connectionRestoredSubject.send(())
+        }
     }
     
     /// Симулирует потерю интернета
