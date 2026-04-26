@@ -219,6 +219,17 @@ final class VideoCacheDirectoryManager {
         }
         try fileManager.moveItem(at: srcURL, to: dstURL)
     }
+
+    /// Копирует файл
+    /// - Parameters:
+    ///   - srcURL: Исходный URL
+    ///   - dstURL: Целевой URL
+    func copyItem(from srcURL: URL, to dstURL: URL) throws {
+        if fileManager.fileExists(atPath: dstURL.path) {
+            try fileManager.removeItem(at: dstURL)
+        }
+        try fileManager.copyItem(at: srcURL, to: dstURL)
+    }
     
     /// Очищает весь кеш
     func clearAllCache() {

@@ -111,26 +111,8 @@ final class VideoRepository: VideoRepositoryProtocol {
     // MARK: - VideoRepositoryProtocol
     
     func cachedVideoURL(for video: SignVideo) -> URL? {
-        let cacheKey = "video_\(video.id)" as NSString
-        
-        // 1. Проверяем NSCache (быстрый путь, O(1))
-        // NSCache потокобезопасен — дополнительная синхронизация не нужна
-        if let cachedURL = cache.object(forKey: cacheKey) as URL?,
-           fileManager.fileExists(atPath: cachedURL.path) {
-            // Обновляем дату модификации для корректной работы LRU-алгоритма:
-            // без этого файлы, к которым обращаются часто, могут быть удалены
-            // раньше реально «старых» файлов
-            touchFile(at: cachedURL)
-            return cachedURL
-        }
-        
-        // 2. NSCache мог evict запись — проверяем файл на диске по имени
-        let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
-        if fileManager.fileExists(atPath: cachedFileURL.path) {
-            // Восстанавливаем запись в NSCache и обновляем дату для LRU
-            cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
-            touchFile(at: cachedFileURL)
-            return cachedFileURL
+        if let shortTermURL = shortTermCachedVideoURL(for: video) {
+            return shortTermURL
         }
         
         // 3. Проверяем долгосрочный кеш (избранное, файлы на диске)
@@ -224,6 +206,17 @@ final class VideoRepository: VideoRepositoryProtocol {
             logger.info("✅ Видео \(videoId) загружено из файлового кеша")
             PerformanceService.addAttribute(trace, name: "source", value: "cache")
             return cachedFileURL
+        }
+
+        if let shortTermFileURL = shortTermCachedVideoURL(for: video) {
+            do {
+                let promotedURL = try videoCacheService.promoteCachedVideo(video, from: shortTermFileURL)
+                logger.info("✅ Видео \(videoId) перенесено из краткосрочного кеша в избранное")
+                PerformanceService.addAttribute(trace, name: "source", value: "short_term_promotion")
+                return promotedURL
+            } catch {
+                logger.warning("⚠️ Не удалось перенести видео \(videoId) из краткосрочного кеша: \(error.localizedDescription)")
+            }
         }
         
         // Если нет в кеше, проверяем интернет
@@ -376,6 +369,25 @@ final class VideoRepository: VideoRepositoryProtocol {
     private func updateInMemoryCache(localURL: URL, videoId: Int) {
         let cacheKey = "video_\(videoId)" as NSString
         cache.setObject(localURL as NSURL, forKey: cacheKey)
+    }
+
+    private func shortTermCachedVideoURL(for video: SignVideo) -> URL? {
+        let cacheKey = "video_\(video.id)" as NSString
+
+        if let cachedURL = cache.object(forKey: cacheKey) as URL?,
+           fileManager.fileExists(atPath: cachedURL.path) {
+            touchFile(at: cachedURL)
+            return cachedURL
+        }
+
+        let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
+        if fileManager.fileExists(atPath: cachedFileURL.path) {
+            cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
+            touchFile(at: cachedFileURL)
+            return cachedFileURL
+        }
+
+        return nil
     }
     
     // MARK: - Cache Maintenance
