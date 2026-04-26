@@ -151,6 +151,19 @@ final class VideoRepositoryTests: XCTestCase {
         XCTAssertEqual(networkMonitor.checkConnectionCallCount, 0)
     }
 
+    func testGetVideoURLWithFavoritesCachePromotesShortTermCachedFileWithoutNetwork() async throws {
+        let video = makeVideo(id: 1)
+        let shortTermURL = tempDirectory.appendingPathComponent("video_1.mp4")
+        try Data("cached".utf8).write(to: shortTermURL)
+        networkMonitor.setConnected(false)
+
+        let url = try await sut.getVideoURL(for: video, useFavoritesCache: true)
+
+        XCTAssertEqual(url, URL(fileURLWithPath: "/tmp/favorites_1.mp4"))
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(networkMonitor.checkConnectionCallCount, 0)
+    }
+
     func testGetVideoURLWithFavoritesCacheWithoutInternetAndWithoutCacheThrowsNoInternetConnection() async {
         networkMonitor.setConnected(false)
 

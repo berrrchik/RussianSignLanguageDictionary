@@ -93,6 +93,31 @@ final class FavoritesRepositoryTests: XCTestCase {
         XCTAssertFalse(sut.isFavorite(signId: "sign-1"))
     }
 
+    func testReconcileOfflineStateMarksEntryReadyWhenAllFilesExist() {
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+        videos.forEach { videoCacheService.addToCache(video: $0) }
+
+        let reconciled = sut.reconcileOfflineState()
+
+        XCTAssertEqual(reconciled.first?.offlineStatus, .readyOffline)
+        XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1, 2])
+    }
+
+    func testReconcileOfflineStateMarksEntryFailedWhenFilesAreMissing() {
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+        videoCacheService.addToCache(video: videos[0])
+
+        let reconciled = sut.reconcileOfflineState()
+
+        XCTAssertEqual(reconciled.first?.offlineStatus, .failed)
+        XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1])
+        XCTAssertEqual(sut.failedFavoriteEntries().map(\.signId), ["sign-1"])
+    }
+
     func testClearAllFavoritesRemovesPersistedDataAndClearsVideoCache() {
         sut.addFavorite(signId: "sign-1")
         sut.addFavorite(signId: "sign-2")

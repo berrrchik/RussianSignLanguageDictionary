@@ -6,14 +6,20 @@ final class FavoritesViewModelTests: XCTestCase {
     private var sut: FavoritesViewModel!
     private var favoritesRepository: FavoritesRepositorySpy!
     private var signRepository: SignRepositorySpy!
+    private var videoRepository: VideoRepositorySpy!
+    private var networkMonitor: NetworkMonitorSpy!
 
     override func setUp() {
         super.setUp()
         favoritesRepository = FavoritesRepositorySpy()
         signRepository = SignRepositorySpy()
+        videoRepository = VideoRepositorySpy()
+        networkMonitor = NetworkMonitorSpy()
         sut = FavoritesViewModel(
             favoritesRepository: favoritesRepository,
-            signRepository: signRepository
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            networkMonitor: networkMonitor
         )
     }
 
@@ -21,6 +27,8 @@ final class FavoritesViewModelTests: XCTestCase {
         sut = nil
         favoritesRepository = nil
         signRepository = nil
+        videoRepository = nil
+        networkMonitor = nil
         super.tearDown()
     }
 
@@ -42,6 +50,7 @@ final class FavoritesViewModelTests: XCTestCase {
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
         XCTAssertEqual(sut.categoryNamesById["category-1"], "Категория 1")
         XCTAssertEqual(favoritesRepository.updateFavoriteSnapshotCalls.count, 2)
+        XCTAssertEqual(favoritesRepository.reconcileOfflineStateCallCount, 1)
         XCTAssertNil(sut.errorMessage)
     }
 
@@ -165,6 +174,75 @@ final class FavoritesViewModelTests: XCTestCase {
 
         XCTAssertTrue(didUpdate)
         XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .readyOffline)
+    }
+
+    func testNetworkReconnectRetriesOnlyFailedFavoritesUsingSnapshots() async {
+        let failedSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: failedSign, categoryName: "Категория 1"),
+                offlineStatus: .failed
+            ),
+            FavoriteEntry(
+                signId: "sign-2",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-2", word: "Пока"), categoryName: "Категория 1"),
+                offlineStatus: .readyOffline
+            )
+        ]
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        let didRetry = await waitUntil {
+            self.videoRepository.videoRequests.count == failedSign.videosArray.count
+        }
+
+        XCTAssertTrue(didRetry)
+        XCTAssertEqual(Set(videoRepository.videoRequests.map(\.video.id)), Set(failedSign.videosArray.map(\.id)))
+        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
+        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
+        XCTAssertEqual(signRepository.getSignCallArguments, [])
+    }
+
+    func testReconnectFailureKeepsFavoriteAndMarksStatusFailed() async {
+        let failedSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: failedSign, categoryName: "Категория 1"),
+                offlineStatus: .failed
+            )
+        ]
+        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.videoUnavailable)
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        let didFail = await waitUntil {
+            self.favoritesRepository.updateOfflineStatusCalls.last?.status == .failed
+        }
+
+        XCTAssertTrue(didFail)
+        XCTAssertTrue(favoritesRepository.isFavorite(signId: "sign-1"))
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .failed)
+    }
+
+    func testReconnectDoesNotRetryAlreadyReadyFavorites() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-1", word: "Привет"), categoryName: "Категория 1"),
+                offlineStatus: .readyOffline
+            )
+        ]
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(videoRepository.videoRequests.count, 0)
     }
 
     private func makeSign(id: String, word: String) -> Sign {
