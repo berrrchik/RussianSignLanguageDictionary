@@ -33,7 +33,10 @@ final class FavoritesViewModel: ObservableObject {
     
     let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
+    private let videoRepository: VideoRepositoryProtocol
+    private let networkMonitor: NetworkMonitorProtocol
     private var cancellables = Set<AnyCancellable>()
+    private var retryTask: Task<Void, Never>?
     
     // MARK: - Init
     
@@ -42,17 +45,23 @@ final class FavoritesViewModel: ObservableObject {
         let container = DIContainer.shared
         self.init(
             favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
-            signRepository: container.resolve(SignRepositoryProtocol.self)
+            signRepository: container.resolve(SignRepositoryProtocol.self),
+            videoRepository: container.resolve(VideoRepositoryProtocol.self),
+            networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
     }
     
     /// Полный init для тестов и preview (constructor injection)
     init(
         favoritesRepository: FavoritesRepositoryProtocol,
-        signRepository: SignRepositoryProtocol
+        signRepository: SignRepositoryProtocol,
+        videoRepository: VideoRepositoryProtocol,
+        networkMonitor: NetworkMonitorProtocol
     ) {
         self.favoritesRepository = favoritesRepository
         self.signRepository = signRepository
+        self.videoRepository = videoRepository
+        self.networkMonitor = networkMonitor
 
         signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
@@ -60,8 +69,15 @@ final class FavoritesViewModel: ObservableObject {
                 self?.applyFavoriteData(
                     allSigns: updatedData.signs,
                     categories: updatedData.categories,
-                    entries: favoritesRepository.getFavoriteEntries()
+                    entries: favoritesRepository.reconcileOfflineState()
                 )
+            }
+            .store(in: &cancellables)
+
+        networkMonitor.connectionRestoredPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.retryFailedOfflinePreparation()
             }
             .store(in: &cancellables)
     }
@@ -72,7 +88,7 @@ final class FavoritesViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        let entries = favoritesRepository.getFavoriteEntries()
+        let entries = favoritesRepository.reconcileOfflineState()
 
         guard !entries.isEmpty else {
             favoriteSigns = []
@@ -109,6 +125,7 @@ final class FavoritesViewModel: ObservableObject {
     }
     
     func clearAllFavorites() {
+        retryTask?.cancel()
         favoritesRepository.clearAllFavorites()
         favoriteSigns = []
         categoryNamesById = [:]
@@ -231,5 +248,92 @@ final class FavoritesViewModel: ObservableObject {
         case .alphabeticalDesc:
             favoriteSigns.sort { $0.word > $1.word }
         }
+    }
+
+    private func retryFailedOfflinePreparation() {
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            await self?.performRetryFailedOfflinePreparation()
+        }
+    }
+
+    private func performRetryFailedOfflinePreparation() async {
+        guard await networkMonitor.checkConnection() else { return }
+
+        let failedEntries = favoritesRepository
+            .reconcileOfflineState()
+            .filter { $0.offlineStatus == .failed }
+
+        guard !failedEntries.isEmpty else { return }
+
+        for entry in failedEntries {
+            guard !Task.isCancelled else { return }
+            guard favoritesRepository.isFavorite(signId: entry.signId) else { continue }
+
+            if let snapshot = favoritesRepository.cachedFavoriteSnapshot(signId: entry.signId) {
+                await prepareOfflineMedia(for: snapshot.sign, categoryName: snapshot.categoryName)
+                continue
+            }
+
+            do {
+                guard let liveSign = try await signRepository.getSign(byId: entry.signId) else { continue }
+                let categoryName = categoryNamesById[liveSign.categoryId] ?? liveSign.categoryId.capitalized
+                favoritesRepository.updateFavoriteSnapshot(sign: liveSign, categoryName: categoryName)
+                await prepareOfflineMedia(for: liveSign, categoryName: categoryName)
+            } catch {
+                logger.warning("⚠️ Не удалось восстановить snapshot для retry \(entry.signId): \(error.localizedDescription)")
+            }
+        }
+
+        if favoritesRepository.failedFavoriteEntries().isEmpty, !favoriteSigns.isEmpty {
+            errorMessage = nil
+        }
+    }
+
+    private func prepareOfflineMedia(for sign: Sign, categoryName: String) async {
+        guard favoritesRepository.isFavorite(signId: sign.id) else { return }
+
+        let requiredVideoIds = sign.videosArray.map(\.id)
+        favoritesRepository.updateFavoriteSnapshot(sign: sign, categoryName: categoryName)
+
+        if requiredVideoIds.isEmpty {
+            favoritesRepository.updateOfflineStatus(
+                signId: sign.id,
+                status: .readyOffline,
+                downloadedVideoIds: [],
+                requiredVideoIds: []
+            )
+            offlineStatusBySignId[sign.id] = .readyOffline
+            return
+        }
+
+        var downloadedVideoIds: [Int] = []
+
+        for video in sign.videosArray {
+            guard !Task.isCancelled else { return }
+
+            do {
+                _ = try await videoRepository.getVideoURL(for: video, useFavoritesCache: true)
+                downloadedVideoIds.append(video.id)
+            } catch {
+                favoritesRepository.updateOfflineStatus(
+                    signId: sign.id,
+                    status: .failed,
+                    downloadedVideoIds: downloadedVideoIds,
+                    requiredVideoIds: requiredVideoIds
+                )
+                offlineStatusBySignId[sign.id] = .failed
+                logger.warning("⚠️ Retry офлайн-подготовки не удался для \(sign.id): \(error.localizedDescription)")
+                return
+            }
+        }
+
+        favoritesRepository.updateOfflineStatus(
+            signId: sign.id,
+            status: .readyOffline,
+            downloadedVideoIds: downloadedVideoIds,
+            requiredVideoIds: requiredVideoIds
+        )
+        offlineStatusBySignId[sign.id] = .readyOffline
     }
 }

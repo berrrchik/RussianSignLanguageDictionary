@@ -9,6 +9,18 @@ protocol FavoritesRepositoryProtocol {
     /// Получает расширенные записи избранного со snapshot и offline-статусом
     /// - Returns: Массив записей избранного в порядке добавления
     func getFavoriteEntries() -> [FavoriteEntry]
+
+    /// Возвращает snapshot избранного жеста для офлайн-восстановления
+    /// - Parameter signId: ID жеста
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot?
+
+    /// Возвращает избранные записи, требующие повторной подготовки офлайн-видео
+    func failedFavoriteEntries() -> [FavoriteEntry]
+
+    /// Пересчитывает офлайн-готовность по реальным файлам на диске
+    /// - Returns: Актуальное состояние всех записей после reconciliation
+    @discardableResult
+    func reconcileOfflineState() -> [FavoriteEntry]
     
     /// Добавляет жест в избранное
     /// - Parameter signId: Идентификатор жеста

@@ -47,6 +47,40 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         favoriteEntriesPublisher
     }
 
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        getFavoriteEntry(signId: signId)?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        favoriteEntriesPublisher.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() -> [FavoriteEntry] {
+        var reconciledEntries: [FavoriteEntry] = []
+
+        mutateEntriesOnMainThread {
+            var didChange = false
+            let now = Date()
+
+            for index in self.favoriteEntriesPublisher.indices {
+                let entry = self.favoriteEntriesPublisher[index]
+                let reconciled = self.reconciledEntry(entry, now: now)
+                if reconciled != entry {
+                    self.favoriteEntriesPublisher[index] = reconciled
+                    didChange = true
+                }
+            }
+
+            if didChange {
+                self.persistEntries()
+            }
+
+            reconciledEntries = self.favoriteEntriesPublisher
+        }
+
+        return reconciledEntries
+    }
+
     func addFavorite(signId: String) {
         mutateEntriesOnMainThread {
             guard self.indexOfFavorite(signId: signId) == nil else {
@@ -159,6 +193,31 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     private func clearVideoCache(for entry: FavoriteEntry) {
         guard let videos = entry.snapshot?.sign.videos, !videos.isEmpty else { return }
         videoCacheService.clearCache(for: entry.signId, videos: videos)
+    }
+
+    private func reconciledEntry(_ entry: FavoriteEntry, now: Date) -> FavoriteEntry {
+        guard let snapshot = entry.snapshot else {
+            var reconciled = entry
+            reconciled.offlineStatus = .failed
+            reconciled.downloadedVideos = []
+            reconciled.updatedAt = now
+            return reconciled
+        }
+
+        let videos = snapshot.sign.videosArray
+        let requiredVideoIds = videos.map(\.id)
+        let downloadedVideoIds = videos
+            .filter { videoCacheService.isVideoCached($0) }
+            .map(\.id)
+
+        var reconciled = entry
+        reconciled.requiredVideoIds = requiredVideoIds
+        reconciled.downloadedVideos = downloadedVideoIds.map { FavoriteOfflineVideo(videoId: $0) }
+        reconciled.offlineStatus = requiredVideoIds.isEmpty || downloadedVideoIds.count == requiredVideoIds.count
+            ? .readyOffline
+            : .failed
+        reconciled.updatedAt = now
+        return reconciled
     }
 
     private func applyPersistedEntries(_ entries: [FavoriteEntry], persist: Bool) {

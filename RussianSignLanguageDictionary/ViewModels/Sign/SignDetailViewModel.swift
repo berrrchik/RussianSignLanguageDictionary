@@ -204,6 +204,7 @@ final class SignDetailViewModel: ObservableObject {
     }
     
     func checkFavoriteStatus() {
+        _ = favoritesRepository.reconcileOfflineState()
         isFavorite = favoritesRepository.isFavorite(signId: sign.id)
         favoriteOfflineStatus = favoritesRepository.getFavoriteEntry(signId: sign.id)?.offlineStatus
     }

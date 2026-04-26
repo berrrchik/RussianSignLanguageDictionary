@@ -6,6 +6,9 @@ protocol NetworkMonitorProtocol {
     /// Публикует изменения состояния подключения.
     var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> { get }
 
+    /// Публикует событие восстановления подключения после офлайн-состояния.
+    var connectionRestoredPublisher: AnyPublisher<Void, Never> { get }
+
     /// Возвращает текущее нормализованное состояние подключения.
     var connectivityStatus: ConnectivityStatus { get }
 
