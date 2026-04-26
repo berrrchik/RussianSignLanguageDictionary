@@ -1,9 +1,12 @@
 import Foundation
 import FirebasePerformance
+import os.log
 
 /// Фасад для отслеживания производительности
 /// Инкапсулирует Firebase Performance Monitoring за единым интерфейсом
 enum PerformanceService {
+    private static let logger = Logger(subsystem: "com.rsl.performance", category: "PerformanceService")
+
     // MARK: - Trace Management
     
     /// Создаёт и начинает новый трейс производительности
@@ -17,11 +20,10 @@ enum PerformanceService {
     /// defer { PerformanceService.stopTrace(trace) }
     /// // ... код операции ...
     /// ```
-    static func startTrace(_ traceName: String) -> Trace {
+    static func startTrace(_ traceName: String) -> Trace? {
         guard let trace = Performance.startTrace(name: traceName) else {
-            // Если трейс не может быть создан, создаём пустой трейс
-            // В реальности это не должно происходить, но для безопасности
-            fatalError("Failed to create trace: \(traceName)")
+            logger.error("❌ Failed to create performance trace: \(traceName, privacy: .public)")
+            return nil
         }
         return trace
     }
@@ -29,8 +31,8 @@ enum PerformanceService {
     /// Останавливает трейс производительности
     /// - Parameter trace: Трейс, который нужно остановить
     /// - Note: Всегда вызывайте этот метод, даже при ошибках. Используйте defer для гарантии вызова.
-    static func stopTrace(_ trace: Trace) {
-        trace.stop()
+    static func stopTrace(_ trace: Trace?) {
+        trace?.stop()
     }
     
     // MARK: - Attributes
@@ -49,9 +51,9 @@ enum PerformanceService {
     /// PerformanceService.addAttribute(trace, name: "video_id", value: videoId)
     /// PerformanceService.addAttribute(trace, name: "query", value: searchQuery)
     /// ```
-    static func addAttribute(_ trace: Trace, name: String, value: String) {
+    static func addAttribute(_ trace: Trace?, name: String, value: String) {
         // Валидация имени атрибута: только буквы, цифры, подчёркивания, не пустое
-        guard !name.isEmpty else {
+        guard let trace, !name.isEmpty else {
             return // Игнорируем пустые имена
         }
         
@@ -85,8 +87,8 @@ enum PerformanceService {
     /// PerformanceService.incrementMetric(trace, name: "video_size_bytes", by: fileSize)
     /// PerformanceService.incrementMetric(trace, name: "results_count", by: Int64(results.count))
     /// ```
-    static func incrementMetric(_ trace: Trace, name: String, by value: Int64 = 1) {
-        trace.incrementMetric(name, by: value)
+    static func incrementMetric(_ trace: Trace?, name: String, by value: Int64 = 1) {
+        trace?.incrementMetric(name, by: value)
     }
     
     // MARK: - Configuration
