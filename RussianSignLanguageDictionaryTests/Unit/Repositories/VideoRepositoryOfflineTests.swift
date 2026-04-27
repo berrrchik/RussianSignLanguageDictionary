@@ -4,7 +4,7 @@ import XCTest
 final class VideoRepositoryOfflineTests: XCTestCase {
     private var sut: VideoRepository!
     private var networkMonitor: MockNetworkMonitor!
-    private var videoCacheService: MockVideoCacheService!
+    private var videoCacheService: VideoCacheServiceSpy!
     private var tempDirectory: URL!
     private var controller: MockURLProtocol.SessionController!
 
@@ -12,7 +12,7 @@ final class VideoRepositoryOfflineTests: XCTestCase {
         try super.setUpWithError()
         tempDirectory = try createTemporaryDirectory()
         networkMonitor = MockNetworkMonitor()
-        videoCacheService = MockVideoCacheService()
+        videoCacheService = VideoCacheServiceSpy()
         controller = MockURLProtocol.makeSessionController()
         sut = VideoRepository(
             videoCacheService: videoCacheService,
@@ -49,12 +49,28 @@ final class VideoRepositoryOfflineTests: XCTestCase {
     func testGetVideoURLWithoutInternetForFavoritesCacheSucceedsWhenCached() async throws {
         let video = makeVideo()
         let cachedURL = URL(fileURLWithPath: "/tmp/favorites-video.mp4")
-        videoCacheService.addToCache(video: video, localURL: cachedURL)
+        videoCacheService.cachedVideoURLValue = cachedURL
         networkMonitor.simulateNoInternet()
 
         let url = try await sut.getVideoURL(for: video, useFavoritesCache: true)
 
         XCTAssertEqual(url, cachedURL)
+    }
+
+    func testGetVideoURLWithoutInternetForFavoritesCachePromotesShortTermCachedVideo() async throws {
+        let video = makeVideo()
+        let shortTermURL = tempDirectory.appendingPathComponent("video_\(video.id).mp4")
+        let promotedURL = URL(fileURLWithPath: "/tmp/promoted-favorites-video.mp4")
+        try Data("cached".utf8).write(to: shortTermURL)
+        videoCacheService.promoteCachedVideoResult = .success(promotedURL)
+        networkMonitor.simulateNoInternet()
+
+        let url = try await sut.getVideoURL(for: video, useFavoritesCache: true)
+
+        XCTAssertEqual(url, promotedURL)
+        XCTAssertEqual(videoCacheService.promoteCachedVideoRequests.count, 1)
+        XCTAssertEqual(videoCacheService.promoteCachedVideoRequests.first?.video.id, video.id)
+        XCTAssertEqual(videoCacheService.promoteCachedVideoRequests.first?.localFileURL, shortTermURL)
     }
 
     func testGetVideoURLWithoutInternetForFavoritesCacheThrowsWhenNotCached() async {
