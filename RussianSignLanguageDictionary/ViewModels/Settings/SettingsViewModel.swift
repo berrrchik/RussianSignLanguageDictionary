@@ -76,7 +76,9 @@ final class SettingsViewModel: ObservableObject {
     /// Очищает кэш видео
     func clearCache() {
         videoRepository.clearCache()
-        _ = favoritesRepository.reconcileOfflineState()
+        Task {
+            await favoritesRepository.reconcileOfflineState()
+        }
         cacheClearedMessage = "Кэш успешно очищен"
         logger.info("✅ Кэш очищен пользователем")
         
