@@ -158,8 +158,6 @@ final class VideoRepository: VideoRepositoryProtocol {
             logger.warning("⚠️ Lesson video: нет интернета для загрузки видео урока \(lesson.id)")
             throw VideoRepositoryError.noInternetConnection
         }
-
-        try await verifyRemoteVideoAvailability(at: url, lessonId: lesson.id)
         
         return url
     }
@@ -334,28 +332,6 @@ final class VideoRepository: VideoRepositoryProtocol {
             throw VideoRepositoryError.videoUnavailable
         }
         return tempURL
-    }
-
-    private func verifyRemoteVideoAvailability(at url: URL, lessonId: String) async throws {
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
-
-        do {
-            let (_, response) = try await session.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw VideoRepositoryError.videoUnavailable
-            }
-
-            switch httpResponse.statusCode {
-            case 200...299, 405, 501:
-                return
-            default:
-                logger.warning("⚠️ Lesson video: fast check failed for \(lessonId), status \(httpResponse.statusCode)")
-                throw VideoRepositoryError.videoUnavailable
-            }
-        } catch {
-            throw mapVideoError(error)
-        }
     }
     
     private func moveToCache(tempURL: URL, videoId: Int) throws -> URL {

@@ -193,7 +193,7 @@ final class VideoRepositoryTests: XCTestCase {
         }
     }
 
-    func testGetLessonVideoURLPerformsFastAvailabilityCheck() async throws {
+    func testGetLessonVideoURLReturnsRemoteURLWithoutPreflightRequest() async throws {
         let lesson = Lesson(
             id: "lesson-1",
             title: "Lesson",
@@ -203,22 +203,12 @@ final class VideoRepositoryTests: XCTestCase {
             createdAt: nil,
             updatedAt: nil
         )
-        controller.setRequestHandler { request in
-            self.requestCount += 1
-            XCTAssertEqual(request.httpMethod, "HEAD")
-            let response = HTTPURLResponse(
-                url: try XCTUnwrap(request.url),
-                statusCode: 200,
-                httpVersion: nil,
-                headerFields: nil
-            )!
-            return (response, Data())
-        }
 
         let url = try await sut.getVideoURL(for: lesson)
 
         XCTAssertEqual(url, try XCTUnwrap(APIConfig.videoURL(forPath: lesson.videoUrl)))
-        XCTAssertEqual(requestCount, 1)
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(networkMonitor.checkConnectionCallCount, 1)
     }
 
     func testPreloadVideoStoresShortTermCachedFile() async throws {
