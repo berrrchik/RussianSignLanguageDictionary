@@ -246,6 +246,22 @@ final class FavoritesViewModelTests: XCTestCase {
         XCTAssertEqual(videoRepository.videoRequests.count, 0)
     }
 
+    func testFavoritesAlwaysSortedAlphabeticallyAZ() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(signId: "sign-b"),
+            FavoriteEntry(signId: "sign-a")
+        ]
+        signRepository.loadAllSignsResult = .success([
+            makeSign(id: "sign-b", word: "Б"),
+            makeSign(id: "sign-a", word: "А")
+        ])
+        signRepository.loadCategoriesResult = .success([])
+
+        await sut.loadFavorites()
+
+        XCTAssertEqual(sut.favoriteSigns.map(\.word), ["А", "Б"])
+    }
+
     private func makeSign(id: String, word: String) -> Sign {
         Sign(
             id: id,

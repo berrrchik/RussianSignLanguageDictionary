@@ -14,21 +14,6 @@ final class FavoritesViewModel: ObservableObject {
     @Published private(set) var offlineStatusBySignId: [String: FavoriteOfflineStatus] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
-    @Published var sortOption: SortOption = .dateAddedDesc {
-        didSet {
-            sortFavorites()
-        }
-    }
-    
-    // MARK: - SortOption
-    
-    enum SortOption: String, CaseIterable {
-        case dateAddedDesc = "Новые первыми"
-        case dateAddedAsc = "Старые первыми"
-        case alphabeticalAsc = "А → Я"
-        case alphabeticalDesc = "Я → А"
-    }
-    
     // MARK: - Dependencies
     
     let favoritesRepository: FavoritesRepositoryProtocol
@@ -66,11 +51,17 @@ final class FavoritesViewModel: ObservableObject {
         signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.applyFavoriteData(
-                    allSigns: updatedData.signs,
-                    categories: updatedData.categories,
-                    entries: favoritesRepository.reconcileOfflineState()
-                )
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await self.favoritesRepository.reconcileOfflineState()
+                    let entries = self.favoritesRepository.getFavoriteEntries()
+                    self.applyFavoriteData(
+                        allSigns: updatedData.signs,
+                        categories: updatedData.categories,
+                        entries: entries
+                    )
+                }
             }
             .store(in: &cancellables)
 
@@ -88,7 +79,8 @@ final class FavoritesViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        let entries = favoritesRepository.reconcileOfflineState()
+        await favoritesRepository.reconcileOfflineState()
+        let entries = favoritesRepository.getFavoriteEntries()
 
         guard !entries.isEmpty else {
             favoriteSigns = []
@@ -180,10 +172,9 @@ final class FavoritesViewModel: ObservableObject {
             removedIds.append(entry.signId)
         }
 
-        favoriteSigns = loadedSigns
+        favoriteSigns = loadedSigns.sorted { $0.word < $1.word }
         categoryNamesById = resolvedCategoryNames
         offlineStatusBySignId = resolvedStatuses
-        sortFavorites()
 
         if !removedIds.isEmpty {
             logger.warning("⚠️ Removed missing favorites from local storage: \(Set(removedIds))")
@@ -213,27 +204,13 @@ final class FavoritesViewModel: ObservableObject {
             return false
         }
 
-        favoriteSigns = loadedSigns
+        favoriteSigns = loadedSigns.sorted { $0.word < $1.word }
         categoryNamesById = resolvedCategoryNames
         offlineStatusBySignId = resolvedStatuses
-        sortFavorites()
 
         errorMessage = nil
 
         return true
-    }
-    
-    private func sortFavorites() {
-        switch sortOption {
-        case .dateAddedDesc:
-            break
-        case .dateAddedAsc:
-            favoriteSigns.reverse()
-        case .alphabeticalAsc:
-            favoriteSigns.sort { $0.word < $1.word }
-        case .alphabeticalDesc:
-            favoriteSigns.sort { $0.word > $1.word }
-        }
     }
 
     private func retryFailedOfflinePreparation() {
@@ -246,9 +223,8 @@ final class FavoritesViewModel: ObservableObject {
     private func performRetryFailedOfflinePreparation() async {
         guard await networkMonitor.checkConnection() else { return }
 
-        let failedEntries = favoritesRepository
-            .reconcileOfflineState()
-            .filter { $0.offlineStatus == .failed }
+        await favoritesRepository.reconcileOfflineState()
+        let failedEntries = favoritesRepository.failedFavoriteEntries()
 
         guard !failedEntries.isEmpty else { return }
 
