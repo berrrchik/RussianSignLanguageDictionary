@@ -29,11 +29,13 @@ struct MainView: View {
             if syncViewModel.startupStatus.isReady {
                 tabView
                     .environmentObject(appStatusViewModel)
+                    .transition(.opacity)
             }
 
             switch syncViewModel.startupStatus {
             case .idle, .loading:
                 StartupSplashScreen()
+                    .transition(.opacity)
                     .zIndex(1)
             case .blocked(let reason):
                 ErrorView(
@@ -45,6 +47,7 @@ struct MainView: View {
                 EmptyView()
             }
         }
+        .animation(.easeOut(duration: 0.4), value: syncViewModel.startupStatus.isReady)
         .task {
             await initializeApp()
         }

@@ -3,7 +3,7 @@ import SwiftUI
 struct FavoritesView: View {
     @StateObject private var viewModel = FavoritesViewModel()
     @Environment(\.dependencies) private var deps
-    @State private var showClearAlert = false
+    @State private var showClearConfirmation = false
     @State private var selectedSign: Sign?
     
     var body: some View {
@@ -19,7 +19,7 @@ struct FavoritesView: View {
                     if !viewModel.favoriteSigns.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                showClearAlert = true
+                                showClearConfirmation = true
                             } label: {
                                 Image(systemName: "trash.fill")
                                     .foregroundColor(.red)
@@ -28,13 +28,17 @@ struct FavoritesView: View {
                         }
                     }
                 }
-                .alert("Очистить избранное?", isPresented: $showClearAlert) {
-                    Button("Отмена", role: .cancel) { }
-                    Button("Очистить", role: .destructive) {
+                .confirmationDialog(
+                    "Удалить все избранные жесты?",
+                    isPresented: $showClearConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Удалить всё", role: .destructive) {
                         viewModel.clearAllFavorites()
                     }
+                    Button("Отмена", role: .cancel) { }
                 } message: {
-                    Text("Все избранные жесты будут удалены. Это действие нельзя отменить.")
+                    Text("Это действие нельзя отменить. Скачанные видео также будут удалены.")
                 }
                 .navigationDestination(item: $selectedSign) { sign in
                     SignDetailView(sign: sign)
