@@ -1,6 +1,7 @@
 import Foundation
 
 /// Протокол репозитория для работы с избранными жестами через UserDefaults
+@MainActor
 protocol FavoritesRepositoryProtocol {
     /// Получает список ID избранных жестов
     /// - Returns: Массив идентификаторов избранных жестов
@@ -18,9 +19,7 @@ protocol FavoritesRepositoryProtocol {
     func failedFavoriteEntries() -> [FavoriteEntry]
 
     /// Пересчитывает офлайн-готовность по реальным файлам на диске
-    /// - Returns: Актуальное состояние всех записей после reconciliation
-    @discardableResult
-    func reconcileOfflineState() -> [FavoriteEntry]
+    func reconcileOfflineState() async
     
     /// Добавляет жест в избранное
     /// - Parameter signId: Идентификатор жеста

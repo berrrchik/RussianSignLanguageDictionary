@@ -141,6 +141,7 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
     }
 }
 
+@MainActor
 final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
     private(set) var addFavoriteCalls: [String] = []
     private(set) var addFavoriteWithSnapshotCalls: [(sign: Sign, categoryName: String)] = []
@@ -176,9 +177,8 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
         entries.filter { $0.offlineStatus == .failed }
     }
 
-    func reconcileOfflineState() -> [FavoriteEntry] {
+    func reconcileOfflineState() async {
         reconcileOfflineStateCallCount += 1
-        return entries
     }
 
     func addFavorite(signId: String) {

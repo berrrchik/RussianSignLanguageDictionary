@@ -67,6 +67,7 @@ final class SignRepositoryFake: SignRepositoryProtocol {
     }
 }
 
+@MainActor
 final class FavoritesRepositoryFake: FavoritesRepositoryProtocol {
     private var entries: [FavoriteEntry]
 
@@ -90,8 +91,7 @@ final class FavoritesRepositoryFake: FavoritesRepositoryProtocol {
         entries.filter { $0.offlineStatus == .failed }
     }
 
-    func reconcileOfflineState() -> [FavoriteEntry] {
-        entries
+    func reconcileOfflineState() async {
     }
 
     func addFavorite(signId: String) {

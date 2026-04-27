@@ -241,6 +241,7 @@ extension DIContainer {
     ///
     /// **Примечание:** `SyncViewModel` не регистрируется в контейнере,
     /// т.к. он помечен `@MainActor` и должен создаваться на main thread.
+    @MainActor
     func configureAppDependencies() {
         // 1. Базовые сервисы (singleton)
         registerSingleton(NetworkMonitorProtocol.self) {
@@ -286,11 +287,12 @@ extension DIContainer {
                 cacheService: self.resolve(CacheService.self)
             )
         }
-        
-        registerSingleton(FavoritesRepositoryProtocol.self) { [unowned self] in
-            FavoritesRepository(
-                videoCacheService: self.resolve(VideoCacheServiceProtocol.self)
-            )
+
+        let favoritesRepository = FavoritesRepository(
+            videoCacheService: resolve(VideoCacheServiceProtocol.self)
+        )
+        registerSingleton(FavoritesRepositoryProtocol.self) {
+            favoritesRepository
         }
     }
 }

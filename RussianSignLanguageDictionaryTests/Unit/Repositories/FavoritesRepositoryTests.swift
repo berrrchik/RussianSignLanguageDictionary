@@ -2,6 +2,7 @@ import Combine
 import XCTest
 @testable import RussianSignLanguageDictionary
 
+@MainActor
 final class FavoritesRepositoryTests: XCTestCase {
     private var sut: FavoritesRepository!
     private var userDefaults: UserDefaults!
@@ -93,29 +94,117 @@ final class FavoritesRepositoryTests: XCTestCase {
         XCTAssertFalse(sut.isFavorite(signId: "sign-1"))
     }
 
-    func testReconcileOfflineStateMarksEntryReadyWhenAllFilesExist() {
+    func testReconcileOfflineStateMarksEntryReadyWhenAllFilesExist() async {
         let videos = [makeVideo(id: 1), makeVideo(id: 2)]
         let sign = makeSign(id: "sign-1", videos: videos)
         sut.addFavorite(sign: sign, categoryName: "Категория 1")
         videos.forEach { videoCacheService.addToCache(video: $0) }
 
-        let reconciled = sut.reconcileOfflineState()
+        await sut.reconcileOfflineState()
 
+        let reconciled = sut.getFavoriteEntries()
         XCTAssertEqual(reconciled.first?.offlineStatus, .readyOffline)
         XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1, 2])
     }
 
-    func testReconcileOfflineStateMarksEntryFailedWhenFilesAreMissing() {
+    func testReconcileOfflineStateMarksEntryFailedWhenFilesAreMissing() async {
         let videos = [makeVideo(id: 1), makeVideo(id: 2)]
         let sign = makeSign(id: "sign-1", videos: videos)
         sut.addFavorite(sign: sign, categoryName: "Категория 1")
         videoCacheService.addToCache(video: videos[0])
 
-        let reconciled = sut.reconcileOfflineState()
+        await sut.reconcileOfflineState()
 
+        let reconciled = sut.getFavoriteEntries()
         XCTAssertEqual(reconciled.first?.offlineStatus, .failed)
         XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1])
         XCTAssertEqual(sut.failedFavoriteEntries().map(\.signId), ["sign-1"])
+    }
+
+    func testReconcileOfflineState_WhenCalledFromMainActorAsyncContext_DoesNotDeadlock() async {
+        let videos = [makeVideo(id: 1)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+        videoCacheService.addToCache(video: videos[0])
+
+        await sut.reconcileOfflineState()
+
+        let result = sut.getFavoriteEntries()
+        XCTAssertEqual(result.first?.signId, "sign-1")
+        XCTAssertEqual(result.first?.offlineStatus, .readyOffline)
+    }
+
+    func testReconcileOfflineState_WhenSomeVideoFilesMissingOnDisk_ReturnsFailedStatus() async {
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+        videoCacheService.addToCache(video: videos[0])
+
+        await sut.reconcileOfflineState()
+
+        let result = sut.getFavoriteEntries()
+        XCTAssertEqual(result.first?.offlineStatus, .failed)
+        XCTAssertEqual(result.first?.downloadedVideos.map(\.videoId), [1])
+        XCTAssertEqual(sut.failedFavoriteEntries().map(\.signId), ["sign-1"])
+    }
+
+    func testReconcileOfflineState_WhenOfflineStateUnchanged_PreservesUpdatedAt() async throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        let entry = FavoriteEntry(
+            signId: sign.id,
+            snapshot: FavoriteSignSnapshot(sign: sign, categoryName: "Категория 1"),
+            offlineStatus: .readyOffline,
+            requiredVideoIds: [1, 2],
+            downloadedVideos: [FavoriteOfflineVideo(videoId: 1), FavoriteOfflineVideo(videoId: 2)],
+            addedAt: timestamp,
+            updatedAt: timestamp
+        )
+
+        let data = try APIJSONEncoder.shared.encode([entry])
+        userDefaults.set(data, forKey: "com.rsl.favoriteEntries")
+        userDefaults.set([sign.id], forKey: "com.rsl.favorites")
+        sut = FavoritesRepository(
+            userDefaults: userDefaults,
+            videoCacheService: videoCacheService
+        )
+        videos.forEach { videoCacheService.addToCache(video: $0) }
+
+        await sut.reconcileOfflineState()
+
+        let reconciledEntry = try XCTUnwrap(sut.getFavoriteEntry(signId: sign.id))
+        XCTAssertEqual(reconciledEntry.updatedAt, timestamp)
+    }
+
+    func testReconcileOfflineState_WhenOfflineStateChanges_UpdatesUpdatedAt() async throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let videos = [makeVideo(id: 1), makeVideo(id: 2)]
+        let sign = makeSign(id: "sign-1", videos: videos)
+        let entry = FavoriteEntry(
+            signId: sign.id,
+            snapshot: FavoriteSignSnapshot(sign: sign, categoryName: "Категория 1"),
+            offlineStatus: .failed,
+            requiredVideoIds: [1, 2],
+            downloadedVideos: [],
+            addedAt: timestamp,
+            updatedAt: timestamp
+        )
+
+        let data = try APIJSONEncoder.shared.encode([entry])
+        userDefaults.set(data, forKey: "com.rsl.favoriteEntries")
+        userDefaults.set([sign.id], forKey: "com.rsl.favorites")
+        sut = FavoritesRepository(
+            userDefaults: userDefaults,
+            videoCacheService: videoCacheService
+        )
+        videos.forEach { videoCacheService.addToCache(video: $0) }
+
+        await sut.reconcileOfflineState()
+
+        let reconciledEntry = try XCTUnwrap(sut.getFavoriteEntry(signId: sign.id))
+        XCTAssertEqual(reconciledEntry.offlineStatus, .readyOffline)
+        XCTAssertGreaterThan(reconciledEntry.updatedAt, timestamp)
     }
 
     func testClearAllFavoritesRemovesPersistedDataAndClearsVideoCache() {

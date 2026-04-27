@@ -2,6 +2,7 @@ import Foundation
 
 #if DEBUG
 /// Mock реализация FavoritesRepositoryProtocol для превью и тестов
+@MainActor
 final class MockFavoritesRepository: FavoritesRepositoryProtocol {
     // MARK: - Properties
     
@@ -31,8 +32,7 @@ final class MockFavoritesRepository: FavoritesRepositoryProtocol {
         entries.filter { $0.offlineStatus == .failed }
     }
 
-    func reconcileOfflineState() -> [FavoriteEntry] {
-        entries
+    func reconcileOfflineState() async {
     }
     
     func addFavorite(signId: String) {

@@ -1,12 +1,12 @@
 import SwiftUI
 
 @main
+@MainActor
 struct RussianSignLanguageDictionaryApp: App {
 
     init() {
         FirebaseConfig.configure()
         DIContainer.shared.configureAppDependencies()
-        _ = DIContainer.shared.resolveOptional(FavoritesRepositoryProtocol.self)?.reconcileOfflineState()
         DIStartupValidation.validateDependencies()
     }
 

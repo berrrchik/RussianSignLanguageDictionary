@@ -8,6 +8,7 @@ import os.log
 /// - membership: сам факт, что жест находится в избранном;
 /// - snapshot: локальная копия данных жеста для офлайн-списка;
 /// - offline status: подготовка долгосрочного кеша видео.
+@MainActor
 final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     // MARK: - Properties
 
@@ -55,76 +56,50 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         favoriteEntriesPublisher.filter { $0.offlineStatus == .failed }
     }
 
-    func reconcileOfflineState() -> [FavoriteEntry] {
-        var reconciledEntries: [FavoriteEntry] = []
+    func reconcileOfflineState() async {
+        let currentEntries = favoriteEntriesPublisher
+        let reconciledEntries = currentEntries.map(reconciledEntry)
 
-        mutateEntriesOnMainThread {
-            var didChange = false
-            let now = Date()
-
-            for index in self.favoriteEntriesPublisher.indices {
-                let entry = self.favoriteEntriesPublisher[index]
-                let reconciled = self.reconciledEntry(entry, now: now)
-                if reconciled != entry {
-                    self.favoriteEntriesPublisher[index] = reconciled
-                    didChange = true
-                }
-            }
-
-            if didChange {
-                self.persistEntries()
-            }
-
-            reconciledEntries = self.favoriteEntriesPublisher
-        }
-
-        return reconciledEntries
+        guard reconciledEntries != currentEntries else { return }
+        favoriteEntriesPublisher = reconciledEntries
+        persistEntries()
     }
 
     func addFavorite(signId: String) {
-        mutateEntriesOnMainThread {
-            guard self.indexOfFavorite(signId: signId) == nil else {
-                return
-            }
-
-            self.favoriteEntriesPublisher.append(FavoriteEntry(signId: signId))
-            self.persistEntries()
-            self.logger.info("⭐️ Жест \(signId) добавлен в избранное")
-        }
+        guard indexOfFavorite(signId: signId) == nil else { return }
+        favoriteEntriesPublisher.append(FavoriteEntry(signId: signId))
+        persistEntries()
+        logger.info("⭐️ Жест \(signId) добавлен в избранное")
     }
 
     func addFavorite(sign: Sign, categoryName: String) {
-        mutateEntriesOnMainThread {
-            if let index = self.indexOfFavorite(signId: sign.id) {
-                self.favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
-                    sign: sign,
-                    categoryName: categoryName
-                )
-                self.favoriteEntriesPublisher[index].updatedAt = Date()
-                self.persistEntries()
-                return
-            }
-
-            let entry = FavoriteEntry(
-                signId: sign.id,
-                snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
-            )
-            self.favoriteEntriesPublisher.append(entry)
-            self.persistEntries()
-            self.logger.info("⭐️ Жест \(sign.id) добавлен в избранное со snapshot")
-        }
-    }
-
-    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
-        mutateEntriesOnMainThread {
-            guard let index = self.indexOfFavorite(signId: sign.id) else { return }
-            self.favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
+        if let index = indexOfFavorite(signId: sign.id) {
+            favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
                 sign: sign,
                 categoryName: categoryName
             )
-            self.favoriteEntriesPublisher[index].updatedAt = Date()
-            self.persistEntries()
+            favoriteEntriesPublisher[index].updatedAt = Date()
+            persistEntries()
+            return
         }
+
+        let entry = FavoriteEntry(
+            signId: sign.id,
+            snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+        )
+        favoriteEntriesPublisher.append(entry)
+        persistEntries()
+        logger.info("⭐️ Жест \(sign.id) добавлен в избранное со snapshot")
+    }
+
+    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
+        guard let index = indexOfFavorite(signId: sign.id) else { return }
+        favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
+            sign: sign,
+            categoryName: categoryName
+        )
+        favoriteEntriesPublisher[index].updatedAt = Date()
+        persistEntries()
     }
 
     func updateOfflineStatus(
@@ -133,31 +108,27 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         downloadedVideoIds: [Int],
         requiredVideoIds: [Int]
     ) {
-        mutateEntriesOnMainThread {
-            guard let index = self.indexOfFavorite(signId: signId) else { return }
+        guard let index = indexOfFavorite(signId: signId) else { return }
 
-            self.favoriteEntriesPublisher[index].offlineStatus = status
-            self.favoriteEntriesPublisher[index].requiredVideoIds = requiredVideoIds
-            self.favoriteEntriesPublisher[index].downloadedVideos = downloadedVideoIds.map {
-                FavoriteOfflineVideo(videoId: $0)
-            }
-            self.favoriteEntriesPublisher[index].updatedAt = Date()
-            self.persistEntries()
-            self.logger.info("📦 Статус офлайн-подготовки для \(signId): \(status.rawValue)")
+        favoriteEntriesPublisher[index].offlineStatus = status
+        favoriteEntriesPublisher[index].requiredVideoIds = requiredVideoIds
+        favoriteEntriesPublisher[index].downloadedVideos = downloadedVideoIds.map {
+            FavoriteOfflineVideo(videoId: $0)
         }
+        favoriteEntriesPublisher[index].updatedAt = Date()
+        persistEntries()
+        logger.info("📦 Статус офлайн-подготовки для \(signId): \(status.rawValue)")
     }
 
     func removeFavorite(signId: String) {
-        mutateEntriesOnMainThread {
-            guard let index = self.indexOfFavorite(signId: signId) else { return }
+        guard let index = indexOfFavorite(signId: signId) else { return }
 
-            let entry = self.favoriteEntriesPublisher[index]
-            self.favoriteEntriesPublisher.remove(at: index)
-            self.persistEntries()
+        let entry = favoriteEntriesPublisher[index]
+        favoriteEntriesPublisher.remove(at: index)
+        persistEntries()
 
-            self.clearVideoCache(for: entry)
-            self.logger.info("💔 Жест \(signId) удалён из избранного")
-        }
+        clearVideoCache(for: entry)
+        logger.info("💔 Жест \(signId) удалён из избранного")
     }
 
     func isFavorite(signId: String) -> Bool {
@@ -165,26 +136,13 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     }
 
     func clearAllFavorites() {
-        mutateEntriesOnMainThread {
-            self.favoriteEntriesPublisher = []
-            self.persistEntries()
-            self.videoCacheService.clearAllCache()
-            self.logger.info("🗑️ Все избранные жесты очищены")
-        }
+        favoriteEntriesPublisher = []
+        persistEntries()
+        videoCacheService.clearAllCache()
+        logger.info("🗑️ Все избранные жесты очищены")
     }
 
     // MARK: - Private Methods
-
-    private func mutateEntriesOnMainThread(_ mutation: @escaping () -> Void) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.sync {
-                mutation()
-            }
-            return
-        }
-
-        mutation()
-    }
 
     private func indexOfFavorite(signId: String) -> Int? {
         favoriteEntriesPublisher.firstIndex { $0.signId == signId }
@@ -195,8 +153,14 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         videoCacheService.clearCache(for: entry.signId, videos: videos)
     }
 
-    private func reconciledEntry(_ entry: FavoriteEntry, now: Date) -> FavoriteEntry {
+    private func reconciledEntry(_ entry: FavoriteEntry) -> FavoriteEntry {
+        let now = Date()
+
         guard let snapshot = entry.snapshot else {
+            guard entry.offlineStatus != .failed || !entry.downloadedVideos.isEmpty else {
+                return entry
+            }
+
             var reconciled = entry
             reconciled.offlineStatus = .failed
             reconciled.downloadedVideos = []
@@ -206,16 +170,24 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
 
         let videos = snapshot.sign.videosArray
         let requiredVideoIds = videos.map(\.id)
-        let downloadedVideoIds = videos
+        let downloadedVideos = videos
             .filter { videoCacheService.isVideoCached($0) }
-            .map(\.id)
+            .map { FavoriteOfflineVideo(videoId: $0.id) }
+        let offlineStatus: FavoriteOfflineStatus =
+            requiredVideoIds.isEmpty || downloadedVideos.count == requiredVideoIds.count
+            ? .readyOffline
+            : .failed
+
+        guard entry.requiredVideoIds != requiredVideoIds ||
+              entry.downloadedVideos != downloadedVideos ||
+              entry.offlineStatus != offlineStatus else {
+            return entry
+        }
 
         var reconciled = entry
         reconciled.requiredVideoIds = requiredVideoIds
-        reconciled.downloadedVideos = downloadedVideoIds.map { FavoriteOfflineVideo(videoId: $0) }
-        reconciled.offlineStatus = requiredVideoIds.isEmpty || downloadedVideoIds.count == requiredVideoIds.count
-            ? .readyOffline
-            : .failed
+        reconciled.downloadedVideos = downloadedVideos
+        reconciled.offlineStatus = offlineStatus
         reconciled.updatedAt = now
         return reconciled
     }
