@@ -241,8 +241,12 @@ final class FavoritesViewModelTests: XCTestCase {
         networkMonitor.setConnectivityStatus(.disconnected)
         networkMonitor.setConnectivityStatus(.connected)
 
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        let didFinishRetryPass = await waitUntil {
+            self.networkMonitor.checkConnectionCallCount == 1
+                && self.favoritesRepository.reconcileOfflineStateCallCount == 1
+        }
 
+        XCTAssertTrue(didFinishRetryPass)
         XCTAssertEqual(videoRepository.videoRequests.count, 0)
     }
 

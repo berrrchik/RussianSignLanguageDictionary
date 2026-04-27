@@ -38,9 +38,27 @@ final class AppStatusViewModelTests: XCTestCase {
         XCTAssertEqual(sut.indicatorStatus, .serverUnavailable)
     }
 
+    func testNoInternetCachedDataShowsNoInternetIndicator() {
+        signRepository.setCurrentDataStatus(.usingCachedData(.noInternet))
+        networkMonitor.setConnectivityStatus(.connected)
+
+        sut = makeSut()
+
+        XCTAssertEqual(sut.indicatorStatus, .noInternet)
+    }
+
     func testConnectedAndUpToDateDataShowsNoIndicator() {
         signRepository.setCurrentDataStatus(.upToDate)
         networkMonitor.setConnectivityStatus(.connected)
+
+        sut = makeSut()
+
+        XCTAssertNil(sut.indicatorStatus)
+    }
+
+    func testNoDataWhileOfflineShowsNoIndicator() {
+        signRepository.setCurrentDataStatus(.noData(.noInternet))
+        networkMonitor.setConnectivityStatus(.disconnected)
 
         sut = makeSut()
 
@@ -55,6 +73,19 @@ final class AppStatusViewModelTests: XCTestCase {
         signRepository.setCurrentDataStatus(.usingCachedData(.serverUnavailable))
 
         let didUpdate = await waitUntil { self.sut.indicatorStatus == .serverUnavailable }
+        XCTAssertTrue(didUpdate)
+    }
+
+    func testIndicatorUpdatesWhenConnectivityChanges() async {
+        signRepository.setCurrentDataStatus(.upToDate)
+        networkMonitor.setConnectivityStatus(.connected)
+        sut = makeSut()
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+
+        let didUpdate = await waitUntil {
+            self.sut.connectivityStatus == .disconnected && self.sut.indicatorStatus == .noInternet
+        }
         XCTAssertTrue(didUpdate)
     }
 
