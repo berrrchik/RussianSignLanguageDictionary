@@ -71,7 +71,7 @@ final class FavoritesViewModelTests: XCTestCase {
         XCTAssertNil(sut.errorMessage)
     }
 
-    func testLoadFavoritesRemovesMissingLiveSignsFromFavorites() async {
+    func testLoadFavoritesKeepsMissingLiveSignsWhenSnapshotExists() async {
         favoritesRepository.entries = [
             FavoriteEntry(
                 signId: "sign-1",
@@ -89,11 +89,11 @@ final class FavoritesViewModelTests: XCTestCase {
 
         await sut.loadFavorites()
 
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2"])
-        XCTAssertNil(sut.offlineStatus(for: "sign-1"))
+        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .failed)
         XCTAssertEqual(sut.offlineStatus(for: "sign-2"), .pending)
         XCTAssertNil(sut.errorMessage)
-        XCTAssertEqual(favoritesRepository.removeFavoriteCalls, ["sign-1"])
+        XCTAssertTrue(favoritesRepository.removeFavoriteCalls.isEmpty)
     }
 
     func testLoadFavoritesReturnsEmptyStateWhenFavoritesListIsEmpty() async {
@@ -204,6 +204,32 @@ final class FavoritesViewModelTests: XCTestCase {
         XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
         XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
         XCTAssertEqual(signRepository.getSignCallArguments, [])
+    }
+
+    func testLoadFavoritesRetriesPendingFavoritesWithRequiredVideos() async {
+        let pendingSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: pendingSign, categoryName: "Категория 1"),
+                offlineStatus: .pending,
+                requiredVideoIds: pendingSign.videosArray.map(\.id)
+            )
+        ]
+        signRepository.loadAllSignsResult = .success([pendingSign])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
+
+        await sut.loadFavorites()
+
+        let didRetry = await waitUntil {
+            self.videoRepository.videoRequests.count == pendingSign.videosArray.count
+                && self.favoritesRepository.updateOfflineStatusCalls.last?.status == .readyOffline
+        }
+
+        XCTAssertTrue(didRetry)
+        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
     }
 
     func testReconnectFailureKeepsFavoriteAndMarksStatusFailed() async {

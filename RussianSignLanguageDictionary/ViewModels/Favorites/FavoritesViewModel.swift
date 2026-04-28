@@ -16,7 +16,7 @@ final class FavoritesViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     // MARK: - Dependencies
     
-    let favoritesRepository: FavoritesRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     private let networkMonitor: NetworkMonitorProtocol
@@ -78,6 +78,7 @@ final class FavoritesViewModel: ObservableObject {
     func loadFavorites() async {
         isLoading = true
         errorMessage = nil
+        var shouldScheduleOfflinePreparationRetry = false
 
         await favoritesRepository.reconcileOfflineState()
         let entries = favoritesRepository.getFavoriteEntries()
@@ -95,9 +96,11 @@ final class FavoritesViewModel: ObservableObject {
             async let loadedCategoriesTask = signRepository.loadCategories()
             let (allSigns, categories) = try await (loadedSignsTask, loadedCategoriesTask)
             applyFavoriteData(allSigns: allSigns, categories: categories, entries: entries)
+            shouldScheduleOfflinePreparationRetry = true
         } catch {
             if applySnapshotFallback(entries: entries) {
                 logger.warning("⚠️ Основная загрузка избранного не удалась, показаны snapshot данные")
+                shouldScheduleOfflinePreparationRetry = true
             } else {
                 errorMessage = ErrorMessageMapper.message(for: error)
                 logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
@@ -105,6 +108,10 @@ final class FavoritesViewModel: ObservableObject {
         }
 
         isLoading = false
+
+        if shouldScheduleOfflinePreparationRetry {
+            scheduleOfflinePreparationRetryIfNeeded()
+        }
     }
     
     func removeFavorite(signId: String) {
@@ -150,6 +157,7 @@ final class FavoritesViewModel: ObservableObject {
         var resolvedCategoryNames: [String: String] = [:]
         var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
         var removedIds: [String] = []
+        var snapshotFallbackIds: [String] = []
 
         for entry in entries {
             resolvedStatuses[entry.signId] = entry.offlineStatus
@@ -167,6 +175,13 @@ final class FavoritesViewModel: ObservableObject {
                 continue
             }
 
+            if let snapshot = entry.snapshot {
+                loadedSigns.append(snapshot.sign)
+                resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
+                snapshotFallbackIds.append(entry.signId)
+                continue
+            }
+
             favoritesRepository.removeFavorite(signId: entry.signId)
             resolvedStatuses.removeValue(forKey: entry.signId)
             removedIds.append(entry.signId)
@@ -178,6 +193,9 @@ final class FavoritesViewModel: ObservableObject {
 
         if !removedIds.isEmpty {
             logger.warning("⚠️ Removed missing favorites from local storage: \(Set(removedIds))")
+        }
+        if !snapshotFallbackIds.isEmpty {
+            logger.warning("⚠️ Missing live signs rendered from stored snapshots: \(Set(snapshotFallbackIds))")
         }
         errorMessage = nil
     }
@@ -220,11 +238,16 @@ final class FavoritesViewModel: ObservableObject {
         }
     }
 
+    private func scheduleOfflinePreparationRetryIfNeeded() {
+        guard !retryableOfflineEntries().isEmpty else { return }
+        retryFailedOfflinePreparation()
+    }
+
     private func performRetryFailedOfflinePreparation() async {
         guard await networkMonitor.checkConnection() else { return }
 
         await favoritesRepository.reconcileOfflineState()
-        let failedEntries = favoritesRepository.failedFavoriteEntries()
+        let failedEntries = retryableOfflineEntries()
 
         guard !failedEntries.isEmpty else { return }
 
@@ -247,8 +270,21 @@ final class FavoritesViewModel: ObservableObject {
             }
         }
 
-        if favoritesRepository.failedFavoriteEntries().isEmpty, !favoriteSigns.isEmpty {
+        if retryableOfflineEntries().isEmpty, !favoriteSigns.isEmpty {
             errorMessage = nil
+        }
+    }
+
+    private func retryableOfflineEntries() -> [FavoriteEntry] {
+        favoritesRepository.getFavoriteEntries().filter { entry in
+            switch entry.offlineStatus {
+            case .failed:
+                return true
+            case .pending:
+                return !entry.requiredVideoIds.isEmpty
+            case .readyOffline:
+                return false
+            }
         }
     }
 
