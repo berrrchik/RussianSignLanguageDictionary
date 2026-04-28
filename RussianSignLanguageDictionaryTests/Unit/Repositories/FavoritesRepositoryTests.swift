@@ -70,18 +70,17 @@ final class FavoritesRepositoryTests: XCTestCase {
         XCTAssertEqual(entry?.requiredVideoIds, [1, 2])
     }
 
-    func testLegacyFavoriteIdsMigrateIntoFavoriteEntries() {
-        let legacyDefaults = makeIsolatedUserDefaults()
-        legacyDefaults.set(["sign-1", "sign-2"], forKey: "com.rsl.favorites")
+    func testInvalidPersistedEntriesResetToEmptyState() {
+        let defaults = makeIsolatedUserDefaults()
+        defaults.set(Data("not-json".utf8), forKey: "com.rsl.favoriteEntries")
 
-        let migratedRepository = FavoritesRepository(
-            userDefaults: legacyDefaults,
+        let restoredRepository = FavoritesRepository(
+            userDefaults: defaults,
             videoCacheService: videoCacheService
         )
 
-        let entries = migratedRepository.getFavoriteEntries()
-        XCTAssertEqual(entries.map(\.signId), ["sign-1", "sign-2"])
-        XCTAssertEqual(entries.map(\.offlineStatus), [.pending, .pending])
+        XCTAssertEqual(restoredRepository.getFavoriteEntries(), [])
+        XCTAssertEqual(restoredRepository.getFavorites(), [])
     }
 
     func testRemoveFavoriteClearsCachedVideosUsingStoredSnapshot() {
@@ -107,7 +106,7 @@ final class FavoritesRepositoryTests: XCTestCase {
         XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1, 2])
     }
 
-    func testReconcileOfflineStateMarksEntryFailedWhenFilesAreMissing() async {
+    func testReconcileOfflineStateKeepsPendingEntryPendingWhenFilesAreMissing() async {
         let videos = [makeVideo(id: 1), makeVideo(id: 2)]
         let sign = makeSign(id: "sign-1", videos: videos)
         sut.addFavorite(sign: sign, categoryName: "Категория 1")
@@ -116,9 +115,9 @@ final class FavoritesRepositoryTests: XCTestCase {
         await sut.reconcileOfflineState()
 
         let reconciled = sut.getFavoriteEntries()
-        XCTAssertEqual(reconciled.first?.offlineStatus, .failed)
+        XCTAssertEqual(reconciled.first?.offlineStatus, .pending)
         XCTAssertEqual(reconciled.first?.downloadedVideos.map(\.videoId), [1])
-        XCTAssertEqual(sut.failedFavoriteEntries().map(\.signId), ["sign-1"])
+        XCTAssertTrue(sut.failedFavoriteEntries().isEmpty)
     }
 
     func testReconcileOfflineState_WhenCalledFromMainActorAsyncContext_DoesNotDeadlock() async {
@@ -134,10 +133,24 @@ final class FavoritesRepositoryTests: XCTestCase {
         XCTAssertEqual(result.first?.offlineStatus, .readyOffline)
     }
 
-    func testReconcileOfflineState_WhenSomeVideoFilesMissingOnDisk_ReturnsFailedStatus() async {
+    func testReconcileOfflineState_WhenSomeVideoFilesMissingOnDiskForFailedEntry_ReturnsFailedStatus() async throws {
         let videos = [makeVideo(id: 1), makeVideo(id: 2)]
         let sign = makeSign(id: "sign-1", videos: videos)
-        sut.addFavorite(sign: sign, categoryName: "Категория 1")
+        let entry = FavoriteEntry(
+            signId: sign.id,
+            snapshot: FavoriteSignSnapshot(sign: sign, categoryName: "Категория 1"),
+            offlineStatus: .failed,
+            requiredVideoIds: [1, 2],
+            downloadedVideos: [],
+            addedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let data = try APIJSONEncoder.shared.encode([entry])
+        userDefaults.set(data, forKey: "com.rsl.favoriteEntries")
+        sut = FavoritesRepository(
+            userDefaults: userDefaults,
+            videoCacheService: videoCacheService
+        )
         videoCacheService.addToCache(video: videos[0])
 
         await sut.reconcileOfflineState()
@@ -164,7 +177,6 @@ final class FavoritesRepositoryTests: XCTestCase {
 
         let data = try APIJSONEncoder.shared.encode([entry])
         userDefaults.set(data, forKey: "com.rsl.favoriteEntries")
-        userDefaults.set([sign.id], forKey: "com.rsl.favorites")
         sut = FavoritesRepository(
             userDefaults: userDefaults,
             videoCacheService: videoCacheService
@@ -193,7 +205,6 @@ final class FavoritesRepositoryTests: XCTestCase {
 
         let data = try APIJSONEncoder.shared.encode([entry])
         userDefaults.set(data, forKey: "com.rsl.favoriteEntries")
-        userDefaults.set([sign.id], forKey: "com.rsl.favorites")
         sut = FavoritesRepository(
             userDefaults: userDefaults,
             videoCacheService: videoCacheService

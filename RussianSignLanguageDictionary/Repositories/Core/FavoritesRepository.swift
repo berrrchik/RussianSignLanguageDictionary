@@ -13,7 +13,6 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     // MARK: - Properties
 
     private let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesRepository")
-    private let legacyFavoritesKey = "com.rsl.favorites"
     private let favoriteEntriesKey = "com.rsl.favoriteEntries"
     private let userDefaults: UserDefaults
     private let videoCacheService: VideoCacheServiceProtocol
@@ -32,8 +31,7 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
 
         let restoredEntries = Self.restoreEntries(
             from: userDefaults,
-            favoriteEntriesKey: favoriteEntriesKey,
-            legacyFavoritesKey: legacyFavoritesKey
+            favoriteEntriesKey: favoriteEntriesKey
         )
         applyPersistedEntries(restoredEntries, persist: true)
     }
@@ -157,15 +155,7 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         let now = Date()
 
         guard let snapshot = entry.snapshot else {
-            guard entry.offlineStatus != .failed || !entry.downloadedVideos.isEmpty else {
-                return entry
-            }
-
-            var reconciled = entry
-            reconciled.offlineStatus = .failed
-            reconciled.downloadedVideos = []
-            reconciled.updatedAt = now
-            return reconciled
+            return entry
         }
 
         let videos = snapshot.sign.videosArray
@@ -173,10 +163,15 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
         let downloadedVideos = videos
             .filter { videoCacheService.isVideoCached($0) }
             .map { FavoriteOfflineVideo(videoId: $0.id) }
-        let offlineStatus: FavoriteOfflineStatus =
-            requiredVideoIds.isEmpty || downloadedVideos.count == requiredVideoIds.count
-            ? .readyOffline
-            : .failed
+        let offlineStatus: FavoriteOfflineStatus
+
+        if requiredVideoIds.isEmpty || downloadedVideos.count == requiredVideoIds.count {
+            offlineStatus = .readyOffline
+        } else if entry.offlineStatus == .pending {
+            offlineStatus = .pending
+        } else {
+            offlineStatus = .failed
+        }
 
         guard entry.requiredVideoIds != requiredVideoIds ||
               entry.downloadedVideos != downloadedVideos ||
@@ -211,20 +206,22 @@ final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
 
         let favoriteIds = favoriteEntriesPublisher.map(\.signId)
         favoritesPublisher = favoriteIds
-        userDefaults.set(favoriteIds, forKey: legacyFavoritesKey)
     }
 
     private static func restoreEntries(
         from userDefaults: UserDefaults,
-        favoriteEntriesKey: String,
-        legacyFavoritesKey: String
+        favoriteEntriesKey: String
     ) -> [FavoriteEntry] {
-        if let data = userDefaults.data(forKey: favoriteEntriesKey),
-           let entries = try? APIJSONDecoder.shared.decode([FavoriteEntry].self, from: data) {
-            return entries
+        let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesRepository")
+
+        if let data = userDefaults.data(forKey: favoriteEntriesKey) {
+            do {
+                return try APIJSONDecoder.shared.decode([FavoriteEntry].self, from: data)
+            } catch {
+                logger.error("❌ Не удалось восстановить favorite entries, состояние избранного будет сброшено: \(error.localizedDescription)")
+            }
         }
 
-        let legacyIds = userDefaults.stringArray(forKey: legacyFavoritesKey) ?? []
-        return legacyIds.map { FavoriteEntry(signId: $0) }
+        return []
     }
 }
