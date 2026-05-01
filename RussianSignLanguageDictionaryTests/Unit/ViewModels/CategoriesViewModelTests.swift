@@ -5,30 +5,22 @@ import XCTest
 final class CategoriesViewModelTests: XCTestCase {
     private var sut: CategoriesViewModel!
     private var signRepository: SignRepositorySpy!
-    private var networkMonitor: NetworkMonitorSpy!
 
     override func setUp() {
         super.setUp()
         signRepository = SignRepositorySpy()
-        networkMonitor = NetworkMonitorSpy()
-        sut = CategoriesViewModel(
-            signRepository: signRepository,
-            networkMonitor: networkMonitor
-        )
+        sut = CategoriesViewModel(signRepository: signRepository)
     }
 
     override func tearDown() {
         sut = nil
         signRepository = nil
-        networkMonitor = nil
         super.tearDown()
     }
 
     func testInitialStateIsIdle() {
         XCTAssertEqual(sut.categories, [])
         XCTAssertEqual(sut.state, .idle)
-        XCTAssertFalse(sut.isOfflineMode)
-        XCTAssertNil(sut.offlineMessage)
     }
 
     func testLoadCategoriesTransitionsToLoadedAndSortsByOrder() async {
@@ -36,15 +28,12 @@ final class CategoriesViewModelTests: XCTestCase {
             makeCategory(id: "2", name: "Животные", order: 2),
             makeCategory(id: "1", name: "Алфавит", order: 1)
         ])
-        networkMonitor.checkConnectionValue = true
 
         await sut.loadCategories()
 
         XCTAssertEqual(signRepository.loadCategoriesCallCount, 1)
         XCTAssertEqual(sut.categories.map(\.id), ["1", "2"])
         XCTAssertEqual(sut.state, .loaded)
-        XCTAssertFalse(sut.isOfflineMode)
-        XCTAssertNil(sut.offlineMessage)
     }
 
     func testLoadCategoriesPublishesLoadingStateBeforeCompleting() async {
@@ -82,7 +71,11 @@ final class CategoriesViewModelTests: XCTestCase {
 
         await sut.loadCategories()
 
-        XCTAssertEqual(sut.state, .error("Произошла неизвестная ошибка"))
+        if case .error(let message) = sut.state {
+            XCTAssertTrue(message.hasPrefix("Произошла ошибка:"))
+        } else {
+            XCTFail("Expected error state")
+        }
     }
 
     func testRefreshCategoriesReloadsData() async {
@@ -92,16 +85,6 @@ final class CategoriesViewModelTests: XCTestCase {
 
         XCTAssertEqual(signRepository.loadCategoriesCallCount, 1)
         XCTAssertEqual(sut.state, .loaded)
-    }
-
-    func testLoadCategoriesEnablesOfflineModeWhenNetworkUnavailable() async {
-        signRepository.loadCategoriesResult = .success([makeCategory(id: "1", name: "Алфавит", order: 1)])
-        networkMonitor.checkConnectionValue = false
-
-        await sut.loadCategories()
-
-        XCTAssertTrue(sut.isOfflineMode)
-        XCTAssertEqual(sut.offlineMessage, "Работа в офлайн-режиме. Показаны сохранённые данные.")
     }
 
     func testRepositoryUpdatesReplaceCategoriesUsingSnapshotOrder() async {

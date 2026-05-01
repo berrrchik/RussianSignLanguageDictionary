@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 @testable import RussianSignLanguageDictionary
 
 final class NetworkMonitorSpy: NetworkMonitorProtocol {
@@ -7,6 +8,20 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
 
     var isConnectedValue = true
     var checkConnectionValue = true
+    private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
+    private let connectionRestoredSubject = PassthroughSubject<Void, Never>()
+
+    var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
+        connectivitySubject.eraseToAnyPublisher()
+    }
+
+    var connectionRestoredPublisher: AnyPublisher<Void, Never> {
+        connectionRestoredSubject.eraseToAnyPublisher()
+    }
+
+    var connectivityStatus: ConnectivityStatus {
+        connectivitySubject.value
+    }
 
     func isConnected() -> Bool {
         isConnectedCallCount += 1
@@ -17,6 +32,17 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
         checkConnectionCallCount += 1
         return checkConnectionValue
     }
+
+    func setConnectivityStatus(_ status: ConnectivityStatus) {
+        let previousStatus = connectivitySubject.value
+        connectivitySubject.send(status)
+        isConnectedValue = status == .connected
+        checkConnectionValue = status == .connected
+
+        if previousStatus != .connected, status == .connected {
+            connectionRestoredSubject.send(())
+        }
+    }
 }
 
 final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
@@ -26,6 +52,7 @@ final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
     private(set) var cachedOriginalURLRequests: [URL] = []
     private(set) var downloadVideoRequests: [SignVideo] = []
     private(set) var downloadURLRequests: [URL] = []
+    private(set) var promoteCachedVideoRequests: [(video: SignVideo, localFileURL: URL)] = []
     private(set) var preloadVideoRequests: [SignVideo] = []
     private(set) var preloadVideosRequests: [[SignVideo]] = []
     private(set) var clearCacheVideoRequests: [SignVideo] = []
@@ -39,6 +66,7 @@ final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
     var cachedVideoURLValue: URL?
     var downloadVideoResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/cached-video.mp4"))
     var downloadURLResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/cached-url.mp4"))
+    var promoteCachedVideoResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/promoted-video.mp4"))
     var cacheSize = 0
 
     func isVideoCached(_ video: SignVideo) -> Bool {
@@ -69,6 +97,11 @@ final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
     func downloadAndCache(url: URL) async throws -> URL {
         downloadURLRequests.append(url)
         return try downloadURLResult.get()
+    }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        promoteCachedVideoRequests.append((video, localFileURL))
+        return try promoteCachedVideoResult.get()
     }
 
     func preloadVideo(_ video: SignVideo) async {

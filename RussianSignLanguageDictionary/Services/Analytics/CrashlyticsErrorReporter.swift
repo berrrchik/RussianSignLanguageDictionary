@@ -56,8 +56,8 @@ enum CrashlyticsErrorReporter {
         case SyncError.serverError:
             return true   // 4xx — клиентская ошибка, не критично, не отправлять
         
-        // VideoRepositoryError — ожидаемые в офлайне
-        case VideoRepositoryError.noInternetConnection, VideoRepositoryError.videoNotCached:
+        // VideoRepositoryError — ожидаемые в офлайне или при временной недоступности видео
+        case VideoRepositoryError.noInternetConnection, VideoRepositoryError.videoUnavailable:
             return true
         
         // LessonRepositoryError — ожидаемые в офлайне

@@ -6,6 +6,12 @@ protocol SignRepositoryProtocol {
     /// Публикует обновлённый snapshot после фоновой синхронизации.
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> { get }
 
+    /// Публикует нормализованный статус доступности данных.
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> { get }
+
+    /// Возвращает текущее состояние доступности данных.
+    var currentDataStatus: RepositoryDataStatus { get }
+
     /// Загружает все жесты из JSON файла
     /// - Returns: Массив всех жестов
     /// - Throws: SignRepositoryError в случае ошибки
@@ -37,4 +43,8 @@ protocol SignRepositoryProtocol {
     /// Возвращает жесты из memory-кэша синхронно, без обращения к диску или сети.
     /// - Returns: Закэшированный массив жестов, либо nil если кэш пуст.
     func cachedSigns() -> [Sign]?
+
+    /// Возвращает полный snapshot из memory-кэша синхронно, без обращения к диску или сети.
+    /// - Returns: Закэшированные данные синхронизации, либо nil если кэш пуст.
+    func cachedData() -> SyncData?
 }

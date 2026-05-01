@@ -4,6 +4,7 @@ import XCTest
 @MainActor
 final class SyncViewModelTests: XCTestCase {
     private var sut: SyncViewModel!
+    private var signRepository: SignRepositorySpy!
     private var syncRepository: SyncRepositorySpy!
     private var networkMonitor: NetworkMonitorSpy!
     private var cacheService: CacheService!
@@ -12,6 +13,7 @@ final class SyncViewModelTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        signRepository = SignRepositorySpy()
         syncRepository = SyncRepositorySpy()
         networkMonitor = NetworkMonitorSpy()
         cacheDirectoryURL = try? createTemporaryDirectory()
@@ -22,6 +24,7 @@ final class SyncViewModelTests: XCTestCase {
 
     override func tearDown() {
         sut = nil
+        signRepository = nil
         syncRepository = nil
         networkMonitor = nil
         cacheService = nil
@@ -37,6 +40,43 @@ final class SyncViewModelTests: XCTestCase {
         let sut = makeSut()
 
         XCTAssertEqual(sut.lastSyncDate, storedDate)
+    }
+
+    func testInitializeAppMarksReadyWhenRepositoryUpdatesSuccessfully() async {
+        signRepository.loadAllSignsResult = .success([TestFixtures.sign])
+        signRepository.setCurrentDataStatus(.updated)
+
+        await sut.initializeApp()
+
+        XCTAssertEqual(sut.startupStatus, .ready)
+        XCTAssertEqual(signRepository.loadAllSignsCallCount, 1)
+    }
+
+    func testInitializeAppMarksReadyUsingCachedDataWhenDiskCacheExists() async {
+        signRepository.loadAllSignsResult = .success([TestFixtures.sign])
+        signRepository.setCurrentDataStatus(.availableLocally(.diskCache))
+
+        await sut.initializeApp()
+
+        XCTAssertEqual(sut.startupStatus, .readyUsingCachedData)
+    }
+
+    func testInitializeAppBlocksFirstLaunchWithoutInternet() async {
+        signRepository.setCurrentDataStatus(.noData(.noInternet))
+        signRepository.loadAllSignsResult = .failure(SignRepositoryError.noDataAvailable)
+
+        await sut.initializeApp()
+
+        XCTAssertEqual(sut.startupStatus, .blocked(.noInternet))
+    }
+
+    func testInitializeAppBlocksFirstLaunchWhenServerIsUnavailable() async {
+        signRepository.setCurrentDataStatus(.noData(.serverUnavailable))
+        signRepository.loadAllSignsResult = .failure(SignRepositoryError.noDataAvailable)
+
+        await sut.initializeApp()
+
+        XCTAssertEqual(sut.startupStatus, .blocked(.serverUnavailable))
     }
 
     func testSyncReturnsSilentlyWhenOffline() async {
@@ -178,6 +218,7 @@ final class SyncViewModelTests: XCTestCase {
     private func makeSut() -> SyncViewModel {
         SyncViewModel(
             syncRepository: syncRepository,
+            signRepository: signRepository,
             cacheService: cacheService,
             networkMonitor: networkMonitor,
             userDefaults: userDefaults

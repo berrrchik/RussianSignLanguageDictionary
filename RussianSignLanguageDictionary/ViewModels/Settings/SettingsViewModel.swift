@@ -49,6 +49,7 @@ final class SettingsViewModel: ObservableObject {
     // MARK: - Dependencies
     
     private let videoRepository: VideoRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
     
     // MARK: - Init
     
@@ -56,13 +57,18 @@ final class SettingsViewModel: ObservableObject {
     convenience init() {
         let container = DIContainer.shared
         self.init(
-            videoRepository: container.resolve(VideoRepositoryProtocol.self)
+            videoRepository: container.resolve(VideoRepositoryProtocol.self),
+            favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self)
         )
     }
     
     /// Полный init для тестов и preview (constructor injection)
-    init(videoRepository: VideoRepositoryProtocol) {
+    init(
+        videoRepository: VideoRepositoryProtocol,
+        favoritesRepository: FavoritesRepositoryProtocol
+    ) {
         self.videoRepository = videoRepository
+        self.favoritesRepository = favoritesRepository
     }
     
     // MARK: - Public Methods
@@ -70,6 +76,9 @@ final class SettingsViewModel: ObservableObject {
     /// Очищает кэш видео
     func clearCache() {
         videoRepository.clearCache()
+        Task {
+            await favoritesRepository.reconcileOfflineState()
+        }
         cacheClearedMessage = "Кэш успешно очищен"
         logger.info("✅ Кэш очищен пользователем")
         

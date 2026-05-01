@@ -33,6 +33,11 @@ struct CategoriesView: View {
                 }
             }
             .navigationTitle("Категории")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    OfflineStatusToolbarItem()
+                }
+            }
             .onAppear {
                 AnalyticsService.logScreenView(screenName: "categories", screenClass: "CategoriesView")
             }
@@ -68,9 +73,14 @@ struct CategoriesView: View {
 
 #if DEBUG
 struct CategoriesView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
         CategoriesView()
             .environment(\.dependencies, .preview)
+            .environmentObject(AppStatusViewModel(
+                signRepository: PreviewData.signRepository,
+                networkMonitor: PreviewData.networkMonitor
+            ))
     }
 }
 #endif

@@ -21,8 +21,6 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var categoryNamesById: [String: String] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var isOfflineMode: Bool = false
-    @Published private(set) var offlineMessage: String?
     @Published var selectedCategoryId: String? = nil
     @Published var sortOrder: SortOrder = .ascending
     
@@ -111,8 +109,6 @@ final class SearchViewModel: ObservableObject {
         
         isLoading = true
         errorMessage = nil
-        isOfflineMode = false
-        offlineMessage = nil
         
         do {
             async let loadedSignsTask = signRepository.loadAllSigns()
@@ -131,12 +127,6 @@ final class SearchViewModel: ObservableObject {
             }
             
             isLoading = false
-            let isConnected = await networkMonitor.checkConnection()
-            if !isConnected {
-                isOfflineMode = true
-                offlineMessage = "Работа в офлайн-режиме. Показаны сохранённые данные."
-                PerformanceService.addAttribute(trace, name: "offline_mode", value: "true")
-            }
         } catch {
             errorMessage = errorMessage(for: error)
             isLoading = false
@@ -237,6 +227,13 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Private Methods
 
     private func preloadFromCache() {
+        if let cachedData = signRepository.cachedData(), !cachedData.signs.isEmpty {
+            applyLoadedData(signs: cachedData.signs, categories: cachedData.categories)
+            searchResults = cachedData.signs
+            hasLoadedInitialData = true
+            return
+        }
+
         guard let cached = signRepository.cachedSigns(), !cached.isEmpty else { return }
         // Обязательно через updateSearchData — иначе hybridSearchService остаётся nil
         // и loadAllSigns() выходит по раннему guard без построения гибридного поиска.

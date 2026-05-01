@@ -19,6 +19,7 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
             ],
             favoritesRepository: nil,
             categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: nil,
             onSignSelected: { _ in }
         )
         let coordinator = tableViewWrapper.makeCoordinator()
@@ -28,6 +29,60 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         let cell = coordinator.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
 
         XCTAssertTrue(viewHierarchy(of: cell).contains("Категория 1"))
+    }
+
+    func testCoordinatorShowsReadyOfflineIconNextToSignTitle() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: { _ in .readyOffline },
+            onSignSelected: { _ in }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+        tableView.register(SignRowTableViewCell.self, forCellReuseIdentifier: "SignCell")
+
+        let cell = coordinator.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+
+        XCTAssertTrue(imageIdentifiers(in: cell).contains("offline-status-arrow.down.to.line.compact"))
+    }
+
+    func testCoordinatorShowsFailedOfflineIconNextToSignTitle() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: { _ in .failed },
+            onSignSelected: { _ in }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+        tableView.register(SignRowTableViewCell.self, forCellReuseIdentifier: "SignCell")
+
+        let cell = coordinator.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+
+        XCTAssertTrue(imageIdentifiers(in: cell).contains("offline-status-exclamationmark.circle"))
     }
 
     private func viewHierarchy(of view: UIView) -> [String] {
@@ -42,5 +97,19 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         }
 
         return texts
+    }
+
+    private func imageIdentifiers(in view: UIView) -> [String] {
+        var identifiers: [String] = []
+
+        if let imageView = view as? UIImageView, let identifier = imageView.accessibilityIdentifier {
+            identifiers.append(identifier)
+        }
+
+        for subview in view.subviews {
+            identifiers.append(contentsOf: imageIdentifiers(in: subview))
+        }
+
+        return identifiers
     }
 }

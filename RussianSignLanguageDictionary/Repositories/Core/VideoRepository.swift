@@ -69,14 +69,14 @@ final class VideoRepository: VideoRepositoryProtocol {
         videoCacheService: VideoCacheServiceProtocol,
         networkMonitor: NetworkMonitorProtocol,
         fileManager: FileManager = .default,
-        session: URLSession = .shared,
+        session: URLSession? = nil,
         shortTermCacheDirectory: URL? = nil,
         cacheLimitEnforcer: @escaping CacheLimitEnforcer = FileCacheLRU.enforceSizeLimit
     ) {
         self.videoCacheService = videoCacheService
         self.networkMonitor = networkMonitor
         self.fileManager = fileManager
-        self.session = session
+        self.session = session ?? VideoSessionFactory.makeSession()
         self.cacheLimitEnforcer = cacheLimitEnforcer
         
         // Настройка NSCache (хранит маппинг video_id → локальный file URL)
@@ -111,26 +111,8 @@ final class VideoRepository: VideoRepositoryProtocol {
     // MARK: - VideoRepositoryProtocol
     
     func cachedVideoURL(for video: SignVideo) -> URL? {
-        let cacheKey = "video_\(video.id)" as NSString
-        
-        // 1. Проверяем NSCache (быстрый путь, O(1))
-        // NSCache потокобезопасен — дополнительная синхронизация не нужна
-        if let cachedURL = cache.object(forKey: cacheKey) as URL?,
-           fileManager.fileExists(atPath: cachedURL.path) {
-            // Обновляем дату модификации для корректной работы LRU-алгоритма:
-            // без этого файлы, к которым обращаются часто, могут быть удалены
-            // раньше реально «старых» файлов
-            touchFile(at: cachedURL)
-            return cachedURL
-        }
-        
-        // 2. NSCache мог evict запись — проверяем файл на диске по имени
-        let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
-        if fileManager.fileExists(atPath: cachedFileURL.path) {
-            // Восстанавливаем запись в NSCache и обновляем дату для LRU
-            cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
-            touchFile(at: cachedFileURL)
-            return cachedFileURL
+        if let shortTermURL = shortTermCachedVideoURL(for: video) {
+            return shortTermURL
         }
         
         // 3. Проверяем долгосрочный кеш (избранное, файлы на диске)
@@ -223,13 +205,24 @@ final class VideoRepository: VideoRepositoryProtocol {
             PerformanceService.addAttribute(trace, name: "source", value: "cache")
             return cachedFileURL
         }
+
+        if let shortTermFileURL = shortTermCachedVideoURL(for: video) {
+            do {
+                let promotedURL = try videoCacheService.promoteCachedVideo(video, from: shortTermFileURL)
+                logger.info("✅ Видео \(videoId) перенесено из краткосрочного кеша в избранное")
+                PerformanceService.addAttribute(trace, name: "source", value: "short_term_promotion")
+                return promotedURL
+            } catch {
+                logger.warning("⚠️ Не удалось перенести видео \(videoId) из краткосрочного кеша: \(error.localizedDescription)")
+            }
+        }
         
         // Если нет в кеше, проверяем интернет
         let isConnected = await networkMonitor.checkConnection()
         if !isConnected {
             logger.warning("⚠️ Видео \(videoId) не найдено в кеше и нет интернета")
             PerformanceService.addAttribute(trace, name: "error", value: "no_internet")
-            throw VideoRepositoryError.videoNotCached
+            throw VideoRepositoryError.noInternetConnection
         }
         
         // Загружаем и сохраняем видео в файловый кеш
@@ -252,7 +245,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         } catch {
             logger.error("❌ Ошибка загрузки видео \(videoId): \(error.localizedDescription)")
             PerformanceService.addAttribute(trace, name: "error", value: error.localizedDescription)
-            throw VideoRepositoryError.downloadFailed
+            throw mapVideoError(error)
         }
     }
     
@@ -276,7 +269,7 @@ final class VideoRepository: VideoRepositoryProtocol {
         
         // 2. Получаем или создаём задачу загрузки через actor (не блокирует поток!)
         let (task, isExisting) = await downloadCoordinator.getOrCreateTask(videoId: video.id) { [weak self] in
-            guard let self = self else { throw VideoRepositoryError.downloadFailed }
+            guard let self = self else { throw VideoRepositoryError.videoUnavailable }
             return try await self.downloadAndCacheVideo(url: url, video: video)
         }
         
@@ -328,12 +321,16 @@ final class VideoRepository: VideoRepositoryProtocol {
                 context: ["videoId": "\(video.id)", "url": url.absoluteString],
                 subsystem: "com.rsl.videoRepository"
             )
-            throw VideoRepositoryError.downloadFailed
+            throw mapVideoError(error)
         }
     }
     
     private func downloadToTemp(from url: URL) async throws -> URL {
-        let (tempURL, _) = try await session.download(from: url)
+        let (tempURL, response) = try await session.download(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw VideoRepositoryError.videoUnavailable
+        }
         return tempURL
     }
     
@@ -348,6 +345,25 @@ final class VideoRepository: VideoRepositoryProtocol {
     private func updateInMemoryCache(localURL: URL, videoId: Int) {
         let cacheKey = "video_\(videoId)" as NSString
         cache.setObject(localURL as NSURL, forKey: cacheKey)
+    }
+
+    private func shortTermCachedVideoURL(for video: SignVideo) -> URL? {
+        let cacheKey = "video_\(video.id)" as NSString
+
+        if let cachedURL = cache.object(forKey: cacheKey) as URL?,
+           fileManager.fileExists(atPath: cachedURL.path) {
+            touchFile(at: cachedURL)
+            return cachedURL
+        }
+
+        let cachedFileURL = shortTermCacheDirectory.appendingPathComponent("video_\(video.id).mp4")
+        if fileManager.fileExists(atPath: cachedFileURL.path) {
+            cache.setObject(cachedFileURL as NSURL, forKey: cacheKey)
+            touchFile(at: cachedFileURL)
+            return cachedFileURL
+        }
+
+        return nil
     }
     
     // MARK: - Cache Maintenance
@@ -386,5 +402,28 @@ final class VideoRepository: VideoRepositoryProtocol {
             [.modificationDate: Date()],
             ofItemAtPath: url.path
         )
+    }
+
+    private func mapVideoError(_ error: Error) -> VideoRepositoryError {
+        if let repositoryError = error as? VideoRepositoryError {
+            return repositoryError
+        }
+
+        if let cacheError = error as? VideoCacheError {
+            return VideoRepositoryError.from(cacheError)
+        }
+
+        guard let urlError = error as? URLError else {
+            return .videoUnavailable
+        }
+
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost:
+            return .noInternetConnection
+        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
+            return .videoUnavailable
+        default:
+            return .videoUnavailable
+        }
     }
 }

@@ -10,6 +10,7 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     private(set) var searchQueries: [String] = []
 
     let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.idle)
 
     var loadAllSignsResult: Result<[Sign], Error> = .success([])
     var loadCategoriesResult: Result<[AppCategory], Error> = .success([])
@@ -17,12 +18,21 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     var getSignsByCategoryResult: Result<[Sign], Error> = .success([])
     var searchSignsResult: Result<[Sign], Error> = .success([])
     var cachedSignsValue: [Sign]?
+    var cachedDataValue: SyncData?
     var loadAllSignsImplementation: (() async throws -> [Sign])?
     var loadCategoriesImplementation: (() async throws -> [AppCategory])?
     var getSignImplementation: ((String) async throws -> Sign?)?
 
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject.eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
 
     func loadAllSigns() async throws -> [Sign] {
@@ -62,6 +72,14 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     func cachedSigns() -> [Sign]? {
         cachedSignsValue
     }
+
+    func cachedData() -> SyncData? {
+        cachedDataValue
+    }
+
+    func setCurrentDataStatus(_ status: RepositoryDataStatus) {
+        dataStatusSubject.send(status)
+    }
 }
 
 final class VideoRepositorySpy: VideoRepositoryProtocol {
@@ -79,6 +97,7 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
     var directVideoURLResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/direct-video.mp4"))
     var preloadSignError: Error?
     var preloadVideoError: Error?
+    var directVideoURLImplementation: ((SignVideo, Bool) async throws -> URL)?
 
     func cachedVideoURL(for video: SignVideo) -> URL? {
         cachedVideoRequests.append(video)
@@ -97,6 +116,9 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
 
     func getVideoURL(for video: SignVideo, useFavoritesCache: Bool) async throws -> URL {
         videoRequests.append((video, useFavoritesCache))
+        if let directVideoURLImplementation {
+            return try await directVideoURLImplementation(video, useFavoritesCache)
+        }
         return try directVideoURLResult.get()
     }
 
@@ -119,20 +141,44 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
     }
 }
 
+@MainActor
 final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
     private(set) var addFavoriteCalls: [String] = []
+    private(set) var addFavoriteWithSnapshotCalls: [(sign: Sign, categoryName: String)] = []
     private(set) var removeFavoriteCalls: [String] = []
     private(set) var isFavoriteCalls: [String] = []
     private(set) var getFavoritesCallCount = 0
+    private(set) var getFavoriteEntriesCallCount = 0
+    private(set) var reconcileOfflineStateCallCount = 0
     private(set) var clearAllFavoritesCallCount = 0
+    private(set) var updateFavoriteSnapshotCalls: [(sign: Sign, categoryName: String)] = []
+    private(set) var updateOfflineStatusCalls: [(signId: String, status: FavoriteOfflineStatus, downloadedVideoIds: [Int], requiredVideoIds: [Int])] = []
 
     var favorites: [String] = []
+    var entries: [FavoriteEntry] = []
     var favoriteLookup: [String: Bool] = [:]
     var mutatesStoredFavorites = true
 
     func getFavorites() -> [String] {
         getFavoritesCallCount += 1
-        return favorites
+        return entries.map(\.signId).isEmpty ? favorites : entries.map(\.signId)
+    }
+
+    func getFavoriteEntries() -> [FavoriteEntry] {
+        getFavoriteEntriesCallCount += 1
+        return entries
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() async {
+        reconcileOfflineStateCallCount += 1
     }
 
     func addFavorite(signId: String) {
@@ -141,25 +187,81 @@ final class FavoritesRepositorySpy: FavoritesRepositoryProtocol {
             if !favorites.contains(signId) {
                 favorites.append(signId)
             }
+            if !entries.contains(where: { $0.signId == signId }) {
+                entries.append(FavoriteEntry(signId: signId))
+            }
             favoriteLookup[signId] = true
         }
+    }
+
+    func addFavorite(sign: Sign, categoryName: String) {
+        addFavoriteWithSnapshotCalls.append((sign, categoryName))
+        if mutatesStoredFavorites {
+            if !favorites.contains(sign.id) {
+                favorites.append(sign.id)
+            }
+            if let index = entries.firstIndex(where: { $0.signId == sign.id }) {
+                entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+            } else {
+                entries.append(
+                    FavoriteEntry(
+                        signId: sign.id,
+                        snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+                    )
+                )
+            }
+            favoriteLookup[sign.id] = true
+        }
+    }
+
+    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
+        updateFavoriteSnapshotCalls.append((sign, categoryName))
+        guard mutatesStoredFavorites,
+              let index = entries.firstIndex(where: { $0.signId == sign.id }) else {
+            return
+        }
+
+        entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+    }
+
+    func updateOfflineStatus(
+        signId: String,
+        status: FavoriteOfflineStatus,
+        downloadedVideoIds: [Int],
+        requiredVideoIds: [Int]
+    ) {
+        updateOfflineStatusCalls.append((signId, status, downloadedVideoIds, requiredVideoIds))
+        guard mutatesStoredFavorites,
+              let index = entries.firstIndex(where: { $0.signId == signId }) else {
+            return
+        }
+
+        entries[index].offlineStatus = status
+        entries[index].requiredVideoIds = requiredVideoIds
+        entries[index].downloadedVideos = downloadedVideoIds.map { FavoriteOfflineVideo(videoId: $0) }
     }
 
     func removeFavorite(signId: String) {
         removeFavoriteCalls.append(signId)
         if mutatesStoredFavorites {
             favorites.removeAll { $0 == signId }
+            entries.removeAll { $0.signId == signId }
             favoriteLookup[signId] = false
         }
     }
 
     func isFavorite(signId: String) -> Bool {
         isFavoriteCalls.append(signId)
-        return favoriteLookup[signId] ?? false
+        return favoriteLookup[signId] ?? entries.contains { $0.signId == signId }
     }
 
     func clearAllFavorites() {
         clearAllFavoritesCallCount += 1
+        if mutatesStoredFavorites {
+            favorites.removeAll()
+            entries.removeAll()
+            favoriteLookup.removeAll()
+        }
     }
 }
 

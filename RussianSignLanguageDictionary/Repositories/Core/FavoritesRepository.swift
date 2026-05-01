@@ -1,164 +1,227 @@
-import Foundation
 import Combine
+import Foundation
 import os.log
 
 /// Репозиторий для работы с избранными жестами через UserDefaults
 ///
-/// Автоматически управляет кешем видео при добавлении/удалении из избранного:
-/// - При добавлении жеста в избранное - предзагружает все его видео в долгосрочный кеш
-/// - При удалении из избранного - очищает долгосрочный кеш для всех видео жеста
+/// Хранит три независимых слоя состояния:
+/// - membership: сам факт, что жест находится в избранном;
+/// - snapshot: локальная копия данных жеста для офлайн-списка;
+/// - offline status: подготовка долгосрочного кеша видео.
+@MainActor
 final class FavoritesRepository: FavoritesRepositoryProtocol, ObservableObject {
     // MARK: - Properties
-    
+
     private let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesRepository")
-    
-    /// Ключ для хранения избранного в UserDefaults
-    private let favoritesKey = "com.rsl.favorites"
-    
-    /// UserDefaults для хранения данных
+    private let favoriteEntriesKey = "com.rsl.favoriteEntries"
     private let userDefaults: UserDefaults
-    
-    /// Publisher для изменений избранного
-    @Published private(set) var favoritesPublisher: [String] = []
-    
-    /// Репозиторий жестов для получения данных о видео
-    ///
-    /// Используется для предзагрузки/очистки видео кеша при изменениях в избранном.
-    /// Зависимость разрешается через DI-контейнер при создании.
-    private let signRepository: SignRepositoryProtocol
-    
-    /// Сервис кеширования видео
     private let videoCacheService: VideoCacheServiceProtocol
-    
+
+    @Published private(set) var favoritesPublisher: [String] = []
+    @Published private(set) var favoriteEntriesPublisher: [FavoriteEntry] = []
+
     // MARK: - Initialization
-    
-    /// Инициализатор репозитория
-    /// - Parameters:
-    ///   - userDefaults: UserDefaults (по умолчанию .standard)
-    ///   - signRepository: Репозиторий жестов для получения данных о видео
-    ///   - videoCacheService: Сервис кеширования видео
+
     init(
         userDefaults: UserDefaults = .standard,
-        signRepository: SignRepositoryProtocol,
         videoCacheService: VideoCacheServiceProtocol
     ) {
         self.userDefaults = userDefaults
-        self.signRepository = signRepository
         self.videoCacheService = videoCacheService
-        self.favoritesPublisher = self.getFavorites()
+
+        let restoredEntries = Self.restoreEntries(
+            from: userDefaults,
+            favoriteEntriesKey: favoriteEntriesKey
+        )
+        applyPersistedEntries(restoredEntries, persist: true)
     }
-    
+
     // MARK: - FavoritesRepositoryProtocol
-    
+
     func getFavorites() -> [String] {
-        // UserDefaults.standard является thread-safe для чтения
-        // Поэтому можем безопасно читать с любого потока
-        return userDefaults.stringArray(forKey: favoritesKey) ?? []
+        favoriteEntriesPublisher.map(\.signId)
     }
-    
+
+    func getFavoriteEntries() -> [FavoriteEntry] {
+        favoriteEntriesPublisher
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        getFavoriteEntry(signId: signId)?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        favoriteEntriesPublisher.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() async {
+        let currentEntries = favoriteEntriesPublisher
+        let reconciledEntries = currentEntries.map(reconciledEntry)
+
+        guard reconciledEntries != currentEntries else { return }
+        favoriteEntriesPublisher = reconciledEntries
+        persistEntries()
+    }
+
     func addFavorite(signId: String) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.sync { [weak self] in
-                self?.addFavorite(signId: signId)
-            }
-            return
-        }
-        
-        var favorites = getFavorites()
-        
-        guard !favorites.contains(signId) else {
-            return
-        }
-        
-        favorites.append(signId)
-        userDefaults.set(favorites, forKey: favoritesKey)
-        
-        favoritesPublisher = favorites
-        
+        guard indexOfFavorite(signId: signId) == nil else { return }
+        favoriteEntriesPublisher.append(FavoriteEntry(signId: signId))
+        persistEntries()
         logger.info("⭐️ Жест \(signId) добавлен в избранное")
-        
-        // Предзагрузка видео в долгосрочный кеш
-        preloadVideosForFavorite(signId: signId)
     }
-    
+
+    func addFavorite(sign: Sign, categoryName: String) {
+        if let index = indexOfFavorite(signId: sign.id) {
+            favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
+                sign: sign,
+                categoryName: categoryName
+            )
+            favoriteEntriesPublisher[index].updatedAt = Date()
+            persistEntries()
+            return
+        }
+
+        let entry = FavoriteEntry(
+            signId: sign.id,
+            snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+        )
+        favoriteEntriesPublisher.append(entry)
+        persistEntries()
+        logger.info("⭐️ Жест \(sign.id) добавлен в избранное со snapshot")
+    }
+
+    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
+        guard let index = indexOfFavorite(signId: sign.id) else { return }
+        favoriteEntriesPublisher[index].snapshot = FavoriteSignSnapshot(
+            sign: sign,
+            categoryName: categoryName
+        )
+        favoriteEntriesPublisher[index].updatedAt = Date()
+        persistEntries()
+    }
+
+    func updateOfflineStatus(
+        signId: String,
+        status: FavoriteOfflineStatus,
+        downloadedVideoIds: [Int],
+        requiredVideoIds: [Int]
+    ) {
+        guard let index = indexOfFavorite(signId: signId) else { return }
+
+        favoriteEntriesPublisher[index].offlineStatus = status
+        favoriteEntriesPublisher[index].requiredVideoIds = requiredVideoIds
+        favoriteEntriesPublisher[index].downloadedVideos = downloadedVideoIds.map {
+            FavoriteOfflineVideo(videoId: $0)
+        }
+        favoriteEntriesPublisher[index].updatedAt = Date()
+        persistEntries()
+        logger.info("📦 Статус офлайн-подготовки для \(signId): \(status.rawValue)")
+    }
+
     func removeFavorite(signId: String) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.sync { [weak self] in
-                self?.removeFavorite(signId: signId)
-            }
-            return
-        }
-        
-        var favorites = getFavorites()
-        favorites.removeAll { $0 == signId }
-        
-        userDefaults.set(favorites, forKey: favoritesKey)
-        
-        favoritesPublisher = favorites
-        
+        guard let index = indexOfFavorite(signId: signId) else { return }
+
+        let entry = favoriteEntriesPublisher[index]
+        favoriteEntriesPublisher.remove(at: index)
+        persistEntries()
+
+        clearVideoCache(for: entry)
         logger.info("💔 Жест \(signId) удалён из избранного")
-        
-        // Очистка долгосрочного кеша для видео жеста
-        clearVideoCacheForSign(signId: signId)
     }
-    
+
     func isFavorite(signId: String) -> Bool {
-        let favorites = getFavorites()
-        return favorites.contains(signId)
+        indexOfFavorite(signId: signId) != nil
     }
-    
+
     func clearAllFavorites() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.sync { [weak self] in
-                self?.clearAllFavorites()
-            }
-            return
-        }
-        
-        userDefaults.removeObject(forKey: favoritesKey)
-        
-        favoritesPublisher = []
-        
-        logger.info("🗑️ Все избранные жесты очищены")
-        
-        // Очистка всего долгосрочного кеша видео
+        favoriteEntriesPublisher = []
+        persistEntries()
         videoCacheService.clearAllCache()
+        logger.info("🗑️ Все избранные жесты очищены")
     }
-    
-    // MARK: - Video Cache Management
-    
-    /// Предзагружает все видео жеста в долгосрочный кеш
-    /// - Parameter signId: ID жеста
-    private func preloadVideosForFavorite(signId: String) {
-        Task {
-            do {
-                if let sign = try await signRepository.getSign(byId: signId),
-                   let videos = sign.videos {
-                    logger.info("📥 Предзагрузка \(videos.count) видео для избранного жеста \(signId)...")
-                    
-                    await videoCacheService.preloadVideos(videos)
-                    
-                    logger.info("✅ Предзагрузка видео для жеста \(signId) завершена")
-                }
-            } catch {
-                logger.error("❌ Ошибка предзагрузки видео для \(signId): \(error.localizedDescription)")
-            }
+
+    // MARK: - Private Methods
+
+    private func indexOfFavorite(signId: String) -> Int? {
+        favoriteEntriesPublisher.firstIndex { $0.signId == signId }
+    }
+
+    private func clearVideoCache(for entry: FavoriteEntry) {
+        guard let videos = entry.snapshot?.sign.videos, !videos.isEmpty else { return }
+        videoCacheService.clearCache(for: entry.signId, videos: videos)
+    }
+
+    private func reconciledEntry(_ entry: FavoriteEntry) -> FavoriteEntry {
+        let now = Date()
+
+        guard let snapshot = entry.snapshot else {
+            return entry
+        }
+
+        let videos = snapshot.sign.videosArray
+        let requiredVideoIds = videos.map(\.id)
+        let downloadedVideos = videos
+            .filter { videoCacheService.isVideoCached($0) }
+            .map { FavoriteOfflineVideo(videoId: $0.id) }
+        let offlineStatus: FavoriteOfflineStatus
+
+        if requiredVideoIds.isEmpty || downloadedVideos.count == requiredVideoIds.count {
+            offlineStatus = .readyOffline
+        } else if entry.offlineStatus == .pending {
+            offlineStatus = .pending
+        } else {
+            offlineStatus = .failed
+        }
+
+        guard entry.requiredVideoIds != requiredVideoIds ||
+              entry.downloadedVideos != downloadedVideos ||
+              entry.offlineStatus != offlineStatus else {
+            return entry
+        }
+
+        var reconciled = entry
+        reconciled.requiredVideoIds = requiredVideoIds
+        reconciled.downloadedVideos = downloadedVideos
+        reconciled.offlineStatus = offlineStatus
+        reconciled.updatedAt = now
+        return reconciled
+    }
+
+    private func applyPersistedEntries(_ entries: [FavoriteEntry], persist: Bool) {
+        favoriteEntriesPublisher = entries
+        favoritesPublisher = entries.map(\.signId)
+
+        if persist {
+            persistEntries()
         }
     }
-    
-    /// Очищает долгосрочный кеш для всех видео жеста
-    /// - Parameter signId: ID жеста
-    private func clearVideoCacheForSign(signId: String) {
-        Task {
+
+    private func persistEntries() {
+        do {
+            let data = try APIJSONEncoder.shared.encode(favoriteEntriesPublisher)
+            userDefaults.set(data, forKey: favoriteEntriesKey)
+        } catch {
+            logger.error("❌ Не удалось сохранить favorite entries: \(error.localizedDescription)")
+        }
+
+        let favoriteIds = favoriteEntriesPublisher.map(\.signId)
+        favoritesPublisher = favoriteIds
+    }
+
+    private static func restoreEntries(
+        from userDefaults: UserDefaults,
+        favoriteEntriesKey: String
+    ) -> [FavoriteEntry] {
+        let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesRepository")
+
+        if let data = userDefaults.data(forKey: favoriteEntriesKey) {
             do {
-                if let sign = try await signRepository.getSign(byId: signId),
-                   let videos = sign.videos {
-                    videoCacheService.clearCache(for: signId, videos: videos)
-                    logger.info("🗑️ Кеш видео для жеста \(signId) очищен (\(videos.count) видео)")
-                }
+                return try APIJSONDecoder.shared.decode([FavoriteEntry].self, from: data)
             } catch {
-                logger.error("❌ Ошибка очистки кеша для \(signId): \(error.localizedDescription)")
+                logger.error("❌ Не удалось восстановить favorite entries, состояние избранного будет сброшено: \(error.localizedDescription)")
             }
         }
+
+        return []
     }
 }

@@ -32,11 +32,15 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     ///   - downloader: Загрузчик видео (опционально, создаётся по умолчанию)
     init(
         directoryManager: VideoCacheDirectoryManager? = nil,
-        downloader: VideoCacheDownloader? = nil
+        downloader: VideoCacheDownloader? = nil,
+        networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
     ) {
         let manager = directoryManager ?? VideoCacheDirectoryManager()
         self.directoryManager = manager
-        self.downloader = downloader ?? VideoCacheDownloader(directoryManager: manager)
+        self.downloader = downloader ?? VideoCacheDownloader(
+            directoryManager: manager,
+            networkMonitor: networkMonitor
+        )
         logger.info("✅ VideoCacheService инициализирован")
     }
     
@@ -92,6 +96,22 @@ final class VideoCacheService: VideoCacheServiceProtocol {
     /// - Throws: Ошибка при загрузке
     func downloadAndCache(url: URL) async throws -> URL {
         return try await downloader.downloadAndCache(url: url)
+    }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        guard let originalURL = APIConfig.videoURL(forPath: video.url) else {
+            throw VideoCacheError.invalidURL
+        }
+
+        let videoId = directoryManager.videoId(from: originalURL)
+        guard let targetURL = directoryManager.cacheFileURL(for: videoId) else {
+            throw VideoCacheError.cacheDirectoryNotAvailable
+        }
+
+        try directoryManager.copyItem(from: localFileURL, to: targetURL)
+        logger.info("📦 Видео \(video.id) перенесено из краткосрочного кеша в durable-кеш")
+        directoryManager.ensureCacheLimit()
+        return targetURL
     }
     
     /// Предзагружает видео в кеш (асинхронно, без ожидания)

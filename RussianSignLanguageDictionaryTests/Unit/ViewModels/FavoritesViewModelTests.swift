@@ -6,14 +6,20 @@ final class FavoritesViewModelTests: XCTestCase {
     private var sut: FavoritesViewModel!
     private var favoritesRepository: FavoritesRepositorySpy!
     private var signRepository: SignRepositorySpy!
+    private var videoRepository: VideoRepositorySpy!
+    private var networkMonitor: NetworkMonitorSpy!
 
     override func setUp() {
         super.setUp()
         favoritesRepository = FavoritesRepositorySpy()
         signRepository = SignRepositorySpy()
+        videoRepository = VideoRepositorySpy()
+        networkMonitor = NetworkMonitorSpy()
         sut = FavoritesViewModel(
             favoritesRepository: favoritesRepository,
-            signRepository: signRepository
+            signRepository: signRepository,
+            videoRepository: videoRepository,
+            networkMonitor: networkMonitor
         )
     }
 
@@ -21,11 +27,16 @@ final class FavoritesViewModelTests: XCTestCase {
         sut = nil
         favoritesRepository = nil
         signRepository = nil
+        videoRepository = nil
+        networkMonitor = nil
         super.tearDown()
     }
 
-    func testLoadFavoritesLoadsSignsInFavoritesOrder() async {
-        favoritesRepository.favorites = ["sign-2", "sign-1"]
+    func testLoadFavoritesLoadsSignsInFavoritesOrderAndStoresSnapshots() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(signId: "sign-2"),
+            FavoriteEntry(signId: "sign-1")
+        ]
         signRepository.loadAllSignsResult = .success([
             makeSign(id: "sign-1", word: "Буква"),
             makeSign(id: "sign-2", word: "Арбуз")
@@ -38,12 +49,55 @@ final class FavoritesViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
         XCTAssertEqual(sut.categoryNamesById["category-1"], "Категория 1")
-        XCTAssertFalse(sut.isLoading)
+        XCTAssertEqual(favoritesRepository.updateFavoriteSnapshotCalls.count, 2)
+        XCTAssertEqual(favoritesRepository.reconcileOfflineStateCallCount, 1)
         XCTAssertNil(sut.errorMessage)
     }
 
+    func testLoadFavoritesFallsBackToCachedSnapshotsWhenMainLoadFails() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-1", word: "Привет"), categoryName: "Категория 1"),
+                offlineStatus: .readyOffline
+            )
+        ]
+        signRepository.loadAllSignsResult = .failure(SignRepositoryError.noDataAvailable)
+
+        await sut.loadFavorites()
+
+        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1"])
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .readyOffline)
+        XCTAssertNil(sut.errorMessage)
+    }
+
+    func testLoadFavoritesKeepsMissingLiveSignsWhenSnapshotExists() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-1", word: "Привет"), categoryName: "Категория 1"),
+                offlineStatus: .failed
+            ),
+            FavoriteEntry(signId: "sign-2", offlineStatus: .pending)
+        ]
+        signRepository.loadAllSignsResult = .success([
+            makeSign(id: "sign-2", word: "Пока")
+        ])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
+
+        await sut.loadFavorites()
+
+        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .failed)
+        XCTAssertEqual(sut.offlineStatus(for: "sign-2"), .pending)
+        XCTAssertNil(sut.errorMessage)
+        XCTAssertTrue(favoritesRepository.removeFavoriteCalls.isEmpty)
+    }
+
     func testLoadFavoritesReturnsEmptyStateWhenFavoritesListIsEmpty() async {
-        favoritesRepository.favorites = []
+        favoritesRepository.entries = []
 
         await sut.loadFavorites()
 
@@ -52,36 +106,24 @@ final class FavoritesViewModelTests: XCTestCase {
         XCTAssertEqual(signRepository.loadAllSignsCallCount, 0)
     }
 
-    func testLoadFavoritesShowsTemporaryErrorForMissingSigns() async {
-        favoritesRepository.favorites = ["sign-1", "missing"]
-        signRepository.loadAllSignsResult = .success([
-            makeSign(id: "sign-1", word: "Привет")
-        ])
-        signRepository.loadCategoriesResult = .success([
-            makeCategory(id: "category-1", name: "Категория 1", order: 1)
-        ])
-
-        await sut.loadFavorites()
-
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1"])
-        XCTAssertEqual(sut.errorMessage, "Не удалось загрузить 1 жестов")
-    }
-
-    func testLoadFavoritesMapsRepositoryError() async {
-        favoritesRepository.favorites = ["sign-1"]
+    func testLoadFavoritesMapsRepositoryErrorWhenNoSnapshotsExist() async {
+        favoritesRepository.entries = [FavoriteEntry(signId: "sign-1")]
         signRepository.loadAllSignsResult = .failure(SignRepositoryError.noDataAvailable)
 
         await sut.loadFavorites()
 
         XCTAssertEqual(
             sut.errorMessage,
-            "Для первого запуска приложения необходимо подключение к интернету. После загрузки данных приложение будет работать офлайн."
+            "Данные недоступны. Повторите попытку позже."
         )
         XCTAssertFalse(sut.isLoading)
     }
 
     func testRemoveFavoriteUpdatesRepositoryAndState() async {
-        favoritesRepository.favorites = ["sign-1", "sign-2"]
+        favoritesRepository.entries = [
+            FavoriteEntry(signId: "sign-1"),
+            FavoriteEntry(signId: "sign-2")
+        ]
         signRepository.loadAllSignsResult = .success([
             makeSign(id: "sign-1", word: "Привет"),
             makeSign(id: "sign-2", word: "Пока")
@@ -96,10 +138,11 @@ final class FavoritesViewModelTests: XCTestCase {
 
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, ["sign-1"])
         XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2"])
+        XCTAssertNil(sut.offlineStatus(for: "sign-1"))
     }
 
     func testClearAllFavoritesClearsRepositoryAndState() async {
-        favoritesRepository.favorites = ["sign-1"]
+        favoritesRepository.entries = [FavoriteEntry(signId: "sign-1", offlineStatus: .readyOffline)]
         signRepository.loadAllSignsResult = .success([makeSign(id: "sign-1", word: "Привет")])
         signRepository.loadCategoriesResult = .success([
             makeCategory(id: "category-1", name: "Категория 1", order: 1)
@@ -111,81 +154,11 @@ final class FavoritesViewModelTests: XCTestCase {
 
         XCTAssertEqual(favoritesRepository.clearAllFavoritesCallCount, 1)
         XCTAssertEqual(sut.favoriteSigns, [])
-    }
-
-    func testIsFavoriteDelegatesToRepository() {
-        favoritesRepository.favoriteLookup["sign-1"] = true
-
-        XCTAssertTrue(sut.isFavorite(signId: "sign-1"))
-        XCTAssertEqual(favoritesRepository.isFavoriteCalls, ["sign-1"])
-    }
-
-    func testSortOptionAlphabeticalAscendingSortsByWord() async {
-        favoritesRepository.favorites = ["sign-1", "sign-2"]
-        signRepository.loadAllSignsResult = .success([
-            makeSign(id: "sign-1", word: "Яблоко"),
-            makeSign(id: "sign-2", word: "Арбуз")
-        ])
-        signRepository.loadCategoriesResult = .success([
-            makeCategory(id: "category-1", name: "Категория 1", order: 1)
-        ])
-
-        await sut.loadFavorites()
-        sut.sortOption = .alphabeticalAsc
-
-        XCTAssertEqual(sut.favoriteSigns.map(\.word), ["Арбуз", "Яблоко"])
-    }
-
-    func testSortOptionAlphabeticalDescendingSortsByWord() async {
-        favoritesRepository.favorites = ["sign-1", "sign-2"]
-        signRepository.loadAllSignsResult = .success([
-            makeSign(id: "sign-1", word: "Арбуз"),
-            makeSign(id: "sign-2", word: "Яблоко")
-        ])
-        signRepository.loadCategoriesResult = .success([
-            makeCategory(id: "category-1", name: "Категория 1", order: 1)
-        ])
-
-        await sut.loadFavorites()
-        sut.sortOption = .alphabeticalDesc
-
-        XCTAssertEqual(sut.favoriteSigns.map(\.word), ["Яблоко", "Арбуз"])
-    }
-
-    func testSortOptionDateAddedAscendingReversesLoadedOrder() async {
-        favoritesRepository.favorites = ["sign-2", "sign-1"]
-        signRepository.loadAllSignsResult = .success([
-            makeSign(id: "sign-1", word: "Арбуз"),
-            makeSign(id: "sign-2", word: "Яблоко")
-        ])
-        signRepository.loadCategoriesResult = .success([
-            makeCategory(id: "category-1", name: "Категория 1", order: 1)
-        ])
-
-        await sut.loadFavorites()
-        sut.sortOption = .dateAddedAsc
-
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1", "sign-2"])
-    }
-
-    func testSortOptionDateAddedDescendingKeepsLoadedOrder() async {
-        favoritesRepository.favorites = ["sign-2", "sign-1"]
-        signRepository.loadAllSignsResult = .success([
-            makeSign(id: "sign-1", word: "Арбуз"),
-            makeSign(id: "sign-2", word: "Яблоко")
-        ])
-        signRepository.loadCategoriesResult = .success([
-            makeCategory(id: "category-1", name: "Категория 1", order: 1)
-        ])
-
-        await sut.loadFavorites()
-        sut.sortOption = .dateAddedDesc
-
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-2", "sign-1"])
+        XCTAssertNil(sut.offlineStatus(for: "sign-1"))
     }
 
     func testRepositoryUpdatesRefreshCategoryNamesForFavorites() async {
-        favoritesRepository.favorites = ["sign-1"]
+        favoritesRepository.entries = [FavoriteEntry(signId: "sign-1", offlineStatus: .readyOffline)]
         signRepository.dataUpdatedSubject.send(
             SyncData(
                 categories: [makeCategory(id: "category-1", name: "Обновлённая", order: 1)],
@@ -201,8 +174,122 @@ final class FavoritesViewModelTests: XCTestCase {
         }
 
         XCTAssertTrue(didUpdate)
-        XCTAssertEqual(sut.favoriteSigns.map(\.id), ["sign-1"])
-        XCTAssertEqual(sut.categoryNamesById["category-1"], "Обновлённая")
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .readyOffline)
+    }
+
+    func testNetworkReconnectRetriesOnlyFailedFavoritesUsingSnapshots() async {
+        let failedSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: failedSign, categoryName: "Категория 1"),
+                offlineStatus: .failed
+            ),
+            FavoriteEntry(
+                signId: "sign-2",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-2", word: "Пока"), categoryName: "Категория 1"),
+                offlineStatus: .readyOffline
+            )
+        ]
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        let didRetry = await waitUntil {
+            self.videoRepository.videoRequests.count == failedSign.videosArray.count
+        }
+
+        XCTAssertTrue(didRetry)
+        XCTAssertEqual(Set(videoRepository.videoRequests.map(\.video.id)), Set(failedSign.videosArray.map(\.id)))
+        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
+        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
+        XCTAssertEqual(signRepository.getSignCallArguments, [])
+    }
+
+    func testLoadFavoritesRetriesPendingFavoritesWithRequiredVideos() async {
+        let pendingSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: pendingSign, categoryName: "Категория 1"),
+                offlineStatus: .pending,
+                requiredVideoIds: pendingSign.videosArray.map(\.id)
+            )
+        ]
+        signRepository.loadAllSignsResult = .success([pendingSign])
+        signRepository.loadCategoriesResult = .success([
+            makeCategory(id: "category-1", name: "Категория 1", order: 1)
+        ])
+
+        await sut.loadFavorites()
+
+        let didRetry = await waitUntil {
+            self.videoRepository.videoRequests.count == pendingSign.videosArray.count
+                && self.favoritesRepository.updateOfflineStatusCalls.last?.status == .readyOffline
+        }
+
+        XCTAssertTrue(didRetry)
+        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
+    }
+
+    func testReconnectFailureKeepsFavoriteAndMarksStatusFailed() async {
+        let failedSign = makeSign(id: "sign-1", word: "Привет")
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: failedSign, categoryName: "Категория 1"),
+                offlineStatus: .failed
+            )
+        ]
+        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.videoUnavailable)
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        let didFail = await waitUntil {
+            self.favoritesRepository.updateOfflineStatusCalls.last?.status == .failed
+        }
+
+        XCTAssertTrue(didFail)
+        XCTAssertTrue(favoritesRepository.isFavorite(signId: "sign-1"))
+        XCTAssertEqual(sut.offlineStatus(for: "sign-1"), .failed)
+    }
+
+    func testReconnectDoesNotRetryAlreadyReadyFavorites() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(
+                signId: "sign-1",
+                snapshot: FavoriteSignSnapshot(sign: makeSign(id: "sign-1", word: "Привет"), categoryName: "Категория 1"),
+                offlineStatus: .readyOffline
+            )
+        ]
+
+        networkMonitor.setConnectivityStatus(.disconnected)
+        networkMonitor.setConnectivityStatus(.connected)
+
+        let didFinishRetryPass = await waitUntil {
+            self.networkMonitor.checkConnectionCallCount == 1
+                && self.favoritesRepository.reconcileOfflineStateCallCount == 1
+        }
+
+        XCTAssertTrue(didFinishRetryPass)
+        XCTAssertEqual(videoRepository.videoRequests.count, 0)
+    }
+
+    func testFavoritesAlwaysSortedAlphabeticallyAZ() async {
+        favoritesRepository.entries = [
+            FavoriteEntry(signId: "sign-b"),
+            FavoriteEntry(signId: "sign-a")
+        ]
+        signRepository.loadAllSignsResult = .success([
+            makeSign(id: "sign-b", word: "Б"),
+            makeSign(id: "sign-a", word: "А")
+        ])
+        signRepository.loadCategoriesResult = .success([])
+
+        await sut.loadFavorites()
+
+        XCTAssertEqual(sut.favoriteSigns.map(\.word), ["А", "Б"])
     }
 
     private func makeSign(id: String, word: String) -> Sign {

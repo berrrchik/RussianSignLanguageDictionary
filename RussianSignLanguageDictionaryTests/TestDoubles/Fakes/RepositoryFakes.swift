@@ -7,6 +7,7 @@ final class SignRepositoryFake: SignRepositoryProtocol {
     private(set) var categoriesById: [String: AppCategory]
     private let cachedSignsStorage: [Sign]?
     private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    private let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.updated)
 
     init(
         signs: [Sign] = [TestFixtures.sign],
@@ -20,6 +21,14 @@ final class SignRepositoryFake: SignRepositoryProtocol {
 
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
+    }
+
+    var dataStatusPublisher: AnyPublisher<RepositoryDataStatus, Never> {
+        dataStatusSubject.eraseToAnyPublisher()
+    }
+
+    var currentDataStatus: RepositoryDataStatus {
+        dataStatusSubject.value
     }
 
     func loadAllSigns() async throws -> [Sign] {
@@ -46,32 +55,89 @@ final class SignRepositoryFake: SignRepositoryProtocol {
     func cachedSigns() -> [Sign]? {
         cachedSignsStorage
     }
+
+    func cachedData() -> SyncData? {
+        guard let cachedSignsStorage else { return nil }
+        return SyncData(
+            categories: Array(categoriesById.values).sorted { $0.order < $1.order },
+            signs: cachedSignsStorage,
+            lessons: [],
+            lastUpdated: Date()
+        )
+    }
 }
 
+@MainActor
 final class FavoritesRepositoryFake: FavoritesRepositoryProtocol {
-    private var favorites = Set<String>()
+    private var entries: [FavoriteEntry]
 
     init(initialFavorites: [String] = []) {
-        favorites = Set(initialFavorites)
+        entries = initialFavorites.map { FavoriteEntry(signId: $0) }
     }
 
     func getFavorites() -> [String] {
-        Array(favorites).sorted()
+        entries.map(\.signId)
+    }
+
+    func getFavoriteEntries() -> [FavoriteEntry] {
+        entries
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() async {
     }
 
     func addFavorite(signId: String) {
-        favorites.insert(signId)
+        guard !entries.contains(where: { $0.signId == signId }) else { return }
+        entries.append(FavoriteEntry(signId: signId))
+    }
+
+    func addFavorite(sign: Sign, categoryName: String) {
+        if let index = entries.firstIndex(where: { $0.signId == sign.id }) {
+            entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+        } else {
+            entries.append(
+                FavoriteEntry(
+                    signId: sign.id,
+                    snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+                )
+            )
+        }
+    }
+
+    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
+        guard let index = entries.firstIndex(where: { $0.signId == sign.id }) else { return }
+        entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+    }
+
+    func updateOfflineStatus(
+        signId: String,
+        status: FavoriteOfflineStatus,
+        downloadedVideoIds: [Int],
+        requiredVideoIds: [Int]
+    ) {
+        guard let index = entries.firstIndex(where: { $0.signId == signId }) else { return }
+        entries[index].offlineStatus = status
+        entries[index].requiredVideoIds = requiredVideoIds
+        entries[index].downloadedVideos = downloadedVideoIds.map { FavoriteOfflineVideo(videoId: $0) }
     }
 
     func removeFavorite(signId: String) {
-        favorites.remove(signId)
+        entries.removeAll { $0.signId == signId }
     }
 
     func isFavorite(signId: String) -> Bool {
-        favorites.contains(signId)
+        entries.contains { $0.signId == signId }
     }
 
     func clearAllFavorites() {
-        favorites.removeAll()
+        entries.removeAll()
     }
 }

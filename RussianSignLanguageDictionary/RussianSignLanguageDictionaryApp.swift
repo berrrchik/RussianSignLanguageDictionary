@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct RussianSignLanguageDictionaryApp: App {
 
     init() {

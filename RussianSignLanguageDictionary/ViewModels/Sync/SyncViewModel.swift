@@ -18,10 +18,14 @@ final class SyncViewModel: ObservableObject {
     
     /// Ошибка синхронизации (если есть)
     @Published var syncError: String?
+
+    /// Статус стартовой инициализации приложения
+    @Published private(set) var startupStatus: AppStartupStatus = .idle
     
     // MARK: - Private Properties
     
     private let syncRepository: SyncRepositoryProtocol
+    private let signRepository: SignRepositoryProtocol
     private let cacheService: CacheService
     private let networkMonitor: NetworkMonitorProtocol
     private let userDefaults: UserDefaults
@@ -33,6 +37,7 @@ final class SyncViewModel: ObservableObject {
         let container = DIContainer.shared
         self.init(
             syncRepository: container.resolve(SyncRepositoryProtocol.self),
+            signRepository: container.resolve(SignRepositoryProtocol.self),
             cacheService: container.resolve(CacheService.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
@@ -41,11 +46,13 @@ final class SyncViewModel: ObservableObject {
     /// Полный init для тестов и preview (constructor injection)
     init(
         syncRepository: SyncRepositoryProtocol,
+        signRepository: SignRepositoryProtocol,
         cacheService: CacheService,
         networkMonitor: NetworkMonitorProtocol,
         userDefaults: UserDefaults = .standard
     ) {
         self.syncRepository = syncRepository
+        self.signRepository = signRepository
         self.cacheService = cacheService
         self.networkMonitor = networkMonitor
         self.userDefaults = userDefaults
@@ -55,6 +62,26 @@ final class SyncViewModel: ObservableObject {
     }
     
     // MARK: - Methods
+
+    func initializeApp(force: Bool = false) async {
+        if !force {
+            switch startupStatus {
+            case .loading, .ready, .readyUsingCachedData:
+                return
+            case .idle, .blocked:
+                break
+            }
+        }
+
+        startupStatus = .loading
+
+        do {
+            _ = try await signRepository.loadAllSigns()
+            startupStatus = startupStatus(for: signRepository.currentDataStatus)
+        } catch {
+            startupStatus = blockingStartupStatus(for: error)
+        }
+    }
     
     /// Выполняет синхронизацию данных
     /// 
@@ -174,5 +201,37 @@ final class SyncViewModel: ObservableObject {
     /// Очищает ошибку синхронизации
     func clearError() {
         syncError = nil
+    }
+
+    private func startupStatus(for dataStatus: RepositoryDataStatus) -> AppStartupStatus {
+        switch dataStatus {
+        case .availableLocally, .usingCachedData:
+            return .readyUsingCachedData
+        case .noData(let reason):
+            return .blocked(reason)
+        case .idle, .loading, .updated, .upToDate:
+            return .ready
+        }
+    }
+
+    private func blockingStartupStatus(for error: Error) -> AppStartupStatus {
+        if case .noData(let reason) = signRepository.currentDataStatus {
+            return .blocked(reason)
+        }
+
+        if let syncError = error as? SyncError {
+            switch syncError {
+            case .noInternet:
+                return .blocked(.noInternet)
+            case .serverUnavailable, .serverError, .networkError, .decodingError, .invalidResponse:
+                return .blocked(.serverUnavailable)
+            }
+        }
+
+        return awaitNoInternetFallback()
+    }
+
+    private func awaitNoInternetFallback() -> AppStartupStatus {
+        networkMonitor.isConnected() ? .blocked(.serverUnavailable) : .blocked(.noInternet)
     }
 }

@@ -1,11 +1,26 @@
 import Foundation
+import Combine
 @testable import RussianSignLanguageDictionary
 
 final class NetworkMonitorStub: NetworkMonitorProtocol {
     let connected: Bool
+    private let connectivitySubject: CurrentValueSubject<ConnectivityStatus, Never>
 
     init(connected: Bool) {
         self.connected = connected
+        self.connectivitySubject = CurrentValueSubject(connected ? .connected : .disconnected)
+    }
+
+    var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
+        connectivitySubject.eraseToAnyPublisher()
+    }
+
+    var connectionRestoredPublisher: AnyPublisher<Void, Never> {
+        Empty<Void, Never>().eraseToAnyPublisher()
+    }
+
+    var connectivityStatus: ConnectivityStatus {
+        connectivitySubject.value
     }
 
     func isConnected() -> Bool {
@@ -51,6 +66,10 @@ final class VideoCacheServiceStub: VideoCacheServiceProtocol {
 
     func downloadAndCache(url: URL) async throws -> URL {
         cachedURL ?? URL(fileURLWithPath: "/tmp/url-cache-stub.mp4")
+    }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        cachedURL ?? URL(fileURLWithPath: "/tmp/promoted-video-stub.mp4")
     }
 
     func preloadVideo(_ video: SignVideo) async {}

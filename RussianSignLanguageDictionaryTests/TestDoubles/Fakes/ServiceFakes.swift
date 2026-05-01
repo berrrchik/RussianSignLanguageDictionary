@@ -36,6 +36,12 @@ final class VideoCacheServiceFake: VideoCacheServiceProtocol {
         return localURL
     }
 
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        let promotedURL = URL(fileURLWithPath: "/tmp/promoted-\(video.id).mp4")
+        cachedVideos[video.url] = promotedURL
+        return promotedURL
+    }
+
     func preloadVideo(_ video: SignVideo) async {
         _ = try? await downloadAndCache(video: video)
     }

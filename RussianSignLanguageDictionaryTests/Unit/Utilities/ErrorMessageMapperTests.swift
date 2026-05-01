@@ -8,7 +8,7 @@ final class ErrorMessageMapperTests: XCTestCase {
         XCTAssertEqual(ErrorMessageMapper.message(for: SignRepositoryError.invalidDataFormat), "Неверный формат данных")
         XCTAssertEqual(
             ErrorMessageMapper.message(for: SignRepositoryError.noDataAvailable),
-            "Для первого запуска приложения необходимо подключение к интернету. После загрузки данных приложение будет работать офлайн."
+            "Данные недоступны. Повторите попытку позже."
         )
         XCTAssertTrue(
             ErrorMessageMapper.message(for: SignRepositoryError.decodingError(TestError.sample))
@@ -17,15 +17,14 @@ final class ErrorMessageMapperTests: XCTestCase {
     }
 
     func testMapsAllVideoRepositoryErrors() {
-        XCTAssertEqual(ErrorMessageMapper.message(for: VideoRepositoryError.invalidURL), "Неверный URL видео")
-        XCTAssertEqual(ErrorMessageMapper.message(for: VideoRepositoryError.downloadFailed), "Не удалось загрузить видео")
-        XCTAssertEqual(
-            ErrorMessageMapper.message(for: VideoRepositoryError.videoNotCached),
-            "Видео недоступно в офлайн-режиме. Добавьте жест в избранное для просмотра без интернета."
-        )
+        XCTAssertEqual(ErrorMessageMapper.message(for: VideoRepositoryError.invalidURL), "Неверный адрес видео.")
         XCTAssertEqual(
             ErrorMessageMapper.message(for: VideoRepositoryError.noInternetConnection),
-            "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
+            "Нет интернета."
+        )
+        XCTAssertEqual(
+            ErrorMessageMapper.message(for: VideoRepositoryError.videoUnavailable),
+            "Видео сейчас недоступно."
         )
     }
 
@@ -73,6 +72,7 @@ final class ErrorMessageMapperTests: XCTestCase {
 
     func testMapsAllVideoCacheErrors() {
         XCTAssertEqual(ErrorMessageMapper.message(for: VideoCacheError.invalidURL), "Невалидный URL видео")
+        XCTAssertEqual(ErrorMessageMapper.message(for: VideoCacheError.noInternetConnection), "Нет интернета.")
         XCTAssertEqual(
             ErrorMessageMapper.message(for: VideoCacheError.cacheDirectoryNotAvailable),
             "Директория кеша недоступна"
@@ -81,7 +81,7 @@ final class ErrorMessageMapperTests: XCTestCase {
             ErrorMessageMapper.message(for: VideoCacheError.sessionNotConfigured),
             "Внутренняя ошибка: сессия загрузки не настроена"
         )
-        XCTAssertEqual(ErrorMessageMapper.message(for: VideoCacheError.downloadFailed), "Не удалось загрузить видео")
+        XCTAssertEqual(ErrorMessageMapper.message(for: VideoCacheError.videoUnavailable), "Видео сейчас недоступно.")
         XCTAssertEqual(ErrorMessageMapper.message(for: VideoCacheError.fileNotFound), "Файл видео не найден в кеше")
     }
 
@@ -128,6 +128,10 @@ final class ErrorMessageMapperTests: XCTestCase {
         )
     }
 
+    func testMapsFavoriteOfflineStatus() {
+        XCTAssertEqual(ErrorMessageMapper.message(for: FavoriteOfflineStatus.pending), "Подготавливается для офлайн.")
+    }
+
     func testGenericMessageUsesTypedOverloadsWhenPossible() {
         XCTAssertEqual(
             ErrorMessageMapper.message(for: SignRepositoryError.fileNotFound as Error),
@@ -135,7 +139,7 @@ final class ErrorMessageMapperTests: XCTestCase {
         )
         XCTAssertEqual(
             ErrorMessageMapper.message(for: VideoRepositoryError.invalidURL as Error),
-            "Неверный URL видео"
+            "Неверный адрес видео."
         )
         XCTAssertEqual(
             ErrorMessageMapper.message(for: SyncError.invalidResponse as Error),

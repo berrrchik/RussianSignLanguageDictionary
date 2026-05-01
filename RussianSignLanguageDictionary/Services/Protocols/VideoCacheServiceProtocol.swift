@@ -42,6 +42,13 @@ protocol VideoCacheServiceProtocol {
     /// - Returns: URL локального файла
     /// - Throws: Ошибка при загрузке
     func downloadAndCache(url: URL) async throws -> URL
+
+    /// Продвигает уже скачанный локальный файл в долгосрочный кеш избранного
+    /// - Parameters:
+    ///   - video: Видео, для которого нужно создать durable-копию
+    ///   - localFileURL: Уже существующий локальный файл
+    /// - Returns: URL файла в директории избранного
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL
     
     /// Предзагружает видео в кеш (асинхронно, без ожидания)
     /// - Parameter video: Видео для предзагрузки

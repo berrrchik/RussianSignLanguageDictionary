@@ -45,7 +45,7 @@ final class MockVideoCacheService: VideoCacheServiceProtocol {
     
     func downloadAndCache(video: SignVideo) async throws -> URL {
         if shouldFailDownload {
-            throw VideoCacheError.downloadFailed
+            throw VideoCacheError.videoUnavailable
         }
         
         let localURL = URL(fileURLWithPath: "/tmp/cached_\(video.id).mp4")
@@ -55,11 +55,17 @@ final class MockVideoCacheService: VideoCacheServiceProtocol {
     
     func downloadAndCache(url: URL) async throws -> URL {
         if shouldFailDownload {
-            throw VideoCacheError.downloadFailed
+            throw VideoCacheError.videoUnavailable
         }
         
         let localURL = URL(fileURLWithPath: "/tmp/cached_\(url.lastPathComponent)")
         cachedVideos[url.absoluteString] = localURL
+        return localURL
+    }
+
+    func promoteCachedVideo(_ video: SignVideo, from localFileURL: URL) throws -> URL {
+        let localURL = URL(fileURLWithPath: "/tmp/favorites_\(video.id).mp4")
+        cachedVideos[video.url] = localURL
         return localURL
     }
     

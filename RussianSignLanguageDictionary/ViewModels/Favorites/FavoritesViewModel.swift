@@ -11,28 +11,17 @@ final class FavoritesViewModel: ObservableObject {
     
     @Published private(set) var favoriteSigns: [Sign] = []
     @Published private(set) var categoryNamesById: [String: String] = [:]
+    @Published private(set) var offlineStatusBySignId: [String: FavoriteOfflineStatus] = [:]
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
-    @Published var sortOption: SortOption = .dateAddedDesc {
-        didSet {
-            sortFavorites()
-        }
-    }
-    
-    // MARK: - SortOption
-    
-    enum SortOption: String, CaseIterable {
-        case dateAddedDesc = "Новые первыми"
-        case dateAddedAsc = "Старые первыми"
-        case alphabeticalAsc = "А → Я"
-        case alphabeticalDesc = "Я → А"
-    }
-    
     // MARK: - Dependencies
     
-    let favoritesRepository: FavoritesRepositoryProtocol
+    private let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
+    private let videoRepository: VideoRepositoryProtocol
+    private let networkMonitor: NetworkMonitorProtocol
     private var cancellables = Set<AnyCancellable>()
+    private var retryTask: Task<Void, Never>?
     
     // MARK: - Init
     
@@ -41,26 +30,45 @@ final class FavoritesViewModel: ObservableObject {
         let container = DIContainer.shared
         self.init(
             favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
-            signRepository: container.resolve(SignRepositoryProtocol.self)
+            signRepository: container.resolve(SignRepositoryProtocol.self),
+            videoRepository: container.resolve(VideoRepositoryProtocol.self),
+            networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
     }
     
     /// Полный init для тестов и preview (constructor injection)
     init(
         favoritesRepository: FavoritesRepositoryProtocol,
-        signRepository: SignRepositoryProtocol
+        signRepository: SignRepositoryProtocol,
+        videoRepository: VideoRepositoryProtocol,
+        networkMonitor: NetworkMonitorProtocol
     ) {
         self.favoritesRepository = favoritesRepository
         self.signRepository = signRepository
+        self.videoRepository = videoRepository
+        self.networkMonitor = networkMonitor
 
         signRepository.dataUpdatedPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.applyFavoriteData(
-                    allSigns: updatedData.signs,
-                    categories: updatedData.categories,
-                    favoriteIds: favoritesRepository.getFavorites()
-                )
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await self.favoritesRepository.reconcileOfflineState()
+                    let entries = self.favoritesRepository.getFavoriteEntries()
+                    self.applyFavoriteData(
+                        allSigns: updatedData.signs,
+                        categories: updatedData.categories,
+                        entries: entries
+                    )
+                }
+            }
+            .store(in: &cancellables)
+
+        networkMonitor.connectionRestoredPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.retryFailedOfflinePreparation()
             }
             .store(in: &cancellables)
     }
@@ -70,38 +78,58 @@ final class FavoritesViewModel: ObservableObject {
     func loadFavorites() async {
         isLoading = true
         errorMessage = nil
-        
-        let favoriteIds = favoritesRepository.getFavorites()
-        
-        guard !favoriteIds.isEmpty else {
+        var shouldScheduleOfflinePreparationRetry = false
+
+        await favoritesRepository.reconcileOfflineState()
+        let entries = favoritesRepository.getFavoriteEntries()
+
+        guard !entries.isEmpty else {
             favoriteSigns = []
             categoryNamesById = [:]
+            offlineStatusBySignId = [:]
             isLoading = false
             return
         }
-        
+
         do {
             async let loadedSignsTask = signRepository.loadAllSigns()
             async let loadedCategoriesTask = signRepository.loadCategories()
             let (allSigns, categories) = try await (loadedSignsTask, loadedCategoriesTask)
-            applyFavoriteData(allSigns: allSigns, categories: categories, favoriteIds: favoriteIds)
+            applyFavoriteData(allSigns: allSigns, categories: categories, entries: entries)
+            shouldScheduleOfflinePreparationRetry = true
         } catch {
-            errorMessage = ErrorMessageMapper.message(for: error)
-            logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
+            if applySnapshotFallback(entries: entries) {
+                logger.warning("⚠️ Основная загрузка избранного не удалась, показаны snapshot данные")
+                shouldScheduleOfflinePreparationRetry = true
+            } else {
+                errorMessage = ErrorMessageMapper.message(for: error)
+                logger.error("❌ Failed to load all signs: \(error.localizedDescription)")
+            }
         }
-        
+
         isLoading = false
+
+        if shouldScheduleOfflinePreparationRetry {
+            scheduleOfflinePreparationRetryIfNeeded()
+        }
     }
     
     func removeFavorite(signId: String) {
         favoritesRepository.removeFavorite(signId: signId)
         favoriteSigns.removeAll { $0.id == signId }
+        offlineStatusBySignId.removeValue(forKey: signId)
+        if favoriteSigns.isEmpty {
+            errorMessage = nil
+        }
     }
     
     func clearAllFavorites() {
+        retryTask?.cancel()
         favoritesRepository.clearAllFavorites()
         favoriteSigns = []
         categoryNamesById = [:]
+        offlineStatusBySignId = [:]
+        errorMessage = nil
     }
     
     func isFavorite(signId: String) -> Bool {
@@ -113,39 +141,197 @@ final class FavoritesViewModel: ObservableObject {
     var groupedFavorites: [SearchViewModel.SignSection] {
         SignGroupingHelper.groupByFirstLetter(favoriteSigns)
     }
+
+    func offlineStatus(for signId: String) -> FavoriteOfflineStatus? {
+        offlineStatusBySignId[signId]
+    }
     
     // MARK: - Private Methods
 
-    private func applyFavoriteData(allSigns: [Sign], categories: [Category], favoriteIds: [String]) {
+    private func applyFavoriteData(allSigns: [Sign], categories: [Category], entries: [FavoriteEntry]) {
         let signsById = Dictionary(uniqueKeysWithValues: allSigns.map { ($0.id, $0) })
-        let loadedSigns = favoriteIds.compactMap { signsById[$0] }
-
-        favoriteSigns = loadedSigns
-        categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(
+        let categoryNames = CategoryDisplayDataHelper.categoryNamesById(
             from: CategoryDisplayDataHelper.sortedCategories(categories)
         )
-        sortFavorites()
+        var loadedSigns: [Sign] = []
+        var resolvedCategoryNames: [String: String] = [:]
+        var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
+        var removedIds: [String] = []
+        var snapshotFallbackIds: [String] = []
 
-        let failedCount = favoriteIds.count - loadedSigns.count
-        if failedCount > 0 {
-            errorMessage = "Не удалось загрузить \(failedCount) жестов"
-            let missingIds = Set(favoriteIds).subtracting(loadedSigns.map { $0.id })
-            logger.warning("⚠️ Missing signs: \(missingIds)")
-        } else {
+        for entry in entries {
+            resolvedStatuses[entry.signId] = entry.offlineStatus
+
+            if let liveSign = signsById[entry.signId] {
+                loadedSigns.append(liveSign)
+                resolvedCategoryNames[liveSign.categoryId] = CategoryDisplayDataHelper.name(
+                    for: liveSign.categoryId,
+                    in: categoryNames
+                )
+                favoritesRepository.updateFavoriteSnapshot(
+                    sign: liveSign,
+                    categoryName: CategoryDisplayDataHelper.name(for: liveSign.categoryId, in: categoryNames)
+                )
+                continue
+            }
+
+            if let snapshot = entry.snapshot {
+                loadedSigns.append(snapshot.sign)
+                resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
+                snapshotFallbackIds.append(entry.signId)
+                continue
+            }
+
+            favoritesRepository.removeFavorite(signId: entry.signId)
+            resolvedStatuses.removeValue(forKey: entry.signId)
+            removedIds.append(entry.signId)
+        }
+
+        favoriteSigns = loadedSigns.sorted { $0.word < $1.word }
+        categoryNamesById = resolvedCategoryNames
+        offlineStatusBySignId = resolvedStatuses
+
+        if !removedIds.isEmpty {
+            logger.warning("⚠️ Removed missing favorites from local storage: \(Set(removedIds))")
+        }
+        if !snapshotFallbackIds.isEmpty {
+            logger.warning("⚠️ Missing live signs rendered from stored snapshots: \(Set(snapshotFallbackIds))")
+        }
+        errorMessage = nil
+    }
+
+    private func applySnapshotFallback(entries: [FavoriteEntry]) -> Bool {
+        var loadedSigns: [Sign] = []
+        var resolvedCategoryNames: [String: String] = [:]
+        var resolvedStatuses: [String: FavoriteOfflineStatus] = [:]
+        var missingCount = 0
+
+        for entry in entries {
+            resolvedStatuses[entry.signId] = entry.offlineStatus
+
+            guard let snapshot = entry.snapshot else {
+                missingCount += 1
+                continue
+            }
+
+            loadedSigns.append(snapshot.sign)
+            resolvedCategoryNames[snapshot.sign.categoryId] = snapshot.categoryName
+        }
+
+        guard !loadedSigns.isEmpty else {
+            return false
+        }
+
+        favoriteSigns = loadedSigns.sorted { $0.word < $1.word }
+        categoryNamesById = resolvedCategoryNames
+        offlineStatusBySignId = resolvedStatuses
+
+        errorMessage = nil
+
+        return true
+    }
+
+    private func retryFailedOfflinePreparation() {
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            await self?.performRetryFailedOfflinePreparation()
+        }
+    }
+
+    private func scheduleOfflinePreparationRetryIfNeeded() {
+        guard !retryableOfflineEntries().isEmpty else { return }
+        retryFailedOfflinePreparation()
+    }
+
+    private func performRetryFailedOfflinePreparation() async {
+        guard await networkMonitor.checkConnection() else { return }
+
+        await favoritesRepository.reconcileOfflineState()
+        let failedEntries = retryableOfflineEntries()
+
+        guard !failedEntries.isEmpty else { return }
+
+        for entry in failedEntries {
+            guard !Task.isCancelled else { return }
+            guard favoritesRepository.isFavorite(signId: entry.signId) else { continue }
+
+            if let snapshot = favoritesRepository.cachedFavoriteSnapshot(signId: entry.signId) {
+                await prepareOfflineMedia(for: snapshot.sign, categoryName: snapshot.categoryName)
+                continue
+            }
+
+            do {
+                guard let liveSign = try await signRepository.getSign(byId: entry.signId) else { continue }
+                let categoryName = categoryNamesById[liveSign.categoryId] ?? liveSign.categoryId.capitalized
+                favoritesRepository.updateFavoriteSnapshot(sign: liveSign, categoryName: categoryName)
+                await prepareOfflineMedia(for: liveSign, categoryName: categoryName)
+            } catch {
+                logger.warning("⚠️ Не удалось восстановить snapshot для retry \(entry.signId): \(error.localizedDescription)")
+            }
+        }
+
+        if retryableOfflineEntries().isEmpty, !favoriteSigns.isEmpty {
             errorMessage = nil
         }
     }
-    
-    private func sortFavorites() {
-        switch sortOption {
-        case .dateAddedDesc:
-            break
-        case .dateAddedAsc:
-            favoriteSigns.reverse()
-        case .alphabeticalAsc:
-            favoriteSigns.sort { $0.word < $1.word }
-        case .alphabeticalDesc:
-            favoriteSigns.sort { $0.word > $1.word }
+
+    private func retryableOfflineEntries() -> [FavoriteEntry] {
+        favoritesRepository.getFavoriteEntries().filter { entry in
+            switch entry.offlineStatus {
+            case .failed:
+                return true
+            case .pending:
+                return !entry.requiredVideoIds.isEmpty
+            case .readyOffline:
+                return false
+            }
         }
+    }
+
+    private func prepareOfflineMedia(for sign: Sign, categoryName: String) async {
+        guard favoritesRepository.isFavorite(signId: sign.id) else { return }
+
+        let requiredVideoIds = sign.videosArray.map(\.id)
+        favoritesRepository.updateFavoriteSnapshot(sign: sign, categoryName: categoryName)
+
+        if requiredVideoIds.isEmpty {
+            favoritesRepository.updateOfflineStatus(
+                signId: sign.id,
+                status: .readyOffline,
+                downloadedVideoIds: [],
+                requiredVideoIds: []
+            )
+            offlineStatusBySignId[sign.id] = .readyOffline
+            return
+        }
+
+        var downloadedVideoIds: [Int] = []
+
+        for video in sign.videosArray {
+            guard !Task.isCancelled else { return }
+
+            do {
+                _ = try await videoRepository.getVideoURL(for: video, useFavoritesCache: true)
+                downloadedVideoIds.append(video.id)
+            } catch {
+                favoritesRepository.updateOfflineStatus(
+                    signId: sign.id,
+                    status: .failed,
+                    downloadedVideoIds: downloadedVideoIds,
+                    requiredVideoIds: requiredVideoIds
+                )
+                offlineStatusBySignId[sign.id] = .failed
+                logger.warning("⚠️ Retry офлайн-подготовки не удался для \(sign.id): \(error.localizedDescription)")
+                return
+            }
+        }
+
+        favoritesRepository.updateOfflineStatus(
+            signId: sign.id,
+            status: .readyOffline,
+            downloadedVideoIds: downloadedVideoIds,
+            requiredVideoIds: requiredVideoIds
+        )
+        offlineStatusBySignId[sign.id] = .readyOffline
     }
 }

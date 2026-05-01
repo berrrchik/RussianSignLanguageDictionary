@@ -3,6 +3,40 @@ import Foundation
 /// Маппер для конвертации ошибок в  сообщения
 /// Error enum определяют только случаи ошибок, этот маппер отвечает за сообщения.
 enum ErrorMessageMapper {
+    static func message(for status: RepositoryDataStatus) -> String {
+        switch status {
+        case .usingCachedData(.noInternet):
+            return "Нет интернета. Показаны сохранённые данные."
+        case .usingCachedData(.serverUnavailable):
+            return "Сервер недоступен. Показаны сохранённые данные."
+        case .noData(.noInternet):
+            return "Для первого запуска приложения необходимо подключение к интернету. После загрузки данных приложение будет работать офлайн."
+        case .noData(.serverUnavailable):
+            return "Сервер временно недоступен. Попробуйте открыть приложение позже."
+        case .idle, .loading, .availableLocally, .updated, .upToDate:
+            return "Данные загружены."
+        }
+    }
+
+    static func message(for status: OfflineIndicatorStatus) -> String {
+        switch status {
+        case .noInternet:
+            return "Нет интернета."
+        case .serverUnavailable:
+            return "Сервер недоступен. Показаны сохранённые данные."
+        }
+    }
+
+    static func message(for status: FavoriteOfflineStatus) -> String {
+        switch status {
+        case .pending:
+            return "Подготавливается для офлайн."
+        case .readyOffline:
+            return "Доступно офлайн."
+        case .failed:
+            return "Не удалось подготовить офлайн."
+        }
+    }
     
     // MARK: - SignRepositoryError Mapping
     
@@ -17,7 +51,7 @@ enum ErrorMessageMapper {
         case .invalidDataFormat:
             return "Неверный формат данных"
         case .noDataAvailable:
-            return "Для первого запуска приложения необходимо подключение к интернету. После загрузки данных приложение будет работать офлайн."
+            return "Данные недоступны. Повторите попытку позже."
         }
     }
     
@@ -26,13 +60,11 @@ enum ErrorMessageMapper {
     static func message(for error: VideoRepositoryError) -> String {
         switch error {
         case .invalidURL:
-            return "Неверный URL видео"
-        case .downloadFailed:
-            return "Не удалось загрузить видео"
-        case .videoNotCached:
-            return "Видео недоступно в офлайн-режиме. Добавьте жест в избранное для просмотра без интернета."
+            return "Неверный адрес видео."
         case .noInternetConnection:
-            return "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
+            return "Нет интернета."
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
         }
     }
     
@@ -74,12 +106,14 @@ enum ErrorMessageMapper {
         switch error {
         case .invalidURL:
             return "Невалидный URL видео"
+        case .noInternetConnection:
+            return "Нет интернета."
         case .cacheDirectoryNotAvailable:
             return "Директория кеша недоступна"
         case .sessionNotConfigured:
             return "Внутренняя ошибка: сессия загрузки не настроена"
-        case .downloadFailed:
-            return "Не удалось загрузить видео"
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
         case .fileNotFound:
             return "Файл видео не найден в кеше"
         }
@@ -152,4 +186,3 @@ enum ErrorMessageMapper {
         return "Произошла ошибка: \(error.localizedDescription)"
     }
 }
-

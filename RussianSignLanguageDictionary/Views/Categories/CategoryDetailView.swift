@@ -12,7 +12,7 @@ struct CategoryDetailView: View {
     var body: some View {
         contentView
             .navigationTitle(viewModel.category.name)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationBackButton()
             .onAppear {
                 AnalyticsService.logCategoryOpened(
@@ -67,6 +67,7 @@ struct CategoryDetailView: View {
             sections: viewModel.groupedSigns,
             favoritesRepository: deps.favoritesRepository,
             categoryNamesById: viewModel.categoryNamesById,
+            favoriteOfflineStatusProvider: nil,
             onSignSelected: { sign in
                 selectedSign = sign
             }

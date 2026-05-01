@@ -72,30 +72,86 @@ final class SignDetailViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoadingVideo)
         XCTAssertEqual(
             sut.videoErrorMessage,
-            "Нет подключения к интернету. Для просмотра этого видео необходимо подключение к сети."
+            "Нет интернета."
         )
     }
 
-    func testToggleFavoriteAddsFavoriteWhenCurrentlyNotFavorite() {
+    func testLoadVideoMapsServerFailureToShortStableMessage() async {
+        videoRepository.cachedVideoURLValue = nil
+        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.videoUnavailable)
         favoritesRepository.favoriteLookup["sign-1"] = false
+        let sut = makeSut()
+
+        await sut.loadVideo()
+
+        XCTAssertEqual(sut.videoErrorMessage, "Видео сейчас недоступно.")
+        XCTAssertFalse(sut.isLoadingVideo)
+    }
+
+    func testToggleFavoriteAddsFavoriteWithSnapshotAndMarksPendingImmediately() {
+        favoritesRepository.favoriteLookup["sign-1"] = false
+        videoRepository.directVideoURLImplementation = { _, _ in
+            try await Task.sleep(nanoseconds: 300_000_000)
+            return URL(fileURLWithPath: "/tmp/favorite.mp4")
+        }
         let sut = makeSut()
 
         sut.toggleFavorite()
 
         XCTAssertTrue(sut.isFavorite)
-        XCTAssertEqual(favoritesRepository.addFavoriteCalls, ["sign-1"])
+        XCTAssertEqual(favoritesRepository.addFavoriteWithSnapshotCalls.map(\.sign.id), ["sign-1"])
+        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.first?.status, .pending)
+        XCTAssertEqual(sut.favoriteOfflineStatus, .pending)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, [])
     }
 
     func testToggleFavoriteRemovesFavoriteWhenCurrentlyFavorite() {
         favoritesRepository.favoriteLookup["sign-1"] = true
+        favoritesRepository.entries = [FavoriteEntry(signId: "sign-1", offlineStatus: .readyOffline)]
         let sut = makeSut()
 
         sut.toggleFavorite()
 
         XCTAssertFalse(sut.isFavorite)
+        XCTAssertNil(sut.favoriteOfflineStatus)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, ["sign-1"])
         XCTAssertEqual(favoritesRepository.addFavoriteCalls, [])
+    }
+
+    func testToggleFavoritePreservesFavoriteWhenOfflinePreparationFails() async {
+        favoritesRepository.favoriteLookup["sign-1"] = false
+        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.noInternetConnection)
+        let sut = makeSut()
+
+        sut.toggleFavorite()
+
+        let didFail = await waitUntil {
+            sut.favoriteOfflineStatus == .failed
+        }
+
+        XCTAssertTrue(didFail)
+        XCTAssertTrue(sut.isFavorite)
+        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .failed)
+        XCTAssertEqual(favoritesRepository.removeFavoriteCalls, [])
+    }
+
+    func testToggleFavoriteMarksReadyOfflineAfterSuccessfulPreparation() async {
+        favoritesRepository.favoriteLookup["sign-1"] = false
+        videoRepository.directVideoURLResult = .success(URL(fileURLWithPath: "/tmp/favorite.mp4"))
+        let sut = makeSut()
+
+        sut.toggleFavorite()
+
+        let didComplete = await waitUntil {
+            sut.favoriteOfflineStatus == .readyOffline
+        }
+
+        XCTAssertTrue(didComplete)
+        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
+        XCTAssertEqual(
+            Set(favoritesRepository.updateOfflineStatusCalls.last?.downloadedVideoIds ?? []),
+            Set([1, 2])
+        )
     }
 
     func testLoadCategoryNameUsesRepositoryCategories() async {
@@ -116,6 +172,29 @@ final class SignDetailViewModelTests: XCTestCase {
         await sut.loadCategoryName()
 
         XCTAssertEqual(sut.categoryName, "Категория 1")
+    }
+
+    func testLoadCategoryNameUpdatesFavoriteSnapshotWhenSignAlreadyFavorite() async {
+        favoritesRepository.favoriteLookup["sign-1"] = true
+        favoritesRepository.entries = [FavoriteEntry(signId: "sign-1", offlineStatus: .pending)]
+        signRepository.loadCategoriesResult = .success([
+            AppCategory(
+                id: "category-1",
+                name: "Категория 1",
+                order: 1,
+                signCount: 1,
+                icon: nil,
+                color: nil,
+                createdAt: nil,
+                updatedAt: nil
+            )
+        ])
+        let sut = makeSut()
+
+        await sut.loadCategoryName()
+
+        XCTAssertEqual(favoritesRepository.updateFavoriteSnapshotCalls.last?.sign.id, "sign-1")
+        XCTAssertEqual(favoritesRepository.updateFavoriteSnapshotCalls.last?.categoryName, "Категория 1")
     }
 
     func testVideoNavigationUpdatesIndexAndAvailabilityFlags() {
@@ -186,7 +265,7 @@ final class SignDetailViewModelTests: XCTestCase {
 
         sut.navigateToSign("synonym-2")
         let didShowRetryableError = await waitUntil {
-            sut.synonymError?.contains("Не удалось загрузить жест") == true
+            sut.synonymError == "Не удалось загрузить данные"
         }
         XCTAssertTrue(didShowRetryableError)
 

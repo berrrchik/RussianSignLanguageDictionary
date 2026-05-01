@@ -5,6 +5,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     let sections: [SearchViewModel.SignSection]
     let favoritesRepository: FavoritesRepositoryProtocol?
     let categoryNamesById: [String: String]
+    let favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
     let onSignSelected: (Sign) -> Void
     
     func makeUIView(context: Context) -> UITableView {
@@ -19,6 +20,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         tableView.sectionIndexTrackingBackgroundColor = .clear
         
         tableView.contentInsetAdjustmentBehavior = .never
+        tableView.sectionHeaderTopPadding = 0
         context.coordinator.tableView = tableView
         
         return tableView
@@ -28,11 +30,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         context.coordinator.sections = sections
         context.coordinator.favoritesRepository = favoritesRepository
         context.coordinator.categoryNamesById = categoryNamesById
+        context.coordinator.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
         context.coordinator.tableView = uiView
-
-        // SwiftUI может вызывать `updateUIView` до того, как UIKit-вью окажется в `window`.
-        // В этот момент принудительный `reloadData()` может приводить к предупреждению
-        // "UITableView was told to layout its visible cells ... without being in the view hierarchy".
         if uiView.window != nil {
             uiView.reloadData()
         } else {
@@ -54,6 +53,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             sections: sections,
             favoritesRepository: favoritesRepository,
             categoryNamesById: categoryNamesById,
+            favoriteOfflineStatusProvider: favoriteOfflineStatusProvider,
             onSignSelected: onSignSelected
         )
     }
@@ -62,6 +62,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         var sections: [SearchViewModel.SignSection]
         var favoritesRepository: FavoritesRepositoryProtocol?
         var categoryNamesById: [String: String]
+        var favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
         let onSignSelected: (Sign) -> Void
         weak var tableView: UITableView?
         
@@ -69,11 +70,13 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             sections: [SearchViewModel.SignSection],
             favoritesRepository: FavoritesRepositoryProtocol?,
             categoryNamesById: [String: String],
+            favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?,
             onSignSelected: @escaping (Sign) -> Void
         ) {
             self.sections = sections
             self.favoritesRepository = favoritesRepository
             self.categoryNamesById = categoryNamesById
+            self.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
             self.onSignSelected = onSignSelected
             super.init()
         }
@@ -81,6 +84,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         func cleanup() {
             sections.removeAll()
             favoritesRepository = nil
+            favoriteOfflineStatusProvider = nil
         }
         
         // MARK: - UITableViewDataSource
@@ -109,8 +113,14 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
                 for: sign.categoryId,
                 in: categoryNamesById
             )
+            let offlineStatus = favoriteOfflineStatusProvider?(sign.id)
             
-            cell.configure(with: sign, categoryName: categoryName, isFavorite: isFavorite)
+            cell.configure(
+                with: sign,
+                categoryName: categoryName,
+                isFavorite: isFavorite,
+                offlineStatus: offlineStatus
+            )
             
             return cell
         }
@@ -136,7 +146,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         // MARK: - UITableViewDelegate
         
         func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-            tableView.deselectRow(at: indexPath, animated: true)
+            tableView.deselectRow(at: indexPath, animated: false)
             
             guard indexPath.section < sections.count,
                   indexPath.row < sections[indexPath.section].signs.count else {
@@ -144,10 +154,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             }
             
             let sign = sections[indexPath.section].signs[indexPath.row]
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.onSignSelected(sign)
-            }
+            onSignSelected(sign)
         }
         
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {

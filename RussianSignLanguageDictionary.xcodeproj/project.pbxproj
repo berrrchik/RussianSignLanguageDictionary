@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57068D642F9E5EA800FE54F3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 57068D632F9E5EA800FE54F3 /* PrivacyInfo.xcprivacy */; };
 		57578D372F4322310073FB35 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57578D362F4322310073FB35 /* FirebaseAnalytics */; };
 		57578D3B2F4328150073FB35 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 57578D3A2F4328150073FB35 /* FirebaseAnalyticsCore */; };
 		57BD95852F432F9200D09B31 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 57BD95842F432F9200D09B31 /* FirebaseCrashlytics */; };
@@ -31,6 +32,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		57068D632F9E5EA800FE54F3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		57D364A82EC4FC3E007D9784 /* RussianSignLanguageDictionary.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RussianSignLanguageDictionary.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57D366BC2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RussianSignLanguageDictionaryTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D12F01000100AABBCC /* RussianSignLanguageDictionaryUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RussianSignLanguageDictionaryUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,6 +88,7 @@
 		57D3649F2EC4FC3E007D9784 = {
 			isa = PBXGroup;
 			children = (
+				57068D632F9E5EA800FE54F3 /* PrivacyInfo.xcprivacy */,
 				57D364AA2EC4FC3E007D9784 /* RussianSignLanguageDictionary */,
 				57D366BD2ECA64B9007D9784 /* RussianSignLanguageDictionaryTests */,
 				A1B2C3D22F01000100AABBCC /* RussianSignLanguageDictionaryUITests */,
@@ -238,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57068D642F9E5EA800FE54F3 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

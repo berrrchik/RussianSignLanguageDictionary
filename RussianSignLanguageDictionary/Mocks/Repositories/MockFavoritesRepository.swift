@@ -2,38 +2,85 @@ import Foundation
 
 #if DEBUG
 /// Mock реализация FavoritesRepositoryProtocol для превью и тестов
+@MainActor
 final class MockFavoritesRepository: FavoritesRepositoryProtocol {
     // MARK: - Properties
     
-    /// Хранилище избранных жестов
-    private var favorites: Set<String> = []
+    private var entries: [FavoriteEntry] = []
     
     // MARK: - Init
     
     init(initialFavorites: [String] = []) {
-        self.favorites = Set(initialFavorites)
+        self.entries = initialFavorites.map { FavoriteEntry(signId: $0) }
     }
     
     // MARK: - FavoritesRepositoryProtocol
     
     func getFavorites() -> [String] {
-        return Array(favorites)
+        entries.map(\.signId)
+    }
+
+    func getFavoriteEntries() -> [FavoriteEntry] {
+        entries
+    }
+
+    func cachedFavoriteSnapshot(signId: String) -> FavoriteSignSnapshot? {
+        entries.first(where: { $0.signId == signId })?.snapshot
+    }
+
+    func failedFavoriteEntries() -> [FavoriteEntry] {
+        entries.filter { $0.offlineStatus == .failed }
+    }
+
+    func reconcileOfflineState() async {
     }
     
     func addFavorite(signId: String) {
-        favorites.insert(signId)
+        guard !entries.contains(where: { $0.signId == signId }) else { return }
+        entries.append(FavoriteEntry(signId: signId))
+    }
+
+    func addFavorite(sign: Sign, categoryName: String) {
+        if let index = entries.firstIndex(where: { $0.signId == sign.id }) {
+            entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+            return
+        }
+
+        entries.append(
+            FavoriteEntry(
+                signId: sign.id,
+                snapshot: FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+            )
+        )
+    }
+
+    func updateFavoriteSnapshot(sign: Sign, categoryName: String) {
+        guard let index = entries.firstIndex(where: { $0.signId == sign.id }) else { return }
+        entries[index].snapshot = FavoriteSignSnapshot(sign: sign, categoryName: categoryName)
+    }
+
+    func updateOfflineStatus(
+        signId: String,
+        status: FavoriteOfflineStatus,
+        downloadedVideoIds: [Int],
+        requiredVideoIds: [Int]
+    ) {
+        guard let index = entries.firstIndex(where: { $0.signId == signId }) else { return }
+        entries[index].offlineStatus = status
+        entries[index].requiredVideoIds = requiredVideoIds
+        entries[index].downloadedVideos = downloadedVideoIds.map { FavoriteOfflineVideo(videoId: $0) }
     }
     
     func removeFavorite(signId: String) {
-        favorites.remove(signId)
+        entries.removeAll { $0.signId == signId }
     }
     
     func isFavorite(signId: String) -> Bool {
-        return favorites.contains(signId)
+        entries.contains { $0.signId == signId }
     }
     
     func clearAllFavorites() {
-        favorites.removeAll()
+        entries.removeAll()
     }
 }
 
