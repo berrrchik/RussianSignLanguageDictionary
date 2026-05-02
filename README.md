@@ -13,6 +13,8 @@
 
 ## Демо
 
+https://github.com/user-attachments/assets/ff46733e-a3b9-4ea4-a696-1efa5b91989b
+
 ---
 
 ## Основные функции
@@ -55,7 +57,7 @@
   - `HybridSearchService` и `SBERTSearchService`;
   - `VideoCacheService` и `CacheService`;
   - `NetworkMonitor` для контроля connectivity.
-- Наблюдаемость через `Firebase Analytics`, `Crashlytics` и `Firebase Performance`.
+- Мониторинг через `Firebase Analytics`, `Crashlytics` и `Firebase Performance`.
 - Тестируемая архитектура с unit, integration и UI тестами.
 
 ---
