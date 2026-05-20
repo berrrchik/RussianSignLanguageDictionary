@@ -299,3 +299,40 @@ final class SyncRepositorySpy: SyncRepositoryProtocol {
         return try fetchAllDataResult.get()
     }
 }
+
+final class LessonRepositorySpy: LessonRepositoryProtocol {
+    private(set) var loadAllLessonsCallCount = 0
+    private(set) var getLessonCallArguments: [String] = []
+    private(set) var getLessonsCallCount = 0
+
+    var loadAllLessonsResult: Result<[Lesson], Error> = .success([])
+    var getLessonResult: Result<Lesson?, Error> = .success(nil)
+    var getLessonsResult: Result<[Lesson], Error> = .success([])
+    var loadAllLessonsImplementation: (() async throws -> [Lesson])?
+    var getLessonImplementation: ((String) async throws -> Lesson?)?
+    var getLessonsImplementation: (() async throws -> [Lesson])?
+
+    func loadAllLessons() async throws -> [Lesson] {
+        loadAllLessonsCallCount += 1
+        if let loadAllLessonsImplementation {
+            return try await loadAllLessonsImplementation()
+        }
+        return try loadAllLessonsResult.get()
+    }
+
+    func getLesson(byId id: String) async throws -> Lesson? {
+        getLessonCallArguments.append(id)
+        if let getLessonImplementation {
+            return try await getLessonImplementation(id)
+        }
+        return try getLessonResult.get()
+    }
+
+    func getLessons() async throws -> [Lesson] {
+        getLessonsCallCount += 1
+        if let getLessonsImplementation {
+            return try await getLessonsImplementation()
+        }
+        return try getLessonsResult.get()
+    }
+}
