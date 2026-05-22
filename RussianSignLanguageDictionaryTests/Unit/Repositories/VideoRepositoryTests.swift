@@ -193,7 +193,8 @@ final class VideoRepositoryTests: XCTestCase {
         }
     }
 
-    func testGetLessonVideoURLReturnsRemoteURLWithoutPreflightRequest() async throws {
+    func testGetLessonVideoURLDownloadsToShortTermCache() async throws {
+        configureDownloadResponse(data: Data("lesson-video-data".utf8))
         let lesson = Lesson(
             id: "lesson-1",
             title: "Lesson",
@@ -206,9 +207,9 @@ final class VideoRepositoryTests: XCTestCase {
 
         let url = try await sut.getVideoURL(for: lesson)
 
-        XCTAssertEqual(url, try XCTUnwrap(APIConfig.videoURL(forPath: lesson.videoUrl)))
-        XCTAssertEqual(requestCount, 0)
-        XCTAssertEqual(networkMonitor.checkConnectionCallCount, 1)
+        XCTAssertTrue(url.isFileURL)
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertGreaterThanOrEqual(networkMonitor.checkConnectionCallCount, 1)
     }
 
     func testPreloadVideoStoresShortTermCachedFile() async throws {

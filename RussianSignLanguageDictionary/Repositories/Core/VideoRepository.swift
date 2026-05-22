@@ -148,18 +148,12 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     func getVideoURL(for lesson: Lesson) async throws -> URL {
-        guard let url = APIConfig.videoURL(forPath: lesson.videoUrl) else {
+        guard APIConfig.videoURL(forPath: lesson.videoUrl) != nil else {
             logger.error("❌ Lesson video: невалидный путь для урока \(lesson.id) (\(lesson.videoUrl))")
             throw VideoRepositoryError.invalidURL
         }
         
-        let isConnected = await networkMonitor.checkConnection()
-        if !isConnected {
-            logger.warning("⚠️ Lesson video: нет интернета для загрузки видео урока \(lesson.id)")
-            throw VideoRepositoryError.noInternetConnection
-        }
-        
-        return url
+        return try await getVideoURL(for: signVideo(for: lesson), useFavoritesCache: false)
     }
     
     func preloadVideo(for sign: Sign) async throws {
@@ -184,6 +178,21 @@ final class VideoRepository: VideoRepositoryProtocol {
     }
     
     // MARK: - Private Methods
+    
+    private func signVideo(for lesson: Lesson) -> SignVideo {
+        SignVideo(
+            id: stableLessonVideoId(lesson.id),
+            url: lesson.videoUrl,
+            contextDescription: lesson.title,
+            order: lesson.order,
+            createdAt: lesson.createdAt,
+            updatedAt: lesson.updatedAt
+        )
+    }
+    
+    private func stableLessonVideoId(_ lessonId: String) -> Int {
+        lessonId.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) }
+    }
     
     /// Получает URL видео из долгосрочного кеша (для избранных жестов)
     /// Если видео есть в кеше - возвращает URL локального файла
