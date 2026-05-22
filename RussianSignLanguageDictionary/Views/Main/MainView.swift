@@ -74,29 +74,24 @@ struct MainView: View {
     
     private var tabView: some View {
         TabView {
-            SearchView()
-            .tabItem {
-                Label("Поиск", systemImage: "magnifyingglass")
+            Tab("Поиск", systemImage: "magnifyingglass") {
+                SearchView()
             }
             
-            FavoritesView()
-            .tabItem {
-                Label("Избранное", systemImage: "heart.fill")
+            Tab("Избранное", systemImage: "heart.fill") {
+                FavoritesView()
             }
             
-            CategoriesView()
-            .tabItem {
-                Label("Категории", systemImage: "square.grid.2x2")
+            Tab("Категории", systemImage: "square.grid.2x2") {
+                CategoriesView()
             }
             
-            LessonsView()
-            .tabItem {
-                Label("Обучение", systemImage: "book.fill")
+            Tab("Обучение", systemImage: "book.fill") {
+                LessonsView()
             }
             
-            SettingsView()
-            .tabItem {
-                Label("Настройки", systemImage: "gear")
+            Tab("Настройки", systemImage: "gear") {
+                SettingsView()
             }
         }
     }
