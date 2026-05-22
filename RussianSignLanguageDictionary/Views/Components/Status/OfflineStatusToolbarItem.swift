@@ -21,18 +21,30 @@ struct OfflineStatusToolbarItem: View {
     }
 
     private func statusPopover(for status: OfflineIndicatorStatus) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(status.title, systemImage: status.systemImageName)
-                .font(.headline)
-
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: status.systemImageName)
+                    .foregroundStyle(.orange)
+                    .imageScale(.medium)
+                    .accessibilityHidden(true)
+                
+                Text(status.title)
+                    .font(.headline)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
             Text(ErrorMessageMapper.message(for: status))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .frame(maxWidth: 260, alignment: .leading)
+        .frame(minWidth: 220, maxWidth: 340, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .presentationCompactAdaptation(.popover)
+        .presentationSizing(.fitted)
     }
 }
 
