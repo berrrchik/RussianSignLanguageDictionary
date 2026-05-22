@@ -53,6 +53,7 @@ final class LessonDetailViewModel: ObservableObject {
     func loadVideo() async {
         isLoadingVideo = true
         videoErrorMessage = nil
+        videoURL = nil
         
         do {
             let url = try await videoRepository.getVideoURL(for: lesson)
