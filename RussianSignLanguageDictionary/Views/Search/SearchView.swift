@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SearchView: View {
+    @ScaledMetric(relativeTo: .body) private var sortControlSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .body) private var filterHorizontalPadding: CGFloat = 12
+    @ScaledMetric(relativeTo: .body) private var filterVerticalPadding: CGFloat = 8
+    
     @StateObject private var viewModel = SearchViewModel()
     @Environment(\.dependencies) private var deps
     @State private var selectedSign: Sign?
@@ -137,15 +141,16 @@ struct SearchView: View {
                 }
             }
         } label: {
-            HStack {
+            HStack(spacing: 4) {
                 Text(selectedCategoryName)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.semibold))
             }
             .foregroundColor(.primary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, filterHorizontalPadding)
+            .padding(.vertical, filterVerticalPadding)
             .background(Color.secondary.opacity(0.2))
             .cornerRadius(8)
         }
@@ -164,9 +169,9 @@ struct SearchView: View {
             viewModel.sortOrder = viewModel.sortOrder == .ascending ? .descending : .ascending
         }) {
             Image(systemName: "arrow.up.arrow.down")
-                .font(.system(size: 16, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundColor(.primary)
-                .frame(width: 36, height: 36)
+                .frame(width: sortControlSize, height: sortControlSize)
                 .background(Color.secondary.opacity(0.2))
                 .cornerRadius(8)
         }
