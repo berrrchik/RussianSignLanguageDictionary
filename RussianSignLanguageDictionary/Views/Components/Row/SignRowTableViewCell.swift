@@ -16,6 +16,12 @@ final class SignRowTableViewCell: UITableViewCell {
     private let categoryContainer = UIView()
     private let favoriteIcon = UIImageView()
     private let iconView = UIView()
+    private var iconViewWidthConstraint: NSLayoutConstraint?
+    private var iconViewHeightConstraint: NSLayoutConstraint?
+    private var offlineStatusWidthConstraint: NSLayoutConstraint?
+    private var offlineStatusHeightConstraint: NSLayoutConstraint?
+    private var favoriteIconWidthConstraint: NSLayoutConstraint?
+    private var favoriteIconHeightConstraint: NSLayoutConstraint?
     
     // MARK: - Initialization
     
@@ -29,6 +35,14 @@ final class SignRowTableViewCell: UITableViewCell {
     }
     
     // MARK: - Lifecycle
+    
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory else {
+            return
+        }
+        applyDynamicTypeStyles()
+    }
     
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -80,8 +94,34 @@ final class SignRowTableViewCell: UITableViewCell {
         setupOfflineStatusIcon()
         setupFavoriteIcon()
         setupConstraints()
+        applyDynamicTypeStyles()
         
         accessoryType = .none
+    }
+    
+    private func applyDynamicTypeStyles() {
+        let headlineFont = UIFont.preferredFont(forTextStyle: .headline)
+        signWordLabel.font = UIFont.systemFont(ofSize: headlineFont.pointSize, weight: .semibold)
+        signWordLabel.adjustsFontForContentSizeCategory = true
+        
+        categoryLabel.font = UIFont.preferredFont(forTextStyle: .caption1)
+        categoryLabel.adjustsFontForContentSizeCategory = true
+        
+        let iconSide = UIFontMetrics.default.scaledValue(for: 60)
+        iconViewWidthConstraint?.constant = iconSide
+        iconViewHeightConstraint?.constant = iconSide
+        
+        let accessorySide = UIFontMetrics.default.scaledValue(for: 24)
+        favoriteIconWidthConstraint?.constant = accessorySide
+        favoriteIconHeightConstraint?.constant = accessorySide
+        
+        let statusSide = UIFontMetrics.default.scaledValue(for: 16)
+        offlineStatusWidthConstraint?.constant = statusSide
+        offlineStatusHeightConstraint?.constant = statusSide
+        
+        let symbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body)
+        favoriteIcon.preferredSymbolConfiguration = symbolConfiguration
+        offlineStatusIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
     }
     
     private func setupIconView() {
@@ -105,8 +145,8 @@ final class SignRowTableViewCell: UITableViewCell {
     }
     
     private func setupSignWordLabel() {
-        signWordLabel.font = .systemFont(ofSize: 17, weight: .semibold)
         signWordLabel.textColor = .label
+        signWordLabel.numberOfLines = 1
         signWordLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(signWordLabel)
     }
@@ -118,7 +158,6 @@ final class SignRowTableViewCell: UITableViewCell {
         categoryContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(categoryContainer)
         
-        categoryLabel.font = .systemFont(ofSize: 12, weight: .medium)
         categoryLabel.textColor = .systemBlue
         categoryLabel.backgroundColor = .clear
         categoryLabel.textAlignment = .center
@@ -143,12 +182,27 @@ final class SignRowTableViewCell: UITableViewCell {
     }
     
     private func setupConstraints() {
+        let iconWidth = iconView.widthAnchor.constraint(equalToConstant: 60)
+        let iconHeight = iconView.heightAnchor.constraint(equalToConstant: 60)
+        iconViewWidthConstraint = iconWidth
+        iconViewHeightConstraint = iconHeight
+        
+        let offlineWidth = offlineStatusIcon.widthAnchor.constraint(equalToConstant: 16)
+        let offlineHeight = offlineStatusIcon.heightAnchor.constraint(equalToConstant: 16)
+        offlineStatusWidthConstraint = offlineWidth
+        offlineStatusHeightConstraint = offlineHeight
+        
+        let favoriteWidth = favoriteIcon.widthAnchor.constraint(equalToConstant: 24)
+        let favoriteHeight = favoriteIcon.heightAnchor.constraint(equalToConstant: 24)
+        favoriteIconWidthConstraint = favoriteWidth
+        favoriteIconHeightConstraint = favoriteHeight
+        
         NSLayoutConstraint.activate([
             // Icon View
             iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 60),
-            iconView.heightAnchor.constraint(equalToConstant: 60),
+            iconWidth,
+            iconHeight,
             
             // Sign Word Label
             signWordLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
@@ -156,15 +210,14 @@ final class SignRowTableViewCell: UITableViewCell {
             
             offlineStatusIcon.leadingAnchor.constraint(equalTo: signWordLabel.trailingAnchor, constant: 6),
             offlineStatusIcon.centerYAnchor.constraint(equalTo: signWordLabel.centerYAnchor),
-            offlineStatusIcon.widthAnchor.constraint(equalToConstant: 16),
-            offlineStatusIcon.heightAnchor.constraint(equalToConstant: 16),
+            offlineWidth,
+            offlineHeight,
             
             // Category Container
             categoryContainer.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             categoryContainer.topAnchor.constraint(equalTo: signWordLabel.bottomAnchor, constant: 4),
             categoryContainer.trailingAnchor.constraint(lessThanOrEqualTo: favoriteIcon.leadingAnchor, constant: -8),
-            categoryContainer.heightAnchor.constraint(equalToConstant: 24),
-            categoryContainer.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+            categoryContainer.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
             
             // Category Label
             categoryLabel.leadingAnchor.constraint(equalTo: categoryContainer.leadingAnchor, constant: 10),
@@ -175,8 +228,8 @@ final class SignRowTableViewCell: UITableViewCell {
             // Favorite Icon
             favoriteIcon.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             favoriteIcon.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            favoriteIcon.widthAnchor.constraint(equalToConstant: 24),
-            favoriteIcon.heightAnchor.constraint(equalToConstant: 24)
+            favoriteWidth,
+            favoriteHeight
         ])
     }
     

@@ -18,6 +18,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         tableView.sectionIndexColor = .systemBlue
         tableView.sectionIndexBackgroundColor = .clear
         tableView.sectionIndexTrackingBackgroundColor = .clear
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 80
         
         tableView.contentInsetAdjustmentBehavior = .never
         tableView.sectionHeaderTopPadding = 0
@@ -159,10 +161,6 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
             return 28
-        }
-        
-        func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-            return 80
         }
     }
 }
