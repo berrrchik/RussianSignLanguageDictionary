@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SignDetailView: View {
+    @ScaledMetric(relativeTo: .body) private var videoPlayerHeight = LayoutConstants.VideoPlayer.defaultHeight
+    
     @StateObject private var viewModel: SignDetailViewModel
     
     // MARK: - Init
@@ -46,17 +48,17 @@ struct SignDetailView: View {
         VStack(spacing: LayoutConstants.SignDetail.sectionSpacing) {
             if viewModel.isLoadingVideo {
                 LoadingView(message: "Загрузка видео...")
-                    .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
+                    .frame(height: videoPlayerHeight)
             } else if let errorMessage = viewModel.videoErrorMessage {
                 ErrorView(
                     message: errorMessage,
                     retryAction: { Task { await viewModel.loadVideo() } },
                     skipAction: viewModel.canGoNext ? { viewModel.showNextVideo() } : nil
                 )
-                .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
+                .frame(height: videoPlayerHeight)
             } else if let videoURL = viewModel.videoURL {
                 VideoPlayerView(videoURL: videoURL)
-                    .frame(height: LayoutConstants.VideoPlayer.defaultHeight)
+                    .frame(height: videoPlayerHeight)
                     .animation(.easeInOut, value: viewModel.currentVideoIndex)
             }
             
