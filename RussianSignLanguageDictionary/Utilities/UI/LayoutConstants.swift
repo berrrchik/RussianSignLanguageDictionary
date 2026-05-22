@@ -18,6 +18,9 @@ enum LayoutConstants {
         
         /// Радиус скругления углов
         static let cornerRadius: CGFloat = 12
+        
+        /// Горизонтальные отступы области видео
+        static let horizontalPadding: CGFloat = 16
     }
     
     // MARK: - Category Card
