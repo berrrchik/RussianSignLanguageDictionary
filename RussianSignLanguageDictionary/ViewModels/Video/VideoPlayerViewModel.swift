@@ -12,13 +12,17 @@ final class VideoPlayerViewModel: ObservableObject {
     
     @Published private(set) var player: AVPlayer?
     @Published private(set) var isReadyToPlay = false
+    @Published private(set) var playbackErrorMessage: String?
     
     // MARK: - Properties
+    
+    private static let remoteLoadTimeout: TimeInterval = 15
     
     private let logger = Logger(subsystem: "com.rsl.videoPlayer", category: "VideoPlayerViewModel")
     
     private var loopObserver: NSObjectProtocol?
     private var statusObserver: NSKeyValueObservation?
+    private var setupTask: Task<Void, Never>?
     
     // MARK: - Public Methods
     
@@ -26,6 +30,7 @@ final class VideoPlayerViewModel: ObservableObject {
     /// - Parameter url: URL видео (локальный файл или remote URL)
     func setupPlayer(for url: URL) {
         cleanupPlayer()
+        playbackErrorMessage = nil
         
         if url.isFileURL {
             setupLocalPlayer(url: url)
@@ -36,6 +41,8 @@ final class VideoPlayerViewModel: ObservableObject {
     
     /// Очищает ресурсы player
     func cleanupPlayer() {
+        setupTask?.cancel()
+        setupTask = nil
         player?.pause()
         
         if let observer = loopObserver {
@@ -48,15 +55,12 @@ final class VideoPlayerViewModel: ObservableObject {
         
         player = nil
         isReadyToPlay = false
+        playbackErrorMessage = nil
     }
     
     // MARK: - Private Methods
     
     /// Настройка player для локального файла
-    ///
-    /// Для локальных файлов AVPlayer готовится почти мгновенно,
-    /// но корректно наблюдаем `playerItem.status` через KVO
-    /// вместо ложного `isReadyToPlay = true` до реальной готовности.
     private func setupLocalPlayer(url: URL) {
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
@@ -64,46 +68,104 @@ final class VideoPlayerViewModel: ObservableObject {
         newPlayer.actionAtItemEnd = .none
         
         setupLoopObserver(for: playerItem, player: newPlayer)
-        self.player = newPlayer
-        
-        // KVO на status: для локальных файлов .readyToPlay наступает почти мгновенно
-        statusObserver = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self = self else { return }
-                if item.status == .readyToPlay {
-                    self.isReadyToPlay = true
-                    newPlayer.play()
-                }
-            }
-        }
+        player = newPlayer
+        observePlayerItemStatus(playerItem, player: newPlayer)
     }
     
     /// Настройка player для удалённого URL (асинхронно, с loading)
     private func setupRemotePlayer(url: URL) {
         isReadyToPlay = false
+        playbackErrorMessage = nil
         
-        let asset = AVURLAsset(url: url)
-        let logger = self.logger
-        
-        Task {
+        setupTask = Task {
+            let asset = AVURLAsset(url: url)
+            
             do {
-                let isPlayable = try await asset.load(.isPlayable)
-                guard isPlayable else { return }
+                let isPlayable = try await loadPlayableStatus(for: asset)
+                guard !Task.isCancelled else { return }
                 
-                await MainActor.run {
-                    let playerItem = AVPlayerItem(asset: asset)
-                    let newPlayer = AVPlayer(playerItem: playerItem)
-                    newPlayer.actionAtItemEnd = .none
-                    
-                    self.setupLoopObserver(for: playerItem, player: newPlayer)
-                    self.player = newPlayer
-                    self.isReadyToPlay = true
-                    newPlayer.play()
+                guard isPlayable else {
+                    reportPlaybackFailure()
+                    return
                 }
+                
+                let playerItem = AVPlayerItem(asset: asset)
+                let newPlayer = AVPlayer(playerItem: playerItem)
+                newPlayer.actionAtItemEnd = .none
+                
+                setupLoopObserver(for: playerItem, player: newPlayer)
+                player = newPlayer
+                observePlayerItemStatus(playerItem, player: newPlayer)
             } catch {
+                guard !Task.isCancelled else { return }
                 logger.error("❌ Ошибка загрузки ассета: \(error.localizedDescription)")
+                reportPlaybackFailure(error)
             }
         }
+    }
+    
+    private func observePlayerItemStatus(_ playerItem: AVPlayerItem, player: AVPlayer) {
+        statusObserver = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                
+                switch item.status {
+                case .readyToPlay:
+                    self.playbackErrorMessage = nil
+                    self.isReadyToPlay = true
+                    player.play()
+                case .failed:
+                    self.reportPlaybackFailure(item.error)
+                default:
+                    break
+                }
+            }
+        }
+    }
+    
+    private func loadPlayableStatus(for asset: AVURLAsset) async throws -> Bool {
+        try await withThrowingTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                try await asset.load(.isPlayable)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(Self.remoteLoadTimeout * 1_000_000_000))
+                throw VideoRepositoryError.videoUnavailable
+            }
+            
+            guard let result = try await group.next() else {
+                throw VideoRepositoryError.videoUnavailable
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+    
+    private func reportPlaybackFailure(_ error: Error? = nil) {
+        setupTask?.cancel()
+        setupTask = nil
+        isReadyToPlay = false
+        player?.pause()
+        playbackErrorMessage = Self.message(for: error)
+    }
+    
+    private static func message(for error: Error?) -> String {
+        if let videoError = error as? VideoRepositoryError {
+            return ErrorMessageMapper.message(for: videoError)
+        }
+        
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return ErrorMessageMapper.message(for: VideoRepositoryError.noInternetConnection)
+            case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
+                return ErrorMessageMapper.message(for: VideoRepositoryError.videoUnavailable)
+            default:
+                return ErrorMessageMapper.message(for: VideoRepositoryError.videoUnavailable)
+            }
+        }
+        
+        return ErrorMessageMapper.message(for: VideoRepositoryError.videoUnavailable)
     }
     
     /// Настраивает observer для loop видео

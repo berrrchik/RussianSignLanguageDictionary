@@ -20,7 +20,12 @@ struct VideoPlayerView: View {
     
     var body: some View {
         ZStack {
-            if let player = viewModel.player, viewModel.isReadyToPlay {
+            if let errorMessage = viewModel.playbackErrorMessage {
+                ErrorView(
+                    message: errorMessage,
+                    retryAction: { viewModel.setupPlayer(for: videoURL) }
+                )
+            } else if let player = viewModel.player, viewModel.isReadyToPlay {
                 VideoPlayer(player: player)
                     .aspectRatio(aspectRatio, contentMode: .fit)
                     .cornerRadius(LayoutConstants.VideoPlayer.cornerRadius)
