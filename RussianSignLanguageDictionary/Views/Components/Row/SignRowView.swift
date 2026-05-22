@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SignRowView: View {
+    @ScaledMetric(relativeTo: .body) private var thumbnailSize = LayoutConstants.SignRow.thumbnailSize
+    @ScaledMetric(relativeTo: .body) private var iconSize = LayoutConstants.SignRow.iconSize
     let sign: Sign
     let categoryName: String
     let showFavoriteIndicator: Bool
@@ -41,7 +43,7 @@ struct SignRowView: View {
             
             if showFavoriteIndicator && isFavorite {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 20))
+                    .font(.body)
                     .foregroundColor(.red)
                     .accessibilityLabel("В избранном")
             }
@@ -56,10 +58,10 @@ struct SignRowView: View {
     private var placeholderImage: some View {
         RoundedRectangle(cornerRadius: LayoutConstants.SignRow.thumbnailCornerRadius)
             .fill(Color.secondary.opacity(LayoutConstants.Opacity.secondary))
-            .frame(width: LayoutConstants.SignRow.thumbnailSize, height: LayoutConstants.SignRow.thumbnailSize)
+            .frame(width: thumbnailSize, height: thumbnailSize)
             .overlay(
                 Image(systemName: "hand.raised.fill")
-                    .font(.system(size: LayoutConstants.SignRow.iconSize))
+                    .font(.system(size: iconSize))
                     .foregroundColor(.secondary)
             )
     }
