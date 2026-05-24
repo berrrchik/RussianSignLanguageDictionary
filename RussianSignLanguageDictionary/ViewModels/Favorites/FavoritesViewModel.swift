@@ -5,8 +5,9 @@ import os.log
 @MainActor
 final class FavoritesViewModel: ObservableObject {
     // MARK: - Logger
-    
+
     private let logger = Logger(subsystem: "com.rsl.favorites", category: "FavoritesViewModel")
+
     // MARK: - Published Properties
     
     @Published private(set) var favoriteSigns: [Sign] = []
@@ -18,34 +19,34 @@ final class FavoritesViewModel: ObservableObject {
     
     private let favoritesRepository: FavoritesRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
-    private let videoRepository: VideoRepositoryProtocol
+    private let offlinePreparationService: OfflinePreparationServiceProtocol
     private let networkMonitor: NetworkMonitorProtocol
     private var cancellables = Set<AnyCancellable>()
     private var retryTask: Task<Void, Never>?
-    
+
     // MARK: - Init
-    
+
     /// Convenience init для production — резолвит зависимости из DIContainer
     convenience init() {
         let container = DIContainer.shared
         self.init(
             favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
             signRepository: container.resolve(SignRepositoryProtocol.self),
-            videoRepository: container.resolve(VideoRepositoryProtocol.self),
+            offlinePreparationService: container.resolve(OfflinePreparationServiceProtocol.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
     }
-    
+
     /// Полный init для тестов и preview (constructor injection)
     init(
         favoritesRepository: FavoritesRepositoryProtocol,
         signRepository: SignRepositoryProtocol,
-        videoRepository: VideoRepositoryProtocol,
+        offlinePreparationService: OfflinePreparationServiceProtocol,
         networkMonitor: NetworkMonitorProtocol
     ) {
         self.favoritesRepository = favoritesRepository
         self.signRepository = signRepository
-        self.videoRepository = videoRepository
+        self.offlinePreparationService = offlinePreparationService
         self.networkMonitor = networkMonitor
 
         signRepository.dataUpdatedPublisher
@@ -289,49 +290,14 @@ final class FavoritesViewModel: ObservableObject {
     }
 
     private func prepareOfflineMedia(for sign: Sign, categoryName: String) async {
-        guard favoritesRepository.isFavorite(signId: sign.id) else { return }
-
-        let requiredVideoIds = sign.videosArray.map(\.id)
-        favoritesRepository.updateFavoriteSnapshot(sign: sign, categoryName: categoryName)
-
-        if requiredVideoIds.isEmpty {
-            favoritesRepository.updateOfflineStatus(
-                signId: sign.id,
-                status: .readyOffline,
-                downloadedVideoIds: [],
-                requiredVideoIds: []
-            )
+        let outcome = await offlinePreparationService.prepare(sign: sign, categoryName: categoryName)
+        switch outcome {
+        case .readyOffline:
             offlineStatusBySignId[sign.id] = .readyOffline
-            return
+        case .failed:
+            offlineStatusBySignId[sign.id] = .failed
+        case .cancelled:
+            break
         }
-
-        var downloadedVideoIds: [Int] = []
-
-        for video in sign.videosArray {
-            guard !Task.isCancelled else { return }
-
-            do {
-                _ = try await videoRepository.getVideoURL(for: video, useFavoritesCache: true)
-                downloadedVideoIds.append(video.id)
-            } catch {
-                favoritesRepository.updateOfflineStatus(
-                    signId: sign.id,
-                    status: .failed,
-                    downloadedVideoIds: downloadedVideoIds,
-                    requiredVideoIds: requiredVideoIds
-                )
-                offlineStatusBySignId[sign.id] = .failed
-                logger.warning("⚠️ Retry офлайн-подготовки не удался для \(sign.id): \(error.localizedDescription)")
-                return
-            }
-        }
-
-        favoritesRepository.updateOfflineStatus(
-            signId: sign.id,
-            status: .readyOffline,
-            downloadedVideoIds: downloadedVideoIds,
-            requiredVideoIds: requiredVideoIds
-        )
-        offlineStatusBySignId[sign.id] = .readyOffline
     }
 }
