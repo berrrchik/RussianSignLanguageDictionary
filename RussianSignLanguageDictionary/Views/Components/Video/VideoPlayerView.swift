@@ -39,7 +39,7 @@ struct VideoPlayerView: View {
         .onAppear {
             viewModel.setupPlayer(for: videoURL)
         }
-        .onChange(of: videoURL) { newURL in
+        .onChange(of: videoURL) { _, newURL in
             viewModel.setupPlayer(for: newURL)
         }
     }
