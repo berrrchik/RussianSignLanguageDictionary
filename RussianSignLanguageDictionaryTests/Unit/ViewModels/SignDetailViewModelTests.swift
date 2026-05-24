@@ -6,18 +6,21 @@ final class SignDetailViewModelTests: XCTestCase {
     private var signRepository: SignRepositorySpy!
     private var videoRepository: VideoRepositorySpy!
     private var favoritesRepository: FavoritesRepositorySpy!
+    private var offlinePreparationService: OfflinePreparationServiceSpy!
 
     override func setUp() {
         super.setUp()
         signRepository = SignRepositorySpy()
         videoRepository = VideoRepositorySpy()
         favoritesRepository = FavoritesRepositorySpy()
+        offlinePreparationService = OfflinePreparationServiceSpy()
     }
 
     override func tearDown() {
         signRepository = nil
         videoRepository = nil
         favoritesRepository = nil
+        offlinePreparationService = nil
         super.tearDown()
     }
 
@@ -120,7 +123,7 @@ final class SignDetailViewModelTests: XCTestCase {
 
     func testToggleFavoritePreservesFavoriteWhenOfflinePreparationFails() async {
         favoritesRepository.favoriteLookup["sign-1"] = false
-        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.noInternetConnection)
+        offlinePreparationService.prepareResult = .failed
         let sut = makeSut()
 
         sut.toggleFavorite()
@@ -131,13 +134,12 @@ final class SignDetailViewModelTests: XCTestCase {
 
         XCTAssertTrue(didFail)
         XCTAssertTrue(sut.isFavorite)
-        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .failed)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, [])
     }
 
     func testToggleFavoriteMarksReadyOfflineAfterSuccessfulPreparation() async {
         favoritesRepository.favoriteLookup["sign-1"] = false
-        videoRepository.directVideoURLResult = .success(URL(fileURLWithPath: "/tmp/favorite.mp4"))
+        offlinePreparationService.prepareResult = .readyOffline
         let sut = makeSut()
 
         sut.toggleFavorite()
@@ -147,11 +149,8 @@ final class SignDetailViewModelTests: XCTestCase {
         }
 
         XCTAssertTrue(didComplete)
-        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
-        XCTAssertEqual(
-            Set(favoritesRepository.updateOfflineStatusCalls.last?.downloadedVideoIds ?? []),
-            Set([1, 2])
-        )
+        XCTAssertEqual(offlinePreparationService.prepareCalls.count, 1)
+        XCTAssertEqual(offlinePreparationService.prepareCalls.first?.sign.id, "sign-1")
     }
 
     func testLoadCategoryNameUsesRepositoryCategories() async {
@@ -287,6 +286,7 @@ final class SignDetailViewModelTests: XCTestCase {
             signRepository: signRepository,
             videoRepository: videoRepository,
             favoritesRepository: favoritesRepository,
+            offlinePreparationService: offlinePreparationService,
             visitedSignIds: visitedSignIds
         )
     }
