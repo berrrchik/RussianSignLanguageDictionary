@@ -6,19 +6,19 @@ final class FavoritesViewModelTests: XCTestCase {
     private var sut: FavoritesViewModel!
     private var favoritesRepository: FavoritesRepositorySpy!
     private var signRepository: SignRepositorySpy!
-    private var videoRepository: VideoRepositorySpy!
+    private var offlinePreparationService: OfflinePreparationServiceSpy!
     private var networkMonitor: NetworkMonitorSpy!
 
     override func setUp() {
         super.setUp()
         favoritesRepository = FavoritesRepositorySpy()
         signRepository = SignRepositorySpy()
-        videoRepository = VideoRepositorySpy()
+        offlinePreparationService = OfflinePreparationServiceSpy()
         networkMonitor = NetworkMonitorSpy()
         sut = FavoritesViewModel(
             favoritesRepository: favoritesRepository,
             signRepository: signRepository,
-            videoRepository: videoRepository,
+            offlinePreparationService: offlinePreparationService,
             networkMonitor: networkMonitor
         )
     }
@@ -27,7 +27,7 @@ final class FavoritesViewModelTests: XCTestCase {
         sut = nil
         favoritesRepository = nil
         signRepository = nil
-        videoRepository = nil
+        offlinePreparationService = nil
         networkMonitor = nil
         super.tearDown()
     }
@@ -195,14 +195,14 @@ final class FavoritesViewModelTests: XCTestCase {
         networkMonitor.setConnectivityStatus(.disconnected)
         networkMonitor.setConnectivityStatus(.connected)
 
+        // Сервис должен быть вызван только для failed жеста (sign-1), не для readyOffline (sign-2)
         let didRetry = await waitUntil {
-            self.videoRepository.videoRequests.count == failedSign.videosArray.count
+            self.offlinePreparationService.prepareCalls.contains { $0.sign.id == "sign-1" }
         }
 
         XCTAssertTrue(didRetry)
-        XCTAssertEqual(Set(videoRepository.videoRequests.map(\.video.id)), Set(failedSign.videosArray.map(\.id)))
-        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
-        XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.last?.status, .readyOffline)
+        XCTAssertEqual(offlinePreparationService.prepareCalls.map(\.sign.id), ["sign-1"])
+        XCTAssertEqual(offlinePreparationService.prepareCalls.first?.categoryName, "Категория 1")
         XCTAssertEqual(signRepository.getSignCallArguments, [])
     }
 
@@ -224,12 +224,11 @@ final class FavoritesViewModelTests: XCTestCase {
         await sut.loadFavorites()
 
         let didRetry = await waitUntil {
-            self.videoRepository.videoRequests.count == pendingSign.videosArray.count
-                && self.favoritesRepository.updateOfflineStatusCalls.last?.status == .readyOffline
+            self.offlinePreparationService.prepareCalls.contains { $0.sign.id == "sign-1" }
         }
 
         XCTAssertTrue(didRetry)
-        XCTAssertTrue(videoRepository.videoRequests.allSatisfy(\.useFavoritesCache))
+        XCTAssertEqual(offlinePreparationService.prepareCalls.map(\.sign.id), ["sign-1"])
     }
 
     func testReconnectFailureKeepsFavoriteAndMarksStatusFailed() async {
@@ -241,13 +240,13 @@ final class FavoritesViewModelTests: XCTestCase {
                 offlineStatus: .failed
             )
         ]
-        videoRepository.directVideoURLResult = .failure(VideoRepositoryError.videoUnavailable)
+        offlinePreparationService.prepareResult = .failed
 
         networkMonitor.setConnectivityStatus(.disconnected)
         networkMonitor.setConnectivityStatus(.connected)
 
         let didFail = await waitUntil {
-            self.favoritesRepository.updateOfflineStatusCalls.last?.status == .failed
+            self.sut.offlineStatus(for: "sign-1") == .failed
         }
 
         XCTAssertTrue(didFail)
@@ -273,7 +272,8 @@ final class FavoritesViewModelTests: XCTestCase {
         }
 
         XCTAssertTrue(didFinishRetryPass)
-        XCTAssertEqual(videoRepository.videoRequests.count, 0)
+        // Для уже готовых жестов сервис не вызывается
+        XCTAssertEqual(offlinePreparationService.prepareCalls.count, 0)
     }
 
     func testFavoritesAlwaysSortedAlphabeticallyAZ() async {
