@@ -24,8 +24,16 @@ final class VideoPlayerViewModel: ObservableObject {
     private var statusObserver: NSKeyValueObservation?
     private var setupTask: Task<Void, Never>?
     
+    // MARK: - Lifecycle
+
+    deinit {
+        // @StateObject гарантированно деаллоцируется на main thread в SwiftUI.
+        // MainActor.assumeIsolated безопасен здесь и позволяет вызвать @MainActor-метод из deinit.
+        MainActor.assumeIsolated { cleanupPlayer() }
+    }
+
     // MARK: - Public Methods
-    
+
     /// Настраивает player для указанного URL
     /// - Parameter url: URL видео (локальный файл или remote URL)
     func setupPlayer(for url: URL) {
@@ -144,6 +152,8 @@ final class VideoPlayerViewModel: ObservableObject {
     private func reportPlaybackFailure(_ error: Error? = nil) {
         setupTask?.cancel()
         setupTask = nil
+        statusObserver?.invalidate()
+        statusObserver = nil
         isReadyToPlay = false
         player?.pause()
         playbackErrorMessage = Self.message(for: error)
