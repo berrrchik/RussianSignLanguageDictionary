@@ -17,8 +17,11 @@ final class VideoRepositoryOfflineTests: XCTestCase {
         sut = VideoRepository(
             videoCacheService: videoCacheService,
             networkMonitor: networkMonitor,
-            session: MockURLProtocol.makeEphemeralSession(controller: controller),
-            shortTermCacheDirectory: tempDirectory
+            shortTermCache: ShortTermVideoCacheManager(
+                networkMonitor: networkMonitor,
+                session: MockURLProtocol.makeEphemeralSession(controller: controller),
+                cacheDirectory: tempDirectory
+            )
         )
         controller.reset()
     }

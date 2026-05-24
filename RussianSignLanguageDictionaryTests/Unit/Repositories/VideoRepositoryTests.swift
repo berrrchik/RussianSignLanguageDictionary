@@ -25,12 +25,15 @@ final class VideoRepositoryTests: XCTestCase {
         sut = VideoRepository(
             videoCacheService: videoCacheService,
             networkMonitor: networkMonitor,
-            session: session,
-            shortTermCacheDirectory: tempDirectory,
-            cacheLimitEnforcer: { _, _, _ in
-                self.onLRUInvocation?()
-                return 0
-            }
+            shortTermCache: ShortTermVideoCacheManager(
+                networkMonitor: networkMonitor,
+                session: session,
+                cacheDirectory: tempDirectory,
+                cacheLimitEnforcer: { [weak self] _, _, _ in
+                    self?.onLRUInvocation?()
+                    return 0
+                }
+            )
         )
     }
 
