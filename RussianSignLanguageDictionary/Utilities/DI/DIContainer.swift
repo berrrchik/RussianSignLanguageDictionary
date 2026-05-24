@@ -197,6 +197,7 @@ final class DIContainer {
             String(describing: VideoRepositoryProtocol.self),
             String(describing: LessonRepositoryProtocol.self),
             String(describing: FavoritesRepositoryProtocol.self),
+            String(describing: OfflinePreparationServiceProtocol.self),
         ]
         
         lock.lock()
@@ -293,6 +294,14 @@ extension DIContainer {
         )
         registerSingleton(FavoritesRepositoryProtocol.self) {
             favoritesRepository
+        }
+
+        // 3. Сервисы высокого уровня (зависят от репозиториев)
+        registerSingleton(OfflinePreparationServiceProtocol.self) { [unowned self] in
+            OfflinePreparationService(
+                videoRepository: self.resolve(VideoRepositoryProtocol.self),
+                favoritesRepository: self.resolve(FavoritesRepositoryProtocol.self)
+            )
         }
     }
 }
