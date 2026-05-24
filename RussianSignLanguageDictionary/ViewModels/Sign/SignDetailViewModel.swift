@@ -65,12 +65,13 @@ final class SignDetailViewModel: ObservableObject {
     
     // MARK: - Dependencies
     
-    let signRepository: SignRepositoryProtocol
+    private let signRepository: SignRepositoryProtocol
     private let videoRepository: VideoRepositoryProtocol
     private let favoritesRepository: FavoritesRepositoryProtocol
-    
+    private let offlinePreparationService: OfflinePreparationServiceProtocol
+
     // MARK: - Init
-    
+
     /// Convenience init для production — резолвит зависимости из DIContainer
     convenience init(sign: Sign, visitedSignIds: Set<String> = []) {
         let container = DIContainer.shared
@@ -79,22 +80,25 @@ final class SignDetailViewModel: ObservableObject {
             signRepository: container.resolve(SignRepositoryProtocol.self),
             videoRepository: container.resolve(VideoRepositoryProtocol.self),
             favoritesRepository: container.resolve(FavoritesRepositoryProtocol.self),
+            offlinePreparationService: container.resolve(OfflinePreparationServiceProtocol.self),
             visitedSignIds: visitedSignIds
         )
     }
-    
+
     /// Полный init для тестов и preview (constructor injection)
     init(
         sign: Sign,
         signRepository: SignRepositoryProtocol,
         videoRepository: VideoRepositoryProtocol,
         favoritesRepository: FavoritesRepositoryProtocol,
+        offlinePreparationService: OfflinePreparationServiceProtocol,
         visitedSignIds: Set<String> = []
     ) {
         self.sign = sign
         self.signRepository = signRepository
         self.videoRepository = videoRepository
         self.favoritesRepository = favoritesRepository
+        self.offlinePreparationService = offlinePreparationService
         self.visitedSignIds = visitedSignIds.union([sign.id])
         self.isFavorite = favoritesRepository.isFavorite(signId: sign.id)
         self.favoriteOfflineStatus = favoritesRepository.getFavoriteEntry(signId: sign.id)?.offlineStatus
@@ -196,7 +200,7 @@ final class SignDetailViewModel: ObservableObject {
             )
             favoriteOfflineStatus = initialStatus
             if !requiredVideoIds.isEmpty {
-                startOfflinePreparation(requiredVideoIds: requiredVideoIds)
+                startOfflinePreparation()
             }
             AnalyticsService.logSignFavorited(signId: sign.id, word: sign.word)
         }
@@ -267,44 +271,18 @@ final class SignDetailViewModel: ObservableObject {
         categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: categoryNamesById)
     }
 
-    private func startOfflinePreparation(requiredVideoIds: [Int]) {
+    private func startOfflinePreparation() {
         favoritePreparationTask?.cancel()
         favoritePreparationTask = Task { [weak self] in
             guard let self else { return }
-            let videos = sign.videosArray
-            var downloadedVideoIds: [Int] = []
-
-            for video in videos {
-                guard !Task.isCancelled else { return }
-
-                do {
-                    _ = try await videoRepository.getVideoURL(for: video, useFavoritesCache: true)
-                    downloadedVideoIds.append(video.id)
-                } catch {
-                    await MainActor.run {
-                        guard self.favoritesRepository.isFavorite(signId: self.sign.id) else { return }
-                        self.favoritesRepository.updateOfflineStatus(
-                            signId: self.sign.id,
-                            status: .failed,
-                            downloadedVideoIds: downloadedVideoIds,
-                            requiredVideoIds: requiredVideoIds
-                        )
-                        self.favoriteOfflineStatus = .failed
-                        self.logger.warning("⚠️ Не удалось подготовить офлайн-видео для \(self.sign.id): \(error.localizedDescription)")
-                    }
-                    return
-                }
-            }
-
-            await MainActor.run {
-                guard self.favoritesRepository.isFavorite(signId: self.sign.id) else { return }
-                self.favoritesRepository.updateOfflineStatus(
-                    signId: self.sign.id,
-                    status: .readyOffline,
-                    downloadedVideoIds: downloadedVideoIds,
-                    requiredVideoIds: requiredVideoIds
-                )
-                self.favoriteOfflineStatus = .readyOffline
+            let outcome = await offlinePreparationService.prepare(sign: sign, categoryName: categoryName)
+            switch outcome {
+            case .readyOffline:
+                favoriteOfflineStatus = .readyOffline
+            case .failed:
+                favoriteOfflineStatus = .failed
+            case .cancelled:
+                break
             }
         }
     }
