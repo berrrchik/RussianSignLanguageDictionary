@@ -45,6 +45,22 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
     }
 }
 
+@MainActor
+final class OfflinePreparationServiceSpy: OfflinePreparationServiceProtocol {
+    private(set) var prepareCalls: [(sign: Sign, categoryName: String)] = []
+
+    var prepareResult: OfflinePreparationOutcome = .readyOffline
+    var prepareImplementation: ((Sign, String) async -> OfflinePreparationOutcome)?
+
+    func prepare(sign: Sign, categoryName: String) async -> OfflinePreparationOutcome {
+        prepareCalls.append((sign: sign, categoryName: categoryName))
+        if let prepareImplementation {
+            return await prepareImplementation(sign, categoryName)
+        }
+        return prepareResult
+    }
+}
+
 final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
     private(set) var isVideoCachedRequests: [SignVideo] = []
     private(set) var isURLCachedRequests: [URL] = []
@@ -135,6 +151,33 @@ final class VideoCacheServiceSpy: VideoCacheServiceProtocol {
 
     func ensureCacheLimit() {
         ensureCacheLimitCallCount += 1
+    }
+}
+
+final class ShortTermVideoCacheManagerSpy: ShortTermVideoCacheManagerProtocol {
+    private(set) var cachedVideoURLRequests: [SignVideo] = []
+    private(set) var downloadVideoRequests: [(url: URL, video: SignVideo)] = []
+    private(set) var clearCallCount = 0
+
+    var cachedVideoURLValue: URL?
+    var downloadVideoResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/short-term-video.mp4"))
+    var downloadVideoImplementation: ((URL, SignVideo) async throws -> URL)?
+
+    func cachedVideoURL(for video: SignVideo) -> URL? {
+        cachedVideoURLRequests.append(video)
+        return cachedVideoURLValue
+    }
+
+    func downloadVideo(url: URL, video: SignVideo) async throws -> URL {
+        downloadVideoRequests.append((url: url, video: video))
+        if let downloadVideoImplementation {
+            return try await downloadVideoImplementation(url, video)
+        }
+        return try downloadVideoResult.get()
+    }
+
+    func clear() {
+        clearCallCount += 1
     }
 }
 
