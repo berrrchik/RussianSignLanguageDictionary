@@ -36,7 +36,6 @@ final class SignRepositoryOfflineTests: XCTestCase {
     
     func testFirstLaunchOfflineWithoutCacheThrowsNoDataAvailable() async {
         networkMonitor.checkConnectionValue = false
-        networkMonitor.isConnectedValue = false
 
         do {
             _ = try await sut.loadAllSigns()
@@ -67,7 +66,6 @@ final class SignRepositoryOfflineTests: XCTestCase {
     func testOfflineWithDiskCacheLoadsSuccessfully() async throws {
         try cacheService.save(TestFixtures.syncData)
         networkMonitor.checkConnectionValue = false
-        networkMonitor.isConnectedValue = false
 
         let signs = try await sut.loadAllSigns()
 

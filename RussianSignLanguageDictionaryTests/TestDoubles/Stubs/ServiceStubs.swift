@@ -23,10 +23,6 @@ final class NetworkMonitorStub: NetworkMonitorProtocol {
         connectivitySubject.value
     }
 
-    func isConnected() -> Bool {
-        connected
-    }
-
     func checkConnection() async -> Bool {
         connected
     }

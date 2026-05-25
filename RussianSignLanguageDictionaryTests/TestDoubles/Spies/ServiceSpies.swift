@@ -3,10 +3,8 @@ import Combine
 @testable import RussianSignLanguageDictionary
 
 final class NetworkMonitorSpy: NetworkMonitorProtocol {
-    private(set) var isConnectedCallCount = 0
     private(set) var checkConnectionCallCount = 0
 
-    var isConnectedValue = true
     var checkConnectionValue = true
     private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.connected)
     private let connectionRestoredSubject = PassthroughSubject<Void, Never>()
@@ -23,11 +21,6 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
         connectivitySubject.value
     }
 
-    func isConnected() -> Bool {
-        isConnectedCallCount += 1
-        return isConnectedValue
-    }
-
     func checkConnection() async -> Bool {
         checkConnectionCallCount += 1
         return checkConnectionValue
@@ -36,7 +29,6 @@ final class NetworkMonitorSpy: NetworkMonitorProtocol {
     func setConnectivityStatus(_ status: ConnectivityStatus) {
         let previousStatus = connectivitySubject.value
         connectivitySubject.send(status)
-        isConnectedValue = status == .connected
         checkConnectionValue = status == .connected
 
         if previousStatus != .connected, status == .connected {

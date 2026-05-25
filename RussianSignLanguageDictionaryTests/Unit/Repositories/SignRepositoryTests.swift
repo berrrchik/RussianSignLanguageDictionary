@@ -15,7 +15,6 @@ final class SignRepositoryTests: XCTestCase {
         super.setUp()
         syncRepository = SyncRepositorySpy()
         networkMonitor = NetworkMonitorSpy()
-        networkMonitor.isConnectedValue = true
         networkMonitor.checkConnectionValue = true
         cacheDirectoryURL = try? createTemporaryDirectory()
         cacheService = CacheService(cacheDirectoryURL: cacheDirectoryURL)

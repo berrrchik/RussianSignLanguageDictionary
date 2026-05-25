@@ -12,10 +12,6 @@ protocol NetworkMonitorProtocol {
     /// Возвращает текущее нормализованное состояние подключения.
     var connectivityStatus: ConnectivityStatus { get }
 
-    /// Проверяет доступность интернета синхронно
-    /// - Returns: true, если интернет доступен
-    func isConnected() -> Bool
-    
     /// Проверяет доступность интернета асинхронно
     /// - Returns: true, если интернет доступен
     func checkConnection() async -> Bool

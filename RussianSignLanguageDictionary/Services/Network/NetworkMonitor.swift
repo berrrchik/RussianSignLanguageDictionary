@@ -65,16 +65,10 @@ final class NetworkMonitor: NetworkMonitorProtocol {
         isMonitoring = false
     }
     
-    /// Проверяет доступность интернета
-    /// - Returns: true, если интернет доступен
-    func isConnected() -> Bool {
-        connectivityStatus == .connected
-    }
-    
     /// Проверяет доступность интернета асинхронно
     /// - Returns: true, если интернет доступен
     func checkConnection() async -> Bool {
-        isConnected()
+        connectivityStatus == .connected
     }
 
     private static func makeConnectivityStatus(from status: NWPath.Status) -> ConnectivityStatus {

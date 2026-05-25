@@ -232,6 +232,6 @@ final class SyncViewModel: ObservableObject {
     }
 
     private func awaitNoInternetFallback() -> AppStartupStatus {
-        networkMonitor.isConnected() ? .blocked(.serverUnavailable) : .blocked(.noInternet)
+        networkMonitor.connectivityStatus == .connected ? .blocked(.serverUnavailable) : .blocked(.noInternet)
     }
 }
