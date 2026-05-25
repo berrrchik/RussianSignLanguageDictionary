@@ -11,6 +11,9 @@ final class SearchViewModel: ObservableObject {
     
     private enum Constants {
         static let debounceMilliseconds: Int = 300
+        /// Максимальная длина поискового запроса, передаваемого в SBERT.
+        /// Защищает от неожиданно долгих запросов при вставке большого текста.
+        static let maxSearchQueryLength: Int = 100
     }
     
     // MARK: - Published Properties
@@ -83,9 +86,10 @@ final class SearchViewModel: ObservableObject {
         setupDebouncing()
         preloadFromCache()
         signRepository.dataUpdatedPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.handleUpdatedData(updatedData)
+                Task { @MainActor [weak self] in
+                    self?.handleUpdatedData(updatedData)
+                }
             }
             .store(in: &cancellables)
     }
@@ -138,7 +142,10 @@ final class SearchViewModel: ObservableObject {
         searchTask?.cancel()
         isLoading = false
         
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedQuery = String(
+            query.trimmingCharacters(in: .whitespacesAndNewlines)
+                .prefix(Constants.maxSearchQueryLength)
+        )
         guard !trimmedQuery.isEmpty else {
             searchResults = allSigns
             return
