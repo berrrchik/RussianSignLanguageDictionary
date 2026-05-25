@@ -33,19 +33,17 @@ enum VideoRepositoryError: Error {
     }
 }
 
-// MARK: - Equatable
+// MARK: - UserFacingError
 
-extension VideoRepositoryError: Equatable {
-    static func == (lhs: VideoRepositoryError, rhs: VideoRepositoryError) -> Bool {
-        switch (lhs, rhs) {
-        case (.invalidURL, .invalidURL):
-            return true
-        case (.noInternetConnection, .noInternetConnection):
-            return true
-        case (.videoUnavailable, .videoUnavailable):
-            return true
-        default:
-            return false
+extension VideoRepositoryError: UserFacingError {
+    var userFacingMessage: String {
+        switch self {
+        case .invalidURL:
+            return "Неверный адрес видео."
+        case .noInternetConnection:
+            return "Нет интернета."
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
         }
     }
 }

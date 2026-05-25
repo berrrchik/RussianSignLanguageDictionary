@@ -50,6 +50,25 @@ enum SignRepositoryError: Error {
     }
 }
 
+// MARK: - UserFacingError
+
+extension SignRepositoryError: UserFacingError {
+    var userFacingMessage: String {
+        switch self {
+        case .fileNotFound:
+            return "Не удалось загрузить данные"
+        case .unableToReadFile:
+            return "Ошибка чтения файла"
+        case .decodingError(let underlyingError):
+            return "Ошибка обработки данных: \(underlyingError.localizedDescription)"
+        case .invalidDataFormat:
+            return "Неверный формат данных"
+        case .noDataAvailable:
+            return "Данные недоступны. Повторите попытку позже."
+        }
+    }
+}
+
 // MARK: - Equatable
 
 extension SignRepositoryError: Equatable {

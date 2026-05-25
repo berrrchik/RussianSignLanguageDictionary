@@ -22,18 +22,23 @@ enum VideoCacheError: Error {
     case fileNotFound
 }
 
-extension VideoCacheError: Equatable {
-    static func == (lhs: VideoCacheError, rhs: VideoCacheError) -> Bool {
-        switch (lhs, rhs) {
-        case (.invalidURL, .invalidURL),
-             (.noInternetConnection, .noInternetConnection),
-             (.cacheDirectoryNotAvailable, .cacheDirectoryNotAvailable),
-             (.sessionNotConfigured, .sessionNotConfigured),
-             (.videoUnavailable, .videoUnavailable),
-             (.fileNotFound, .fileNotFound):
-            return true
-        default:
-            return false
+// MARK: - UserFacingError
+
+extension VideoCacheError: UserFacingError {
+    var userFacingMessage: String {
+        switch self {
+        case .invalidURL:
+            return "Невалидный URL видео"
+        case .noInternetConnection:
+            return "Нет интернета."
+        case .cacheDirectoryNotAvailable:
+            return "Директория кеша недоступна"
+        case .sessionNotConfigured:
+            return "Внутренняя ошибка: сессия загрузки не настроена"
+        case .videoUnavailable:
+            return "Видео сейчас недоступно."
+        case .fileNotFound:
+            return "Файл видео не найден в кеше"
         }
     }
 }
