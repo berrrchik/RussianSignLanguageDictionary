@@ -105,9 +105,10 @@ final class SignDetailViewModel: ObservableObject {
         self.categoryName = CategoryDisplayDataHelper.name(for: sign.categoryId, in: [:])
 
         signRepository.dataUpdatedPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.applyCategoryName(from: updatedData.categories)
+                Task { @MainActor [weak self] in
+                    self?.applyCategoryName(from: updatedData.categories)
+                }
             }
             .store(in: &cancellables)
         

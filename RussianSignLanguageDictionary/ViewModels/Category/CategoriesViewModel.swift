@@ -41,9 +41,10 @@ final class CategoriesViewModel: ObservableObject {
         self.signRepository = signRepository
 
         signRepository.dataUpdatedPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.applyCategories(updatedData.categories)
+                Task { @MainActor [weak self] in
+                    self?.applyCategories(updatedData.categories)
+                }
             }
             .store(in: &cancellables)
 

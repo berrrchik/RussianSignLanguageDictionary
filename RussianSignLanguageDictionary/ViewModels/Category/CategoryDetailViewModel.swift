@@ -45,12 +45,13 @@ final class CategoryDetailViewModel: ObservableObject {
         self.categoryNamesById = CategoryDisplayDataHelper.categoryNamesById(from: [category])
 
         signRepository.dataUpdatedPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                self?.applyLoadedData(
-                    signs: updatedData.signs.filter { $0.categoryId == category.id },
-                    categories: updatedData.categories
-                )
+                Task { @MainActor [weak self] in
+                    self?.applyLoadedData(
+                        signs: updatedData.signs.filter { $0.categoryId == category.id },
+                        categories: updatedData.categories
+                    )
+                }
             }
             .store(in: &cancellables)
     }

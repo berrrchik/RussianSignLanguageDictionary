@@ -29,20 +29,22 @@ final class AppStatusViewModel: ObservableObject {
         )
 
         signRepository.dataStatusPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
-                guard let self else { return }
-                repositoryDataStatus = status
-                refreshIndicator()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    repositoryDataStatus = status
+                    refreshIndicator()
+                }
             }
             .store(in: &cancellables)
 
         networkMonitor.connectivityPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
-                guard let self else { return }
-                connectivityStatus = status
-                refreshIndicator()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    connectivityStatus = status
+                    refreshIndicator()
+                }
             }
             .store(in: &cancellables)
     }

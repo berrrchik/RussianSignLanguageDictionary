@@ -50,9 +50,7 @@ final class FavoritesViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
 
         signRepository.dataUpdatedPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedData in
-                guard let self else { return }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     await self.favoritesRepository.reconcileOfflineState()
@@ -67,9 +65,10 @@ final class FavoritesViewModel: ObservableObject {
             .store(in: &cancellables)
 
         networkMonitor.connectionRestoredPublisher
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] in
-                self?.retryFailedOfflinePreparation()
+                Task { @MainActor [weak self] in
+                    self?.retryFailedOfflinePreparation()
+                }
             }
             .store(in: &cancellables)
     }
