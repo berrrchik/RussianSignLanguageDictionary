@@ -50,17 +50,6 @@ final class LessonDetailViewModelTests: XCTestCase {
                 createdAt: nil,
                 updatedAt: nil
             ),
-            allLessons: [
-                Lesson(
-                    id: "lesson-1",
-                    title: "Lesson",
-                    description: "Description",
-                    videoUrl: "/lessons/lesson.mp4",
-                    order: 1,
-                    createdAt: nil,
-                    updatedAt: nil
-                )
-            ],
             videoRepository: videoRepository
         )
     }

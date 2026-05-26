@@ -59,10 +59,7 @@ struct LessonsView: View {
     private var lessonsList: some View {
         LazyVStack(spacing: 0) {
             ForEach(viewModel.lessons) { lesson in
-                NavigationLink(destination: LessonDetailView(
-                    lesson: lesson,
-                    allLessons: viewModel.lessons
-                )) {
+                NavigationLink(destination: LessonDetailView(lesson: lesson)) {
                     lessonRow(lesson)
                 }
             }

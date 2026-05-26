@@ -6,7 +6,6 @@ final class LessonDetailViewModel: ObservableObject {
     // MARK: - Properties
     
     let lesson: Lesson
-    let allLessons: [Lesson]
     
     @Published private(set) var videoURL: URL?
     @Published private(set) var isLoadingVideo: Bool = false
@@ -15,36 +14,20 @@ final class LessonDetailViewModel: ObservableObject {
     private let videoRepository: VideoRepositoryProtocol
     private let logger = Logger(subsystem: "com.rsl.LessonDetailViewModel", category: "viewmodel")
     
-    // MARK: - Computed Properties
-    
-    var currentIndex: Int {
-        allLessons.firstIndex(where: { $0.id == lesson.id }) ?? 0
-    }
-    
-    var canGoBack: Bool {
-        currentIndex > 0
-    }
-    
-    var canGoNext: Bool {
-        currentIndex < allLessons.count - 1
-    }
-    
     // MARK: - Initialization
 
     /// Convenience init для production — резолвит зависимости из DIContainer
-    convenience init(lesson: Lesson, allLessons: [Lesson]) {
+    convenience init(lesson: Lesson) {
         let container = DIContainer.shared
         self.init(
             lesson: lesson,
-            allLessons: allLessons,
             videoRepository: container.resolve(VideoRepositoryProtocol.self)
         )
     }
     
     /// Полный init для тестов и preview (constructor injection)
-    init(lesson: Lesson, allLessons: [Lesson], videoRepository: VideoRepositoryProtocol) {
+    init(lesson: Lesson, videoRepository: VideoRepositoryProtocol) {
         self.lesson = lesson
-        self.allLessons = allLessons
         self.videoRepository = videoRepository
     }
     
@@ -65,15 +48,5 @@ final class LessonDetailViewModel: ObservableObject {
         }
         
         isLoadingVideo = false
-    }
-    
-    func showPreviousLesson() -> Lesson? {
-        guard canGoBack else { return nil }
-        return allLessons[currentIndex - 1]
-    }
-    
-    func showNextLesson() -> Lesson? {
-        guard canGoNext else { return nil }
-        return allLessons[currentIndex + 1]
     }
 }
