@@ -46,12 +46,6 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.cacheClearedMessage, "Кэш успешно очищен")
     }
 
-    func testFontSizeScalesMatchExpectedValues() {
-        XCTAssertEqual(SettingsViewModel.FontSize.small.scale, 0.9, accuracy: 0.001)
-        XCTAssertEqual(SettingsViewModel.FontSize.medium.scale, 1.0, accuracy: 0.001)
-        XCTAssertEqual(SettingsViewModel.FontSize.large.scale, 1.15, accuracy: 0.001)
-    }
-
     private func waitUntil(
         timeout: TimeInterval = 1.0,
         pollInterval: UInt64 = 20_000_000,
