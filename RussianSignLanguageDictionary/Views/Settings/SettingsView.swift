@@ -39,38 +39,17 @@ struct SettingsView: View {
                     
                     // Email
                     if let email = viewModel.appInfo.author.email {
-                        Button(action: {
+                        SettingsLinkRow(icon: "envelope", title: email, showsExternalIndicator: false) {
                             if let emailURL = URL(string: "mailto:\(email)") {
                                 UIApplication.shared.open(emailURL)
                             }
-                        }) {
-                            HStack {
-                                Image(systemName: "envelope")
-                                    .foregroundColor(.blue)
-                                    .frame(width: 24)
-                                Text(email)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                            }
                         }
                     }
-                    
+
                     // GitHub
                     if let github = viewModel.appInfo.author.github, let githubURL = URL(string: github) {
-                        Button(action: {
+                        SettingsLinkRow(icon: "link", title: "GitHub") {
                             UIApplication.shared.open(githubURL)
-                        }) {
-                            HStack {
-                                Image(systemName: "link")
-                                    .foregroundColor(.blue)
-                                    .frame(width: 24)
-                                Text("GitHub")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                Image(systemName: "arrow.up.right.square")
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
-                            }
                         }
                     }
                 }
@@ -80,41 +59,17 @@ struct SettingsView: View {
                     VOGInfoRow(vogInfo: viewModel.vogInfo)
                     
                     // Официальный сайт
-                    Button(action: {
+                    SettingsLinkRow(icon: "globe", title: "Официальный сайт") {
                         UIApplication.shared.open(viewModel.vogInfo.websiteURL)
-                    }) {
-                        HStack {
-                            Image(systemName: "globe")
-                                .foregroundColor(.blue)
-                                .frame(width: 24)
-                            Text("Официальный сайт")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
                     }
-                    
+
                     // Контакты
-                    Button(action: {
+                    SettingsLinkRow(icon: "person.2", title: "Контакты") {
                         UIApplication.shared.open(viewModel.vogInfo.contactsURL)
-                    }) {
-                        HStack {
-                            Image(systemName: "person.2")
-                                .foregroundColor(.blue)
-                                .frame(width: 24)
-                            Text("Контакты")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
                     }
-                    
+
                     // Телефон
-                    Button(action: {
+                    SettingsLinkRow(icon: "phone", title: viewModel.vogInfo.phone, showsExternalIndicator: false) {
                         let phoneNumber = viewModel.vogInfo.phone
                             .replacingOccurrences(of: " ", with: "")
                             .replacingOccurrences(of: "(", with: "")
@@ -123,103 +78,18 @@ struct SettingsView: View {
                         if let phoneURL = URL(string: "tel://\(phoneNumber)") {
                             UIApplication.shared.open(phoneURL)
                         }
-                    }) {
-                        HStack {
-                            Image(systemName: "phone")
-                                .foregroundColor(.blue)
-                                .frame(width: 24)
-                            Text(viewModel.vogInfo.phone)
-                                .foregroundColor(.primary)
-                            Spacer()
-                        }
                     }
-                    
+
                     // Социальные сети
-                    if !viewModel.vogInfo.socialNetworks.isEmpty {
-                        ForEach(viewModel.vogInfo.socialNetworks, id: \.name) { network in
-                            Button(action: {
-                                UIApplication.shared.open(network.url)
-                            }) {
-                                HStack {
-                                    Image(systemName: network.iconName)
-                                        .foregroundColor(.blue)
-                                        .frame(width: 24)
-                                    Text(network.name)
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right.square")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                }
-                            }
+                    ForEach(viewModel.vogInfo.socialNetworks, id: \.name) { network in
+                        SettingsLinkRow(icon: network.iconName, title: network.name) {
+                            UIApplication.shared.open(network.url)
                         }
                     }
                 }
                 
-                // Секция "Обратная связь"
-//                Section("Обратная связь") {
-//                    Button(action: {
-//                        viewModel.openAppStoreReview()
-//                    }) {
-//                        HStack {
-//                            Image(systemName: "star.fill")
-//                                .foregroundColor(.blue)
-//                                .frame(width: 24)
-//                            Text("Оставить отзыв")
-//                                .foregroundColor(.primary)
-//                            Spacer()
-//                            Image(systemName: "arrow.up.right.square")
-//                                .foregroundColor(.secondary)
-//                                .font(.caption)
-//                        }
-//                    }
-//                    
-//                    Button(action: {
-//                        viewModel.reportBug()
-//                    }) {
-//                        HStack {
-//                            Image(systemName: "exclamationmark.triangle.fill")
-//                                .foregroundColor(.blue)
-//                                .frame(width: 24)
-//                            Text("Сообщить об ошибке")
-//                                .foregroundColor(.primary)
-//                            Spacer()
-//                            Image(systemName: "arrow.up.right.square")
-//                                .foregroundColor(.secondary)
-//                                .font(.caption)
-//                        }
-//                    }
-//                    
-//                    Button(action: {
-//                        viewModel.shareApp()
-//                    }) {
-//                        HStack {
-//                            Image(systemName: "square.and.arrow.up")
-//                                .foregroundColor(.blue)
-//                                .frame(width: 24)
-//                            Text("Поделиться приложением")
-//                                .foregroundColor(.primary)
-//                            Spacer()
-//                        }
-//                    }
-//                }
-                
-                // Секция "Интерфейс"
-//                Section("Интерфейс") {
-//                    Picker("Размер шрифта", selection: $viewModel.fontSize) {
-//                        ForEach(SettingsViewModel.FontSize.allCases, id: \.self) { size in
-//                            Text(size.rawValue).tag(size)
-//                        }
-//                    }
-//                    
-//                    Toggle("Тёмная тема", isOn: $viewModel.darkMode)
-//                }
-                
                 // Секция "Настройки"
                 Section("Настройки") {
-//                    Toggle("Автоповтор видео", isOn: $viewModel.autoRepeatVideo)
-//                    Toggle("Автозагрузка видео", isOn: $viewModel.autoDownloadVideo)
-                    
                     Button("Очистить кэш") {
                         showClearCacheAlert = true
                     }
