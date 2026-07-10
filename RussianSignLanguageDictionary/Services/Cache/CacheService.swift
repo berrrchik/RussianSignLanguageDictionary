@@ -2,7 +2,7 @@ import Foundation
 import os.log
 
 /// Сервис для управления локальным кешем данных синхронизации
-final class CacheService {
+final class CacheService: CacheServiceProtocol {
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.CacheService", category: "cache")
