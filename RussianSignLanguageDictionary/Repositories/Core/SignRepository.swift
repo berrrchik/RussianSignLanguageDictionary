@@ -14,7 +14,7 @@ final class SignRepository: SignRepositoryProtocol {
     private let logger = Logger(subsystem: "com.rsl.SignRepository", category: "repository")
     
     private let syncRepository: SyncRepositoryProtocol
-    private let cacheService: CacheService
+    private let cacheService: CacheServiceProtocol
     private let networkMonitor: NetworkMonitorProtocol
     
     private let memoryCache = MemoryCacheManager<SyncData>(label: "com.rsl.signRepository.memoryCache")
@@ -48,7 +48,7 @@ final class SignRepository: SignRepositoryProtocol {
     
     init(
         syncRepository: SyncRepositoryProtocol,
-        cacheService: CacheService,
+        cacheService: CacheServiceProtocol,
         networkMonitor: NetworkMonitorProtocol = NetworkMonitor()
     ) {
         self.syncRepository = syncRepository

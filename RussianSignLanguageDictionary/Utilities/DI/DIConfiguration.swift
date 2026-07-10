@@ -17,7 +17,7 @@ extension DIContainer {
             NetworkMonitor()
         }
 
-        registerSingleton(CacheService.self) {
+        registerSingleton(CacheServiceProtocol.self) {
             CacheService()
         }
 
@@ -33,13 +33,13 @@ extension DIContainer {
 
         // 2. Репозитории (singleton)
         registerSingleton(SyncRepositoryProtocol.self) {
-            SyncRepository()
+            LoggingSyncRepositoryDecorator(wrapped: SyncRepository())
         }
 
         registerSingleton(SignRepositoryProtocol.self) { [unowned self] in
             SignRepository(
                 syncRepository: self.resolve(SyncRepositoryProtocol.self),
-                cacheService: self.resolve(CacheService.self),
+                cacheService: self.resolve(CacheServiceProtocol.self),
                 networkMonitor: self.resolve(NetworkMonitorProtocol.self)
             )
         }
@@ -53,7 +53,7 @@ extension DIContainer {
 
         registerSingleton(LessonRepositoryProtocol.self) { [unowned self] in
             LessonRepository(
-                cacheService: self.resolve(CacheService.self)
+                cacheService: self.resolve(CacheServiceProtocol.self)
             )
         }
 

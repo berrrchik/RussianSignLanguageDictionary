@@ -2,9 +2,9 @@ import Foundation
 
 final class LessonRepository: LessonRepositoryProtocol {
     
-    private let cacheService: CacheService
-    
-    init(cacheService: CacheService = CacheService()) {
+    private let cacheService: CacheServiceProtocol
+
+    init(cacheService: CacheServiceProtocol = CacheService()) {
         self.cacheService = cacheService
     }
     

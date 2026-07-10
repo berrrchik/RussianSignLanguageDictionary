@@ -26,7 +26,7 @@ final class SyncViewModel: ObservableObject {
     
     private let syncRepository: SyncRepositoryProtocol
     private let signRepository: SignRepositoryProtocol
-    private let cacheService: CacheService
+    private let cacheService: CacheServiceProtocol
     private let networkMonitor: NetworkMonitorProtocol
     private let userDefaults: UserDefaults
     
@@ -38,7 +38,7 @@ final class SyncViewModel: ObservableObject {
         self.init(
             syncRepository: container.resolve(SyncRepositoryProtocol.self),
             signRepository: container.resolve(SignRepositoryProtocol.self),
-            cacheService: container.resolve(CacheService.self),
+            cacheService: container.resolve(CacheServiceProtocol.self),
             networkMonitor: container.resolve(NetworkMonitorProtocol.self)
         )
     }
@@ -47,7 +47,7 @@ final class SyncViewModel: ObservableObject {
     init(
         syncRepository: SyncRepositoryProtocol,
         signRepository: SignRepositoryProtocol,
-        cacheService: CacheService,
+        cacheService: CacheServiceProtocol,
         networkMonitor: NetworkMonitorProtocol,
         userDefaults: UserDefaults = .standard
     ) {

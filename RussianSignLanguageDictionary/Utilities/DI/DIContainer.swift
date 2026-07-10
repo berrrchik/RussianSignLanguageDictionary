@@ -189,7 +189,7 @@ final class DIContainer {
     func validateConfiguration() -> [String] {
         let expectedKeys: [String] = [
             String(describing: NetworkMonitorProtocol.self),
-            String(describing: CacheService.self),
+            String(describing: CacheServiceProtocol.self),
             String(describing: VideoCacheServiceProtocol.self),
             String(describing: HybridSearchServiceBuilderProtocol.self),
             String(describing: SyncRepositoryProtocol.self),
