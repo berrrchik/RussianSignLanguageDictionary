@@ -173,13 +173,9 @@ final class VideoRepository: VideoRepositoryProtocol {
         if let repositoryError = error as? VideoRepositoryError { return repositoryError }
         if let cacheError = error as? VideoCacheError { return VideoRepositoryError.from(cacheError) }
         guard let urlError = error as? URLError else { return .videoUnavailable }
-        switch urlError.code {
-        case .notConnectedToInternet, .networkConnectionLost:
-            return .noInternetConnection
-        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
-            return .videoUnavailable
-        default:
-            return .videoUnavailable
+        switch URLErrorClassifier.classify(urlError) {
+        case .noInternet: return .noInternetConnection
+        case .unavailable: return .videoUnavailable
         }
     }
 }

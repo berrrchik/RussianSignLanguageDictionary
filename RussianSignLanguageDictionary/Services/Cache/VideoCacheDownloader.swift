@@ -149,13 +149,9 @@ final class VideoCacheDownloader {
             return .videoUnavailable
         }
 
-        switch urlError.code {
-        case .notConnectedToInternet, .networkConnectionLost:
-            return .noInternetConnection
-        case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .badServerResponse:
-            return .videoUnavailable
-        default:
-            return .videoUnavailable
+        switch URLErrorClassifier.classify(urlError) {
+        case .noInternet: return .noInternetConnection
+        case .unavailable: return .videoUnavailable
         }
     }
 }
