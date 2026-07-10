@@ -30,14 +30,11 @@ final class SearchViewModel: ObservableObject {
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol
-    private let networkMonitor: NetworkMonitorProtocol
-    private let hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
-    private var hybridSearchService: HybridSearchServiceProtocol?
+    private let searchCoordinator: SearchCoordinator
     
     // MARK: - Private Properties
     
     private var allSigns: [Sign] = []
-    private var searchableSigns: [SearchableSign] = []
     private var searchTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private(set) var hasLoadedInitialData = false
@@ -55,11 +52,6 @@ final class SearchViewModel: ObservableObject {
         let id: String
         let letter: String
         let signs: [Sign]
-    }
-    
-    private struct SearchableSign {
-        let sign: Sign
-        let lowercasedWord: String
     }
     
     // MARK: - Init
@@ -81,8 +73,10 @@ final class SearchViewModel: ObservableObject {
         hybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol
     ) {
         self.signRepository = signRepository
-        self.networkMonitor = networkMonitor
-        self.hybridSearchServiceBuilder = hybridSearchServiceBuilder
+        self.searchCoordinator = SearchCoordinator(
+            networkMonitor: networkMonitor,
+            hybridSearchServiceBuilder: hybridSearchServiceBuilder
+        )
         setupDebouncing()
         preloadFromCache()
         signRepository.dataUpdatedPublisher
@@ -154,54 +148,27 @@ final class SearchViewModel: ObservableObject {
         searchTask = Task {
             isLoading = true
             errorMessage = nil
-            
-            if let hybridService = hybridSearchService {
-                await executeHybridSearch(trimmedQuery, service: hybridService)
-            } else {
-                executeLocalSearch(trimmedQuery)
+
+            guard let outcome = await searchCoordinator.performSearch(query: trimmedQuery) else {
+                isLoading = false
+                return
             }
+
+            applySearchOutcome(outcome, query: trimmedQuery)
         }
     }
-    
-    // MARK: - Search Steps
-    
-    private func executeHybridSearch(_ query: String, service: HybridSearchServiceProtocol) async {
-        do {
-            let results = try await runHybridSearch(query, service: service)
-            guard !Task.isCancelled else { isLoading = false; return }
-            applySearchResults(results, query: query, searchType: "hybrid")
-        } catch {
-            guard !Task.isCancelled else { isLoading = false; return }
-            CrashlyticsErrorReporter.capture(error, context: ["query": query], subsystem: "com.rsl.search")
-            let textResults = runTextSearchFallback(query, service: service)
-            applySearchResults(textResults, query: query, searchType: "text")
+
+    private func applySearchOutcome(_ outcome: SearchCoordinator.SearchOutcome, query: String) {
+        searchResults = outcome.results
+        isLoading = false
+
+        if let analyticsSearchType = outcome.analyticsSearchType {
+            AnalyticsService.logSearch(
+                query: query,
+                resultsCount: outcome.results.count,
+                searchType: analyticsSearchType
+            )
         }
-    }
-    
-    private func runHybridSearch(_ query: String, service: HybridSearchServiceProtocol) async throws -> [Sign] {
-        try await service.performHybridSearch(
-            query: query,
-            limit: 50,
-            useHighQualityThreshold: false
-        )
-    }
-    
-    private func runTextSearchFallback(_ query: String, service: HybridSearchServiceProtocol) -> [Sign] {
-        service.performTextSearch(query: query, limit: 50)
-    }
-    
-    private func executeLocalSearch(_ query: String) {
-        let lowercasedQuery = query.lowercased()
-        let filtered = searchableSigns.filter { $0.lowercasedWord.contains(lowercasedQuery) }
-        guard !Task.isCancelled else { isLoading = false; return }
-        searchResults = filtered.map { $0.sign }
-        isLoading = false
-    }
-    
-    private func applySearchResults(_ results: [Sign], query: String, searchType: String) {
-        searchResults = results
-        isLoading = false
-        AnalyticsService.logSearch(query: query, resultsCount: results.count, searchType: searchType)
     }
     
     func clearSearch() {
@@ -242,8 +209,8 @@ final class SearchViewModel: ObservableObject {
         }
 
         guard let cached = signRepository.cachedSigns(), !cached.isEmpty else { return }
-        // Обязательно через updateSearchData — иначе hybridSearchService остаётся nil
-        // и loadAllSigns() выходит по раннему guard без построения гибридного поиска.
+        // Обязательно через updateSearchData — иначе coordinator не построит
+        // hybrid-поиск, а loadAllSigns() выйдет по раннему guard.
         updateSearchData(with: cached)
         searchResults = cached
         hasLoadedInitialData = true
@@ -290,17 +257,6 @@ final class SearchViewModel: ObservableObject {
     /// - Parameter signs: Массив жестов для индексации
     private func updateSearchData(with signs: [Sign]) {
         allSigns = signs
-        
-        searchableSigns = signs.map { sign in
-            SearchableSign(
-                sign: sign,
-                lowercasedWord: sign.word.lowercased()
-            )
-        }
-        
-        hybridSearchService = hybridSearchServiceBuilder.make(
-            signs: signs,
-            networkMonitor: networkMonitor
-        )
+        searchCoordinator.updateSearchData(with: signs)
     }
 }
