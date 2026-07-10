@@ -48,6 +48,36 @@ final class SignDetailViewModelTests: XCTestCase {
         XCTAssertTrue(didPreloadNextVideo)
     }
 
+    func testCacheHitWhilePreviousVideoStillLoadingResetsLoadingState() async {
+        videoRepository.cachedVideoURLValue = nil
+        videoRepository.directVideoURLImplementation = { _, _ in
+            try await Task.sleep(nanoseconds: 300_000_000)
+            return URL(fileURLWithPath: "/tmp/video-1.mp4")
+        }
+        favoritesRepository.favoriteLookup["sign-1"] = false
+        let sut = makeSut(sign: makeSignWithMultipleVideos())
+
+        let staleLoad = Task { await sut.loadVideo() }
+        let startedLoading = await waitUntil { sut.isLoadingVideo }
+        XCTAssertTrue(startedLoading)
+
+        // Пользователь переключается на следующее видео, которое уже в кэше,
+        // пока сетевая загрузка первого видео ещё не завершилась.
+        sut.showNextVideo()
+        let cachedURL = URL(fileURLWithPath: "/tmp/cached-next.mp4")
+        videoRepository.cachedVideoURLValue = cachedURL
+        await sut.loadVideo()
+
+        XCTAssertFalse(sut.isLoadingVideo)
+        XCTAssertEqual(sut.videoURL, cachedURL)
+
+        // Устаревшая сетевая загрузка первого видео завершается позже —
+        // не должна снова включить isLoadingVideo или перезаписать videoURL.
+        _ = await staleLoad.value
+        XCTAssertFalse(sut.isLoadingVideo)
+        XCTAssertEqual(sut.videoURL, cachedURL)
+    }
+
     func testLoadVideoFetchesDirectURLWhenCacheMisses() async {
         let directURL = URL(fileURLWithPath: "/tmp/direct.mp4")
         videoRepository.cachedVideoURLValue = nil
@@ -99,12 +129,12 @@ final class SignDetailViewModelTests: XCTestCase {
         }
         let sut = makeSut()
 
-        sut.toggleFavorite()
+        sut.favoriteViewModel.toggle(categoryName: sut.categoryName)
 
-        XCTAssertTrue(sut.isFavorite)
+        XCTAssertTrue(sut.favoriteViewModel.isFavorite)
         XCTAssertEqual(favoritesRepository.addFavoriteWithSnapshotCalls.map(\.sign.id), ["sign-1"])
         XCTAssertEqual(favoritesRepository.updateOfflineStatusCalls.first?.status, .pending)
-        XCTAssertEqual(sut.favoriteOfflineStatus, .pending)
+        XCTAssertEqual(sut.favoriteViewModel.offlineStatus, .pending)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, [])
     }
 
@@ -113,10 +143,10 @@ final class SignDetailViewModelTests: XCTestCase {
         favoritesRepository.entries = [FavoriteEntry(signId: "sign-1", offlineStatus: .readyOffline)]
         let sut = makeSut()
 
-        sut.toggleFavorite()
+        sut.favoriteViewModel.toggle(categoryName: sut.categoryName)
 
-        XCTAssertFalse(sut.isFavorite)
-        XCTAssertNil(sut.favoriteOfflineStatus)
+        XCTAssertFalse(sut.favoriteViewModel.isFavorite)
+        XCTAssertNil(sut.favoriteViewModel.offlineStatus)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, ["sign-1"])
         XCTAssertEqual(favoritesRepository.addFavoriteCalls, [])
     }
@@ -126,14 +156,14 @@ final class SignDetailViewModelTests: XCTestCase {
         offlinePreparationService.prepareResult = .failed
         let sut = makeSut()
 
-        sut.toggleFavorite()
+        sut.favoriteViewModel.toggle(categoryName: sut.categoryName)
 
         let didFail = await waitUntil {
-            sut.favoriteOfflineStatus == .failed
+            sut.favoriteViewModel.offlineStatus == .failed
         }
 
         XCTAssertTrue(didFail)
-        XCTAssertTrue(sut.isFavorite)
+        XCTAssertTrue(sut.favoriteViewModel.isFavorite)
         XCTAssertEqual(favoritesRepository.removeFavoriteCalls, [])
     }
 
@@ -142,10 +172,10 @@ final class SignDetailViewModelTests: XCTestCase {
         offlinePreparationService.prepareResult = .readyOffline
         let sut = makeSut()
 
-        sut.toggleFavorite()
+        sut.favoriteViewModel.toggle(categoryName: sut.categoryName)
 
         let didComplete = await waitUntil {
-            sut.favoriteOfflineStatus == .readyOffline
+            sut.favoriteViewModel.offlineStatus == .readyOffline
         }
 
         XCTAssertTrue(didComplete)
@@ -227,28 +257,28 @@ final class SignDetailViewModelTests: XCTestCase {
         signRepository.getSignResult = .success(synonym)
         let sut = makeSut()
 
-        sut.navigateToSign("synonym-1")
+        sut.synonymViewModel.navigateToSign("synonym-1")
 
         let didNavigate = await waitUntil {
-            sut.selectedSynonymSign?.id == "synonym-1"
+            sut.synonymViewModel.selectedSign?.id == "synonym-1"
         }
         XCTAssertTrue(didNavigate)
         XCTAssertEqual(signRepository.getSignCallArguments, ["synonym-1"])
-        XCTAssertFalse(sut.isLoadingSynonym)
-        XCTAssertNil(sut.synonymError)
+        XCTAssertFalse(sut.synonymViewModel.isLoading)
+        XCTAssertNil(sut.synonymViewModel.errorMessage)
     }
 
     func testNavigateToSignShowsNotFoundErrorWhenRepositoryReturnsNil() async {
         signRepository.getSignResult = .success(nil)
         let sut = makeSut()
 
-        sut.navigateToSign("missing")
+        sut.synonymViewModel.navigateToSign("missing")
 
         let didShowNotFoundError = await waitUntil {
-            sut.synonymError == "Жест не найден"
+            sut.synonymViewModel.errorMessage == "Жест не найден"
         }
         XCTAssertTrue(didShowNotFoundError)
-        XCTAssertFalse(sut.isLoadingSynonym)
+        XCTAssertFalse(sut.synonymViewModel.isLoading)
     }
 
     func testNavigateToSignShowsErrorAndRetryRepeatsLastRequest() async {
@@ -262,16 +292,16 @@ final class SignDetailViewModelTests: XCTestCase {
         }
         let sut = makeSut()
 
-        sut.navigateToSign("synonym-2")
+        sut.synonymViewModel.navigateToSign("synonym-2")
         let didShowRetryableError = await waitUntil {
-            sut.synonymError == "Не удалось загрузить данные"
+            sut.synonymViewModel.errorMessage == "Не удалось загрузить данные"
         }
         XCTAssertTrue(didShowRetryableError)
 
-        sut.retrySynonymLoad()
+        sut.synonymViewModel.retry()
 
         let didLoadAfterRetry = await waitUntil {
-            sut.selectedSynonymSign?.id == "synonym-2"
+            sut.synonymViewModel.selectedSign?.id == "synonym-2"
         }
         XCTAssertTrue(didLoadAfterRetry)
         XCTAssertEqual(signRepository.getSignCallArguments, ["synonym-2", "synonym-2"])

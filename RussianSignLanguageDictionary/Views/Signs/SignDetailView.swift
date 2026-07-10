@@ -4,14 +4,16 @@ struct SignDetailView: View {
     @ScaledMetric(relativeTo: .body) private var videoPlayerHeight = LayoutConstants.VideoPlayer.defaultHeight
     
     @StateObject private var viewModel: SignDetailViewModel
-    
+    @StateObject private var favoriteViewModel: SignFavoriteViewModel
+    @StateObject private var synonymViewModel: SynonymNavigationViewModel
+
     // MARK: - Init
-    
+
     init(sign: Sign, visitedSignIds: Set<String> = []) {
-        _viewModel = StateObject(wrappedValue: SignDetailViewModel(
-            sign: sign,
-            visitedSignIds: visitedSignIds
-        ))
+        let viewModel = SignDetailViewModel(sign: sign, visitedSignIds: visitedSignIds)
+        _viewModel = StateObject(wrappedValue: viewModel)
+        _favoriteViewModel = StateObject(wrappedValue: viewModel.favoriteViewModel)
+        _synonymViewModel = StateObject(wrappedValue: viewModel.synonymViewModel)
     }
     
     // MARK: - Body
@@ -34,7 +36,7 @@ struct SignDetailView: View {
         .onDisappear {
             viewModel.cleanupVideo()
         }
-        .navigationDestination(item: $viewModel.selectedSynonymSign) { sign in
+        .navigationDestination(item: $synonymViewModel.selectedSign) { sign in
             SignDetailView(
                 sign: sign,
                 visitedSignIds: viewModel.visitedSignIds
@@ -89,25 +91,25 @@ struct SignDetailView: View {
             favoriteOfflineBadge
             
             if let synonyms = viewModel.sign.synonyms, !synonyms.isEmpty {
-                if viewModel.isLoadingSynonym {
+                if synonymViewModel.isLoading {
                     LoadingView(message: "Загрузка синонима...", size: .small)
                         .frame(height: 40)
-                } else if let error = viewModel.synonymError {
+                } else if let error = synonymViewModel.errorMessage {
                     VStack(spacing: 8) {
                         ErrorView(
                             message: error,
                             retryAction: {
-                                viewModel.retrySynonymLoad()
+                                synonymViewModel.retry()
                             }
                         )
                         .frame(height: 100)
-                        
+
                         SynonymListView(
                             synonyms: synonyms,
                             currentSignId: viewModel.sign.id,
                             visitedSignIds: viewModel.visitedSignIds,
                             onSynonymTap: { synonymId in
-                                viewModel.navigateToSign(synonymId)
+                                synonymViewModel.navigateToSign(synonymId)
                             }
                         )
                     }
@@ -117,7 +119,7 @@ struct SignDetailView: View {
                         currentSignId: viewModel.sign.id,
                         visitedSignIds: viewModel.visitedSignIds,
                         onSynonymTap: { synonymId in
-                            viewModel.navigateToSign(synonymId)
+                            synonymViewModel.navigateToSign(synonymId)
                         }
                     )
                 }
@@ -151,7 +153,7 @@ struct SignDetailView: View {
 
     @ViewBuilder
     private var favoriteOfflineBadge: some View {
-        if viewModel.isFavorite, let status = viewModel.favoriteOfflineStatus {
+        if favoriteViewModel.isFavorite, let status = favoriteViewModel.offlineStatus {
             HStack(spacing: 6) {
                 Image(systemName: favoriteStatusIcon(for: status))
                     .font(.caption)
@@ -169,21 +171,21 @@ struct SignDetailView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
             Button {
-                viewModel.toggleFavorite()
+                favoriteViewModel.toggle(categoryName: viewModel.categoryName)
             } label: {
-                Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
-                    .foregroundColor(viewModel.isFavorite ? .red : .primary)
+                Image(systemName: favoriteViewModel.isFavorite ? "heart.fill" : "heart")
+                    .foregroundColor(favoriteViewModel.isFavorite ? .red : .primary)
             }
-            .accessibilityLabel(viewModel.isFavorite ? "Удалить из избранного" : "Добавить в избранное")
+            .accessibilityLabel(favoriteViewModel.isFavorite ? "Удалить из избранного" : "Добавить в избранное")
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func loadData() async {
         async let videoLoad: Void = viewModel.loadVideo()
         async let categoryLoad: Void = viewModel.loadCategoryName()
-        viewModel.checkFavoriteStatus()
+        favoriteViewModel.checkStatus()
         _ = await (videoLoad, categoryLoad)
     }
 
