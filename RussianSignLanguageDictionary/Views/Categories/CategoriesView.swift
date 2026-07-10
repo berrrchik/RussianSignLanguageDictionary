@@ -16,21 +16,14 @@ struct CategoriesView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                switch viewModel.state {
-                case .idle, .loading:
-                    LoadingView(message: "Загрузка категорий...")
-                    
-                case .loaded:
-                    categoriesGrid
-                    
-                case .error(let message):
-                    ErrorView(message: message, skipAction:  {
-                        Task {
-                            await viewModel.loadCategories()
-                        }
-                    })
-                }
+            LoadableContentView(state: viewModel.state, loadingMessage: "Загрузка категорий...") {
+                categoriesGrid
+            } errorView: { message in
+                ErrorView(message: message, skipAction: {
+                    Task {
+                        await viewModel.loadCategories()
+                    }
+                })
             }
             .navigationTitle("Категории")
             .toolbar {

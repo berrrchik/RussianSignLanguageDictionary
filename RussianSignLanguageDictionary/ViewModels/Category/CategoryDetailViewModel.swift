@@ -7,21 +7,12 @@ final class CategoryDetailViewModel: ObservableObject {
     
     @Published private(set) var signs: [Sign] = []
     @Published private(set) var categoryNamesById: [String: String] = [:]
-    @Published private(set) var state: ViewState = .idle
-    
+    @Published private(set) var state: ScreenLoadState = .idle
+
     // MARK: - Properties
-    
+
     let category: Category
-    
-    // MARK: - ViewState
-    
-    enum ViewState: Equatable {
-        case idle
-        case loading
-        case loaded
-        case error(String)
-    }
-    
+
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol

@@ -10,17 +10,8 @@ final class CategoriesViewModel: ObservableObject {
     // MARK: - Published Properties
     
     @Published private(set) var categories: [Category] = []
-    @Published private(set) var state: ViewState = .idle
-    
-    // MARK: - ViewState
-    
-    enum ViewState: Equatable {
-        case idle
-        case loading
-        case loaded
-        case error(String)
-    }
-    
+    @Published private(set) var state: ScreenLoadState = .idle
+
     // MARK: - Dependencies
     
     private let signRepository: SignRepositoryProtocol

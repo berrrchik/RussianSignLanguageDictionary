@@ -34,29 +34,22 @@ struct CategoryDetailView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        ZStack {
-            switch viewModel.state {
-            case .idle, .loading:
-                LoadingView(message: "Загрузка жестов...")
-                
-            case .loaded:
-                if viewModel.signs.isEmpty {
-                    EmptyStateView(
-                        icon: "tray.fill",
-                        title: "Жесты не найдены",
-                        message: "В этой категории пока нет жестов"
-                    )
-                } else {
-                    signsList
-                }
-                
-            case .error(let message):
-                ErrorView(message: message, skipAction:  {
-                    Task {
-                        await viewModel.loadSigns()
-                    }
-                })
+        LoadableContentView(state: viewModel.state, loadingMessage: "Загрузка жестов...") {
+            if viewModel.signs.isEmpty {
+                EmptyStateView(
+                    icon: "tray.fill",
+                    title: "Жесты не найдены",
+                    message: "В этой категории пока нет жестов"
+                )
+            } else {
+                signsList
             }
+        } errorView: { message in
+            ErrorView(message: message, skipAction: {
+                Task {
+                    await viewModel.loadSigns()
+                }
+            })
         }
     }
     
