@@ -29,22 +29,25 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UITableView, context: Context) {
+        guard !context.coordinator.isDismantled else { return }
+
         context.coordinator.sections = sections
         context.coordinator.favoritesRepository = favoritesRepository
         context.coordinator.categoryNamesById = categoryNamesById
         context.coordinator.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
         context.coordinator.tableView = uiView
-        if uiView.window != nil {
-            uiView.reloadData()
-        } else {
-            DispatchQueue.main.async {
-                guard uiView.window != nil else { return }
-                uiView.reloadData()
-            }
+
+        guard uiView.window != nil,
+              uiView.dataSource != nil,
+              uiView.delegate != nil else {
+            return
         }
+
+        uiView.reloadData()
     }
     
     static func dismantleUIView(_ uiView: UITableView, coordinator: Coordinator) {
+        coordinator.isDismantled = true
         uiView.delegate = nil
         uiView.dataSource = nil
         coordinator.cleanup()
@@ -67,6 +70,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         var favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
         let onSignSelected: (Sign) -> Void
         weak var tableView: UITableView?
+        var isDismantled = false
         
         init(
             sections: [SearchViewModel.SignSection],
@@ -87,6 +91,7 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             sections.removeAll()
             favoritesRepository = nil
             favoriteOfflineStatusProvider = nil
+            tableView = nil
         }
         
         // MARK: - UITableViewDataSource

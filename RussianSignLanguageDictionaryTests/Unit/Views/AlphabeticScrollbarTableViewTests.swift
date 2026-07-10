@@ -85,6 +85,36 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         XCTAssertTrue(imageIdentifiers(in: cell).contains("offline-status-exclamationmark.circle"))
     }
 
+    func testCoordinatorCleanupClearsTableState() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: { _ in .readyOffline },
+            onSignSelected: { _ in }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+        coordinator.tableView = tableView
+
+        coordinator.cleanup()
+
+        XCTAssertTrue(coordinator.sections.isEmpty)
+        XCTAssertNil(coordinator.favoritesRepository)
+        XCTAssertNil(coordinator.favoriteOfflineStatusProvider)
+        XCTAssertNil(coordinator.tableView)
+    }
+
     private func viewHierarchy(of view: UIView) -> [String] {
         var texts: [String] = []
 

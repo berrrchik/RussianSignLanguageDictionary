@@ -64,14 +64,24 @@ struct FavoritesView: View {
                     await viewModel.loadFavorites()
                 }
             })
-        } else if viewModel.favoriteSigns.isEmpty {
-            emptyStateView
         } else {
-            favoritesListView
+            favoritesContentView
         }
     }
     
     // MARK: - Subviews
+
+    private var favoritesContentView: some View {
+        ZStack {
+            favoritesListView
+
+            if viewModel.favoriteSigns.isEmpty {
+                emptyStateView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+            }
+        }
+    }
     
     private var favoritesListView: some View {
         AlphabeticScrollbarTableView(
