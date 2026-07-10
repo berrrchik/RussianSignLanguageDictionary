@@ -5,18 +5,11 @@ import os.log
 @MainActor
 final class LessonsViewModel: ObservableObject {
     @Published private(set) var lessons: [Lesson] = []
-    @Published private(set) var state: LoadingState = .idle
+    @Published private(set) var state: ScreenLoadState = .idle
     @Published private(set) var errorMessage: String?
-    
+
     private let logger = Logger(subsystem: "com.rsl.LessonsViewModel", category: "viewmodel")
-    
-    enum LoadingState: Equatable {
-        case idle
-        case loading
-        case loaded
-        case error(String)
-    }
-    
+
     private let lessonRepository: LessonRepositoryProtocol
     
     /// Convenience init для production — резолвит зависимости из DIContainer

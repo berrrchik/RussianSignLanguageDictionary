@@ -5,19 +5,14 @@ struct LessonsView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                switch viewModel.state {
-                case .idle, .loading:
-                    LoadingView(message: "Загрузка уроков...")
-                case .loaded:
-                    lessonsContent
-                case .error(let message):
-                    ErrorView(message: message, retryAction: {
-                        Task {
-                            await viewModel.loadLessons()
-                        }
-                    })
-                }
+            LoadableContentView(state: viewModel.state, loadingMessage: "Загрузка уроков...") {
+                lessonsContent
+            } errorView: { message in
+                ErrorView(message: message, retryAction: {
+                    Task {
+                        await viewModel.loadLessons()
+                    }
+                })
             }
             .navigationTitle("Обучение")
             .toolbar {
