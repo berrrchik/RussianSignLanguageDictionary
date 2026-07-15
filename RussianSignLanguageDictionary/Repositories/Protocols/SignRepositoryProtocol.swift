@@ -2,7 +2,8 @@ import Foundation
 import Combine
 
 /// Протокол репозитория для работы с данными о жестах из JSON Bundle
-protocol SignRepositoryProtocol {
+@MainActor
+protocol SignRepositoryProtocol: Sendable {
     /// Публикует обновлённый snapshot после фоновой синхронизации.
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> { get }
 

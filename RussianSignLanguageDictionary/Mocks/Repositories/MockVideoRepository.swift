@@ -2,6 +2,7 @@ import Foundation
 
 #if DEBUG
 /// Mock реализация VideoRepositoryProtocol для превью и тестов
+@MainActor
 final class MockVideoRepository: VideoRepositoryProtocol {
     // MARK: - Properties
     
@@ -23,7 +24,7 @@ final class MockVideoRepository: VideoRepositoryProtocol {
     
     // MARK: - VideoRepositoryProtocol
     
-    func cachedVideoURL(for video: SignVideo) -> URL? {
+    nonisolated func cachedVideoURL(for video: SignVideo) -> URL? {
         // В mock всегда возвращаем nil (нет кеша)
         return nil
     }

@@ -3,6 +3,7 @@ import Combine
 
 #if DEBUG
 /// Mock реализация SignRepositoryProtocol для превью и тестов
+@MainActor
 final class MockSignRepository: SignRepositoryProtocol {
     // MARK: - Properties
     

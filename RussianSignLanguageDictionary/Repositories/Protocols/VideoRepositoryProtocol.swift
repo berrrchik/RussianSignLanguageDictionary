@@ -9,8 +9,11 @@ import Foundation
 /// Краткосрочный кеш хранится в `cachesDirectory` — штатное место для кешей iOS.
 /// Сохраняется между обычными сессиями, но может быть очищен системой
 /// при нехватке места на устройстве (что допустимо для кеша).
-protocol VideoRepositoryProtocol {
+@MainActor
+protocol VideoRepositoryProtocol: Sendable {
     /// Проверяет наличие видео в любом локальном кеше (синхронно)
+    ///
+    /// Безопасно вызывать вне MainActor — не обращается к MainActor-изолированному состоянию.
     ///
     /// Проверяет в порядке приоритета:
     /// 1. Краткосрочный кеш (файлы в `Caches/video_short_term_cache/`)
@@ -18,7 +21,7 @@ protocol VideoRepositoryProtocol {
     ///
     /// - Parameter video: Модель видео
     /// - Returns: Локальный file URL или nil, если видео не кешировано
-    func cachedVideoURL(for video: SignVideo) -> URL?
+    nonisolated func cachedVideoURL(for video: SignVideo) -> URL?
     
     /// Получает URL видео для указанного жеста (для обратной совместимости)
     /// - Parameter sign: Модель жеста
