@@ -7,29 +7,35 @@ import FirebasePerformance
 ///
 /// **Performance Monitoring**: Загрузка и парсинг данных отслеживаются через Firebase Performance Monitoring:
 /// - `signs_data_load` - загрузка данных жестов (из кеша или с сервера)
-final class SignRepository: SignRepositoryProtocol {
-    
+nonisolated final class SignRepository: SignRepositoryProtocol, @unchecked Sendable {
+
     // MARK: - Properties
-    
-    private let logger = Logger(subsystem: "com.rsl.SignRepository", category: "repository")
-    
-    private let syncRepository: SyncRepositoryProtocol
+
+    let logger = Logger(subsystem: "com.rsl.SignRepository", category: "repository")
+
+    let syncRepository: SyncRepositoryProtocol
     private let cacheService: CacheServiceProtocol
-    private let networkMonitor: NetworkMonitorProtocol
-    
-    private let memoryCache = MemoryCacheManager<SyncData>(label: "com.rsl.signRepository.memoryCache")
+    let networkMonitor: NetworkMonitorProtocol
+
+    let memoryCache = MemoryCacheManager<SyncData>(label: "com.rsl.signRepository.memoryCache")
     private let loadCoordinator = DataLoadCoordinator<SyncData>(
         subsystem: "com.rsl.SignRepository",
         category: "LoadCoordinator"
     )
     private let dataStatusSubject = CurrentValueSubject<RepositoryDataStatus, Never>(.idle)
-    
-    /// Защита от множественных фоновых синхронизаций
-    private var backgroundSyncTask: Task<Void, Never>?
-    
+
+    let backgroundSyncCoordinator = SignRepositoryBackgroundSyncCoordinator(
+        subsystem: "com.rsl.SignRepository",
+        category: "BackgroundSync"
+    )
+
+    /// Защита от гонки check-then-send в `updateDataStatus` между foreground `loadAllSigns()`
+    /// и фоновой синхронизацией.
+    private let dataStatusLock = NSLock()
+
     // MARK: - Publishers
     
-    private let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
+    let dataUpdatedSubject = PassthroughSubject<SyncData, Never>()
     var dataUpdatedPublisher: AnyPublisher<SyncData, Never> {
         dataUpdatedSubject.eraseToAnyPublisher()
     }
@@ -54,10 +60,6 @@ final class SignRepository: SignRepositoryProtocol {
         self.syncRepository = syncRepository
         self.cacheService = cacheService
         self.networkMonitor = networkMonitor
-    }
-    
-    deinit {
-        backgroundSyncTask?.cancel()
     }
     
     // MARK: - SignRepositoryProtocol
@@ -103,7 +105,7 @@ final class SignRepository: SignRepositoryProtocol {
         if let cached = memoryCache.get() {
             logger.debug("📦 Данные из memory cache (быстрый путь)")
             updateDataStatus(.availableLocally(.memoryCache))
-            scheduleBackgroundSyncIfNeeded()
+            await scheduleBackgroundSyncIfNeeded()
             return cached
         }
         
@@ -129,7 +131,7 @@ final class SignRepository: SignRepositoryProtocol {
             PerformanceService.addAttribute(trace, name: "source", value: "disk_cache")
             PerformanceService.incrementMetric(trace, name: "signs_count", by: Int64(diskCached.signs.count))
             PerformanceService.incrementMetric(trace, name: "categories_count", by: Int64(diskCached.categories.count))
-            scheduleBackgroundSyncIfNeeded()
+            await scheduleBackgroundSyncIfNeeded()
             return diskCached
         }
         
@@ -178,74 +180,9 @@ final class SignRepository: SignRepositoryProtocol {
         }
     }
     
-    // MARK: - Background Sync
-    
-    private func scheduleBackgroundSyncIfNeeded() {
-        guard backgroundSyncTask == nil || backgroundSyncTask?.isCancelled == true else {
-            logger.debug("⏭️ Фоновая синхронизация уже запущена")
-            return
-        }
-        
-        backgroundSyncTask = Task { [weak self] in
-            await self?.performBackgroundSync()
-        }
-    }
-    
-    private func performBackgroundSync() async {
-        defer { backgroundSyncTask = nil }
-
-        guard !Task.isCancelled else {
-            logger.debug("🛑 Фоновая синхронизация отменена до старта")
-            return
-        }
-        
-        guard await networkMonitor.checkConnection() else {
-            logger.debug("📴 Нет интернета для фоновой синхронизации")
-            updateDataStatus(.usingCachedData(.noInternet))
-            return
-        }
-        
-        do {
-            logger.info("🔄 Фоновая синхронизация...")
-            
-            let currentData = memoryCache.get()
-            let syncData = try await syncRepository.fetchAllData { [weak self] in
-                guard let cached = self?.memoryCache.get() else {
-                    throw SignRepositoryError.noDataAvailable
-                }
-                return cached
-            }
-            
-            guard !Task.isCancelled else {
-                logger.debug("🛑 Фоновая синхронизация отменена после загрузки")
-                return
-            }
-            
-            guard currentData?.lastUpdated != syncData.lastUpdated else {
-                logger.info("ℹ️ Данные не изменились")
-                updateDataStatus(.upToDate)
-                return
-            }
-            
-            logger.info("🆕 Обнаружены изменения!")
-            saveToAllCaches(syncData)
-            dataUpdatedSubject.send(syncData)
-            updateDataStatus(.updated)
-            logger.info("✅ Фоновая синхронизация завершена с обновлением UI")
-            
-        } catch {
-            if error is CancellationError {
-                logger.debug("🛑 Фоновая синхронизация отменена")
-                return
-            }
-            updateDataStatus(.usingCachedData(await dataStatusReason(for: error)))
-            logger.warning("⚠️ Фоновая синхронизация не удалась: \(error.localizedDescription)")
-        }
-    }
-    
     // MARK: - Cache Management
     
-    private func saveToAllCaches(_ data: SyncData) {
+    func saveToAllCaches(_ data: SyncData) {
         memoryCache.set(data)
         
         do {
@@ -256,12 +193,14 @@ final class SignRepository: SignRepositoryProtocol {
         }
     }
 
-    private func updateDataStatus(_ status: RepositoryDataStatus) {
-        guard dataStatusSubject.value != status else { return }
-        dataStatusSubject.send(status)
+    func updateDataStatus(_ status: RepositoryDataStatus) {
+        dataStatusLock.withLock {
+            guard dataStatusSubject.value != status else { return }
+            dataStatusSubject.send(status)
+        }
     }
 
-    private func dataStatusReason(for error: Error) async -> DataStatusReason {
+    func dataStatusReason(for error: Error) async -> DataStatusReason {
         if let syncError = error as? SyncError {
             switch syncError {
             case .noInternet:
