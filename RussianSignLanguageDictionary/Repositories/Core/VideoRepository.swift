@@ -12,7 +12,7 @@ import os.log
 /// **Performance Monitoring**: операции загрузки видео отслеживаются через Firebase Performance:
 /// - `video_load_favorites_cache` — загрузка из долгосрочного кеша избранных
 /// - `video_download_network` — загрузка видео с сервера в краткосрочный кеш (внутри `ShortTermVideoCacheManager`)
-final class VideoRepository: VideoRepositoryProtocol {
+nonisolated final class VideoRepository: VideoRepositoryProtocol, Sendable {
 
     // MARK: - Properties
 
