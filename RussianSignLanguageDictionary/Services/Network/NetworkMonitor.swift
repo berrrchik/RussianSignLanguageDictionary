@@ -3,13 +3,20 @@ import Combine
 import Network
 
 /// Сервис для проверки доступности сети
-final class NetworkMonitor: NetworkMonitorProtocol {
+///
+/// `@unchecked Sendable`: не может быть `actor`, т.к. `NetworkMonitorProtocol.connectivityStatus`
+/// — синхронное требование, вызываемое из нескольких ViewModel без `await`.
+/// `isMonitoring` защищён `NSLock` (не полагаемся только на "вызывается из init/deinit").
+/// `CurrentValueSubject`/`PassthroughSubject` потокобезопасны сами по себе (internal lock),
+/// просто не аннотированы `Sendable` в Combine.
+final class NetworkMonitor: NetworkMonitorProtocol, @unchecked Sendable {
     // MARK: - Properties
-    
+
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.rsl.networkMonitor")
     private let connectivitySubject = CurrentValueSubject<ConnectivityStatus, Never>(.unknown)
     private let connectionRestoredSubject = PassthroughSubject<Void, Never>()
+    private let isMonitoringLock = NSLock()
     private var isMonitoring = false
 
     var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> {
@@ -40,8 +47,12 @@ final class NetworkMonitor: NetworkMonitorProtocol {
     
     /// Начинает мониторинг сети
     private func startMonitoring() {
-        guard !isMonitoring else { return }
-        isMonitoring = true
+        let shouldStart = isMonitoringLock.withLock {
+            guard !isMonitoring else { return false }
+            isMonitoring = true
+            return true
+        }
+        guard shouldStart else { return }
         monitor.pathUpdateHandler = { [weak self] path in
             guard let self else { return }
 
@@ -60,9 +71,13 @@ final class NetworkMonitor: NetworkMonitorProtocol {
     
     /// Останавливает мониторинг сети
     private func stopMonitoring() {
-        guard isMonitoring else { return }
+        let shouldStop = isMonitoringLock.withLock {
+            guard isMonitoring else { return false }
+            isMonitoring = false
+            return true
+        }
+        guard shouldStop else { return }
         monitor.cancel()
-        isMonitoring = false
     }
     
     /// Проверяет доступность интернета асинхронно
