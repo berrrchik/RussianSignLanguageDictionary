@@ -1,7 +1,12 @@
 import Foundation
 
 /// Мок-реализация VideoCacheServiceProtocol для тестирования
-final class MockVideoCacheService: VideoCacheServiceProtocol {
+/// `VideoCacheServiceProtocol` требует синхронных non-async методов, читающих/пишущих
+/// мутируемое состояние (`cachedVideos`, счётчики), поэтому его нельзя целиком изолировать
+/// к MainActor без переписывания протокола. `@unchecked Sendable` безопасен только потому,
+/// что этот мок используется исключительно из Previews и `@MainActor`-тестов (см. CLAUDE.md
+/// конвенцию: ViewModel-тесты всегда `@MainActor`) — фактически однопоточно, без гонок.
+final class MockVideoCacheService: VideoCacheServiceProtocol, @unchecked Sendable {
     // MARK: - Test Control Properties
     
     /// Словарь закешированных видео (URL строка -> локальный URL)

@@ -3,7 +3,11 @@ import Combine
 
 /// Mock реализация NetworkMonitorProtocol для тестирования
 /// Позволяет симулировать наличие или отсутствие интернета
-final class MockNetworkMonitor: NetworkMonitorProtocol {
+/// `NetworkMonitorProtocol` требует синхронного `connectivityStatus`, поэтому мок нельзя
+/// изолировать к MainActor целиком без переписывания протокола. `@unchecked Sendable`
+/// безопасен только потому, что этот мок используется исключительно из Previews и
+/// `@MainActor`-тестов — фактически однопоточно, без гонок.
+final class MockNetworkMonitor: NetworkMonitorProtocol, @unchecked Sendable {
     // MARK: - Properties
     
     private(set) var checkConnectionCallCount = 0
