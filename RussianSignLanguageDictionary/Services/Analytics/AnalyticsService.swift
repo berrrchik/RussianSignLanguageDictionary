@@ -9,6 +9,7 @@ import UIKit
 /// - Версия приложения
 /// - Версия iOS
 /// - Locale пользователя
+@MainActor
 enum AnalyticsService {
     // MARK: - Screen Tracking
     

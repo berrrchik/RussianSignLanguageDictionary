@@ -5,7 +5,7 @@ import os.log
 /// Следует паттерну Decorator для разделения ответственностей:
 /// - SyncRepository отвечает за сетевые запросы
 /// - LoggingSyncRepositoryDecorator отвечает за логирование
-final class LoggingSyncRepositoryDecorator: SyncRepositoryProtocol {
+final class LoggingSyncRepositoryDecorator: SyncRepositoryProtocol, Sendable {
     // MARK: - Properties
     
     private let wrapped: SyncRepositoryProtocol
@@ -32,7 +32,7 @@ final class LoggingSyncRepositoryDecorator: SyncRepositoryProtocol {
         }
     }
     
-    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping @Sendable () throws -> SyncData) async throws -> SyncData {
         logger.info("📥 Начало загрузки данных...")
         
         do {

@@ -1,6 +1,6 @@
 import Foundation
 
-final class HybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol {
+final class HybridSearchServiceBuilder: HybridSearchServiceBuilderProtocol, Sendable {
     private let baseURL: URL
 
     init(baseURL: URL = APIConfig.apiBaseURL) {

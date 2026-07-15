@@ -6,7 +6,7 @@ import os.log
 /// Отвечает за:
 /// - Загрузку видео с сервера
 /// - Сохранение в файловый кеш
-final class VideoCacheDownloader {
+final class VideoCacheDownloader: Sendable {
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.videoCache", category: "Downloader")

@@ -3,7 +3,7 @@ import os.log
 
 /// Управляет кешированием ETag для условных HTTP-запросов
 /// Согласно RFC 7232, ETag используется для оптимизации сетевого трафика
-final class ETagManager {
+final class ETagManager: Sendable {
     // MARK: - Constants
     
     /// Длина MD5 хеша в hex формате (32 символа)
@@ -12,7 +12,8 @@ final class ETagManager {
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.ETagManager", category: "etag")
-    private let userDefaults: UserDefaults
+    /// `UserDefaults` is documented by Apple as thread-safe; not `Sendable`-annotated in Foundation.
+    private nonisolated(unsafe) let userDefaults: UserDefaults
     
     /// Ключи для хранения ETag
     enum StorageKey: String {

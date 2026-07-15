@@ -7,7 +7,9 @@ final class CacheService: CacheServiceProtocol {
     
     private let logger = Logger(subsystem: "com.rsl.CacheService", category: "cache")
     private let cacheKey = "cached_signs_data"
-    private let fileManager: FileManager
+    /// `FileManager` instance methods are documented by Apple as thread-safe;
+    /// the type itself just isn't annotated `Sendable` in Foundation.
+    private nonisolated(unsafe) let fileManager: FileManager
     private let cacheDirectoryURL: URL?
     
     // MARK: - Initialization

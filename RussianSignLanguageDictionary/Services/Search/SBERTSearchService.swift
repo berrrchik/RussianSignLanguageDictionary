@@ -2,7 +2,7 @@ import Foundation
 import os.log
 
 /// Сервис для выполнения SBERT семантического поиска
-final class SBERTSearchService: SBERTSearchServiceProtocol {
+final class SBERTSearchService: SBERTSearchServiceProtocol, Sendable {
     // MARK: - Properties
     
     private let baseURL: URL

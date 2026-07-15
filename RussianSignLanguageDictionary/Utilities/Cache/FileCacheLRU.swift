@@ -21,7 +21,7 @@ enum FileCacheLRU {
     ///   - targetPercent: Целевой процент от лимита после очистки (по умолчанию 80%)
     /// - Returns: Количество удалённых файлов
     @discardableResult
-    static func enforceSizeLimit(
+    @Sendable static func enforceSizeLimit(
         at directory: URL,
         maxSize: Int,
         targetPercent: Int = 80

@@ -3,7 +3,7 @@ import os.log
 
 /// Репозиторий для синхронизации данных с сервером
 /// Использует Raw API endpoints для получения данных
-final class SyncRepository: SyncRepositoryProtocol {
+final class SyncRepository: SyncRepositoryProtocol, Sendable {
     // MARK: - Properties
     
     private let baseURL: URL
@@ -40,7 +40,7 @@ final class SyncRepository: SyncRepositoryProtocol {
         )
     }
     
-    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping @Sendable () throws -> SyncData) async throws -> SyncData {
         let url = SyncEndpoints.fetchData.url(baseURL: baseURL)
         
         return try await performRequest(

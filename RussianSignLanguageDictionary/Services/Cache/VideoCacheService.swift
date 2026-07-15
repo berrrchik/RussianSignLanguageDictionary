@@ -13,7 +13,7 @@ import os.log
 /// Сервис использует композицию для разделения ответственностей:
 /// - `VideoCacheDirectoryManager` — работа с файловой системой
 /// - `VideoCacheDownloader` — загрузка видео с сервера
-final class VideoCacheService: VideoCacheServiceProtocol {
+final class VideoCacheService: VideoCacheServiceProtocol, Sendable {
     // MARK: - Properties
     
     private let logger = Logger(subsystem: "com.rsl.videoCache", category: "VideoCacheService")

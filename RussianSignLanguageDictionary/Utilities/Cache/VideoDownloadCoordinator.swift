@@ -33,7 +33,7 @@ actor VideoDownloadCoordinator {
     /// - Returns: Кортеж из Task загрузки и флага `isExisting` (true, если задача уже была в процессе)
     func getOrCreateTask(
         videoId: Int,
-        downloadTask: @escaping () async throws -> URL
+        downloadTask: @escaping @Sendable () async throws -> URL
     ) -> (task: Task<URL, Error>, isExisting: Bool) {
         // Проверяем, не загружается ли уже
         if let existingTask = inFlightDownloads[videoId] {

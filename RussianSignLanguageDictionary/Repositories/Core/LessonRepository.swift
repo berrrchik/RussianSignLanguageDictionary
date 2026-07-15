@@ -1,6 +1,6 @@
 import Foundation
 
-final class LessonRepository: LessonRepositoryProtocol {
+final class LessonRepository: LessonRepositoryProtocol, Sendable {
     
     private let cacheService: CacheServiceProtocol
 

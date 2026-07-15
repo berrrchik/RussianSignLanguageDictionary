@@ -2,7 +2,7 @@ import Foundation
 
 /// Стандартный JSON декодер для API ответов
 /// Используется в SyncRepository и CacheService для единообразия
-final class APIJSONDecoder {
+final class APIJSONDecoder: Sendable {
     // MARK: - Singleton
     
     static let shared = APIJSONDecoder()
@@ -33,7 +33,7 @@ final class APIJSONDecoder {
 
 /// Стандартный JSON энкодер для API запросов
 /// Используется в CacheService для сохранения данных
-final class APIJSONEncoder {
+final class APIJSONEncoder: Sendable {
     // MARK: - Singleton
     
     static let shared = APIJSONEncoder()
