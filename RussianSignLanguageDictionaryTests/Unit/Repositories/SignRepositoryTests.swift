@@ -195,6 +195,49 @@ final class SignRepositoryTests: XCTestCase {
         releaseBackgroundSync?.resume()
     }
 
+    func testConcurrentBackgroundSyncSchedulingStartsOnlyOneTask() async throws {
+        try cacheService.save(TestFixtures.syncData)
+        _ = try await sut.loadAllSigns()
+        // Дать первой фоновой синхронизации (запущенной внутри loadAllSigns выше) полностью
+        // завершиться, чтобы гонка ниже стартовала с чистого состояния backgroundSyncTask.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let initialFetchCallCount = syncRepository.fetchAllDataCallCount
+
+        let started = expectation(description: "background sync started")
+        var releaseBackgroundSync: CheckedContinuation<Void, Never>?
+        syncRepository.fetchAllDataImplementation = { provider in
+            started.fulfill()
+            await withCheckedContinuation { continuation in
+                releaseBackgroundSync = continuation
+            }
+            return try provider()
+        }
+
+        let startGate = AsyncStartGate()
+        let firstReady = expectation(description: "first task ready")
+        let secondReady = expectation(description: "second task ready")
+
+        let first = Task {
+            firstReady.fulfill()
+            await startGate.wait()
+            return try await self.sut.loadAllSigns()
+        }
+        let second = Task {
+            secondReady.fulfill()
+            await startGate.wait()
+            return try await self.sut.loadAllSigns()
+        }
+
+        await fulfillment(of: [firstReady, secondReady], timeout: 1.0)
+        await startGate.open()
+        _ = try await first.value
+        _ = try await second.value
+
+        await fulfillment(of: [started], timeout: 1.0)
+        XCTAssertEqual(syncRepository.fetchAllDataCallCount, initialFetchCallCount + 1)
+        releaseBackgroundSync?.resume()
+    }
+
     func testDataUpdatedPublisherDoesNotEmitWhenLastUpdatedIsUnchanged() async throws {
         try cacheService.save(TestFixtures.syncData)
         let firstExpectation = expectation(description: "no update for unchanged data")
