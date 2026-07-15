@@ -85,29 +85,28 @@ final class VideoPlayerViewModel: ObservableObject {
         isReadyToPlay = false
         playbackErrorMessage = nil
         
-        setupTask = Task {
+        setupTask = Task { [weak self] in
             let asset = AVURLAsset(url: url)
-            
+
             do {
-                let isPlayable = try await loadPlayableStatus(for: asset)
-                guard !Task.isCancelled else { return }
-                
+                let isPlayable = try await Self.loadPlayableStatus(for: asset)
+                guard !Task.isCancelled, let self else { return }
                 guard isPlayable else {
-                    reportPlaybackFailure()
+                    self.reportPlaybackFailure()
                     return
                 }
-                
+
                 let playerItem = AVPlayerItem(asset: asset)
                 let newPlayer = AVPlayer(playerItem: playerItem)
                 newPlayer.actionAtItemEnd = .none
-                
-                setupLoopObserver(for: playerItem, player: newPlayer)
-                player = newPlayer
-                observePlayerItemStatus(playerItem, player: newPlayer)
+
+                self.setupLoopObserver(for: playerItem, player: newPlayer)
+                self.player = newPlayer
+                self.observePlayerItemStatus(playerItem, player: newPlayer)
             } catch {
-                guard !Task.isCancelled else { return }
-                logger.error("❌ Ошибка загрузки ассета: \(error.localizedDescription)")
-                reportPlaybackFailure(error)
+                guard !Task.isCancelled, let self else { return }
+                self.logger.error("❌ Ошибка загрузки ассета: \(error.localizedDescription)")
+                self.reportPlaybackFailure(error)
             }
         }
     }
@@ -131,7 +130,7 @@ final class VideoPlayerViewModel: ObservableObject {
         }
     }
     
-    private func loadPlayableStatus(for asset: AVURLAsset) async throws -> Bool {
+    private static func loadPlayableStatus(for asset: AVURLAsset) async throws -> Bool {
         try await withThrowingTaskGroup(of: Bool.self) { group in
             group.addTask {
                 try await asset.load(.isPlayable)

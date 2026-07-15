@@ -111,17 +111,10 @@ final class SyncViewModel: ObservableObject {
             if metadata.hasUpdates {
                 logger.info("🔄 Обнаружены обновления, загрузка данных...")
                 
+                let cacheService = self.cacheService
                 let data = try await syncRepository.fetchAllData(
-                    cachedDataProvider: { [weak self] in
-                        guard let self = self else {
-                            throw SyncError.networkError(
-                                NSError(domain: "SyncViewModel", code: -1, userInfo: [
-                                    NSLocalizedDescriptionKey: "SyncViewModel deallocated"
-                                ])
-                            )
-                        }
-                        
-                        guard let cached = try self.cacheService.load() else {
+                    cachedDataProvider: {
+                        guard let cached = try cacheService.load() else {
                             throw SyncError.networkError(
                                 NSError(domain: "SyncViewModel", code: -1, userInfo: [
                                     NSLocalizedDescriptionKey: "Cache unavailable for 304"

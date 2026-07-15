@@ -145,16 +145,17 @@ final class SearchViewModel: ObservableObject {
             return
         }
         
-        searchTask = Task {
-            isLoading = true
-            errorMessage = nil
+        isLoading = true
+        errorMessage = nil
 
+        let searchCoordinator = self.searchCoordinator
+        searchTask = Task { [weak self] in
             guard let outcome = await searchCoordinator.performSearch(query: trimmedQuery) else {
-                isLoading = false
+                self?.isLoading = false
                 return
             }
 
-            applySearchOutcome(outcome, query: trimmedQuery)
+            self?.applySearchOutcome(outcome, query: trimmedQuery)
         }
     }
 

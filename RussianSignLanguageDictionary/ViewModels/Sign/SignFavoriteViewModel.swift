@@ -12,6 +12,7 @@ final class SignFavoriteViewModel: ObservableObject {
     private let favoritesRepository: FavoritesRepositoryProtocol
     private let offlinePreparationService: OfflinePreparationServiceProtocol
     private var preparationTask: Task<Void, Never>?
+    private var statusCheckTask: Task<Void, Never>?
 
     init(
         sign: Sign,
@@ -27,6 +28,7 @@ final class SignFavoriteViewModel: ObservableObject {
 
     deinit {
         preparationTask?.cancel()
+        statusCheckTask?.cancel()
     }
 
     func toggle(categoryName: String) {
@@ -55,10 +57,14 @@ final class SignFavoriteViewModel: ObservableObject {
     }
 
     func checkStatus() {
-        Task {
+        statusCheckTask?.cancel()
+        let favoritesRepository = self.favoritesRepository
+        let signId = sign.id
+        statusCheckTask = Task { [weak self] in
             await favoritesRepository.reconcileOfflineState()
-            isFavorite = favoritesRepository.isFavorite(signId: sign.id)
-            offlineStatus = favoritesRepository.getFavoriteEntry(signId: sign.id)?.offlineStatus
+            guard let self else { return }
+            self.isFavorite = favoritesRepository.isFavorite(signId: signId)
+            self.offlineStatus = favoritesRepository.getFavoriteEntry(signId: signId)?.offlineStatus
         }
     }
 
@@ -70,14 +76,16 @@ final class SignFavoriteViewModel: ObservableObject {
 
     private func startOfflinePreparation(categoryName: String) {
         preparationTask?.cancel()
+        let offlinePreparationService = self.offlinePreparationService
+        let sign = self.sign
         preparationTask = Task { [weak self] in
-            guard let self else { return }
             let outcome = await offlinePreparationService.prepare(sign: sign, categoryName: categoryName)
+            guard let self else { return }
             switch outcome {
             case .readyOffline:
-                offlineStatus = .readyOffline
+                self.offlineStatus = .readyOffline
             case .failed:
-                offlineStatus = .failed
+                self.offlineStatus = .failed
             case .cancelled:
                 break
             }

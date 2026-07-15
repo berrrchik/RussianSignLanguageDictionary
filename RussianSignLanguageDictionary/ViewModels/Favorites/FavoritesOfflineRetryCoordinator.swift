@@ -30,6 +30,10 @@ final class FavoritesOfflineRetryCoordinator {
         self.networkMonitor = networkMonitor
     }
 
+    deinit {
+        retryTask?.cancel()
+    }
+
     func cancel() {
         retryTask?.cancel()
         retryTask = nil
