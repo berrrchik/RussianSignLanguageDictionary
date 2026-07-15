@@ -1,6 +1,7 @@
 import Foundation
 
 /// Mock репозиторий уроков для тестирования и Preview
+@MainActor
 final class MockLessonRepository: LessonRepositoryProtocol {
     
     // MARK: - Configuration

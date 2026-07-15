@@ -1,6 +1,7 @@
 import Foundation
 
 /// Мок-репозиторий синхронизации для тестирования
+@MainActor
 final class MockSyncRepository: SyncRepositoryProtocol {
     
     // MARK: - Configuration
@@ -40,7 +41,7 @@ final class MockSyncRepository: SyncRepositoryProtocol {
         }
     }
     
-    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping @Sendable () throws -> SyncData) async throws -> SyncData {
         fetchAllDataCalled = true
         
         if shouldSucceed {
