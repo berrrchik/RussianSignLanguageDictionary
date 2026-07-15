@@ -17,7 +17,16 @@ import os.log
 /// // Разрешение
 /// let repository = container.resolve(SignRepositoryProtocol.self)
 /// ```
-final class DIContainer {
+///
+/// `@unchecked Sendable`: намеренно, не устранимо без разрушения call sites.
+/// `NSRecursiveLock` защищает внутреннюю согласованность словарей `factories`/`singletons`
+/// (не гонки при записи/чтении), но фабрики типизированы `() -> Any` — не `@Sendable` —
+/// т.к. DI осознанно возвращает `@MainActor`-изолированные типы (большинство ViewModel'ов
+/// и некоторых репозиториев/сервисов), которые не могут быть `Sendable`. Sendability того,
+/// что возвращает фабрика — ответственность вызывающей стороны (resolve вызывается только
+/// из init'ов, синхронно, на том же потоке, что и регистрация). Контейнер — singleton,
+/// резолвится синхронно из множества init-путей; `actor` сломал бы все call sites.
+final class DIContainer: @unchecked Sendable {
     // MARK: - Singleton
     
     /// Общий экземпляр контейнера для всего приложения
