@@ -8,7 +8,7 @@ import os.log
 /// Краткосрочный кеш сохраняется между сессиями приложения, но может быть очищен
 /// системой при нехватке места. При превышении лимита (150 MB) удаляются наиболее
 /// давно использованные файлы.
-protocol ShortTermVideoCacheManagerProtocol {
+protocol ShortTermVideoCacheManagerProtocol: Sendable {
     /// Синхронная проверка кеша (NSCache + файловая система).
     /// Обновляет дату модификации файла для корректной LRU-сортировки.
     func cachedVideoURL(for video: SignVideo) -> URL?
@@ -25,11 +25,16 @@ protocol ShortTermVideoCacheManagerProtocol {
 
 // MARK: - Implementation
 
-final class ShortTermVideoCacheManager: ShortTermVideoCacheManagerProtocol {
+/// `@unchecked Sendable`: все stored properties — `let` (никогда не мутируются после `init`).
+/// `NSCache` потокобезопасен сам по себе, но не аннотирован `Sendable` в Foundation.
+/// `FileManager.default`-совместимые вызовы (`fileExists`, `setAttributes`, etc.) документированы
+/// Apple как потокобезопасные для этого набора операций. Фоновая LRU-очистка (`Task(priority: .utility)`)
+/// работает только с локальными `URL`/`@Sendable`-замыканием — без доступа к shared mutable state.
+final class ShortTermVideoCacheManager: ShortTermVideoCacheManagerProtocol, @unchecked Sendable {
 
     // MARK: - Types
 
-    typealias CacheLimitEnforcer = (URL, Int, Int) -> Int
+    typealias CacheLimitEnforcer = @Sendable (URL, Int, Int) -> Int
 
     // MARK: - Constants
 
