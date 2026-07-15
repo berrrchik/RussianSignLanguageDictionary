@@ -118,7 +118,7 @@ final class SyncRepositoryStub: SyncRepositoryProtocol {
         metadata
     }
 
-    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping @Sendable () throws -> SyncData) async throws -> SyncData {
         data
     }
 }

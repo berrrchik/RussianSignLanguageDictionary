@@ -82,8 +82,21 @@ final class SignRepositorySpy: SignRepositoryProtocol {
     }
 }
 
+@MainActor
 final class VideoRepositorySpy: VideoRepositoryProtocol {
-    private(set) var cachedVideoRequests: [SignVideo] = []
+    /// Lock-protected state читаемое/мутируемое из `nonisolated func cachedVideoURL(for:)`,
+    /// вызов которого не гарантированно происходит на MainActor.
+    private nonisolated(unsafe) let cachedVideoLock = NSLock()
+    private nonisolated(unsafe) var _cachedVideoRequests: [SignVideo] = []
+    private nonisolated(unsafe) var _cachedVideoURLValue: URL?
+    var cachedVideoRequests: [SignVideo] {
+        cachedVideoLock.withLock { _cachedVideoRequests }
+    }
+    var cachedVideoURLValue: URL? {
+        get { cachedVideoLock.withLock { _cachedVideoURLValue } }
+        set { cachedVideoLock.withLock { _cachedVideoURLValue = newValue } }
+    }
+
     private(set) var signRequests: [Sign] = []
     private(set) var lessonRequests: [Lesson] = []
     private(set) var videoRequests: [(video: SignVideo, useFavoritesCache: Bool)] = []
@@ -91,7 +104,6 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
     private(set) var preloadVideoRequests: [(video: SignVideo, useFavoritesCache: Bool)] = []
     private(set) var clearCacheCallCount = 0
 
-    var cachedVideoURLValue: URL?
     var signVideoURLResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/video.mp4"))
     var lessonVideoURLResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/lesson.mp4"))
     var directVideoURLResult: Result<URL, Error> = .success(URL(fileURLWithPath: "/tmp/direct-video.mp4"))
@@ -99,9 +111,11 @@ final class VideoRepositorySpy: VideoRepositoryProtocol {
     var preloadVideoError: Error?
     var directVideoURLImplementation: ((SignVideo, Bool) async throws -> URL)?
 
-    func cachedVideoURL(for video: SignVideo) -> URL? {
-        cachedVideoRequests.append(video)
-        return cachedVideoURLValue
+    nonisolated func cachedVideoURL(for video: SignVideo) -> URL? {
+        cachedVideoLock.withLock {
+            _cachedVideoRequests.append(video)
+            return _cachedVideoURLValue
+        }
     }
 
     func getVideoURL(for sign: Sign) async throws -> URL {
@@ -284,7 +298,7 @@ final class SyncRepositorySpy: SyncRepositoryProtocol {
         return try checkForUpdatesResult.get()
     }
 
-    func fetchAllData(cachedDataProvider: @escaping () throws -> SyncData) async throws -> SyncData {
+    func fetchAllData(cachedDataProvider: @escaping @Sendable () throws -> SyncData) async throws -> SyncData {
         fetchAllDataCallCount += 1
 
         if let fetchAllDataImplementation {
