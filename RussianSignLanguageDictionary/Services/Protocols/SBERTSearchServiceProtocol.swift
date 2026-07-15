@@ -1,7 +1,7 @@
 import Foundation
 
 /// Протокол для выполнения SBERT семантического поиска
-protocol SBERTSearchServiceProtocol {
+protocol SBERTSearchServiceProtocol: Sendable {
     /// Выполняет SBERT семантический поиск жестов
     /// - Parameters:
     ///   - query: Текстовый запрос для поиска

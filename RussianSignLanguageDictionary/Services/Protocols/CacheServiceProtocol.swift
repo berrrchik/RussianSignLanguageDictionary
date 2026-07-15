@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Обеспечивает абстракцию над файловым кешем, что позволяет
 /// внедрять тестовые двойники вместо реального диска.
-protocol CacheServiceProtocol {
+protocol CacheServiceProtocol: Sendable {
     /// Сохраняет данные синхронизации в локальный кеш
     /// - Parameter data: Данные для сохранения
     /// - Throws: Ошибка при сохранении

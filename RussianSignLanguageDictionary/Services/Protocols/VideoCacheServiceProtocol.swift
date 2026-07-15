@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Обеспечивает абстракцию для работы с файловым кешем видео,
 /// что позволяет легко тестировать зависимые компоненты.
-protocol VideoCacheServiceProtocol {
+protocol VideoCacheServiceProtocol: Sendable {
     // MARK: - Cache Checking
     
     /// Проверяет наличие видео в кеше

@@ -1,6 +1,6 @@
 import Foundation
 
-protocol HybridSearchServiceBuilderProtocol {
+protocol HybridSearchServiceBuilderProtocol: Sendable {
     func make(
         signs: [Sign],
         networkMonitor: NetworkMonitorProtocol

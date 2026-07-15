@@ -1,6 +1,6 @@
 import Foundation
 
-protocol HybridSearchServiceProtocol {
+protocol HybridSearchServiceProtocol: Sendable {
     func performHybridSearch(
         query: String,
         limit: Int,

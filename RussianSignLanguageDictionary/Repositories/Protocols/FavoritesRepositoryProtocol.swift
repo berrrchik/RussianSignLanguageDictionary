@@ -2,7 +2,7 @@ import Foundation
 
 /// Протокол репозитория для работы с избранными жестами через UserDefaults
 @MainActor
-protocol FavoritesRepositoryProtocol {
+protocol FavoritesRepositoryProtocol: Sendable {
     /// Получает список ID избранных жестов
     /// - Returns: Массив идентификаторов избранных жестов
     func getFavorites() -> [String]

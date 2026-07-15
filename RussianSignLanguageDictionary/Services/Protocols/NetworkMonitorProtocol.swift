@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Протокол для мониторинга состояния сети
-protocol NetworkMonitorProtocol {
+protocol NetworkMonitorProtocol: Sendable {
     /// Публикует изменения состояния подключения.
     var connectivityPublisher: AnyPublisher<ConnectivityStatus, Never> { get }
 
