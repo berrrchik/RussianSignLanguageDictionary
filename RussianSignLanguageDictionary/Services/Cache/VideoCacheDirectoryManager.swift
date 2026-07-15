@@ -3,7 +3,12 @@ import os.log
 import CryptoKit
 
 /// Менеджер для работы с директорией кеша видео
-final class VideoCacheDirectoryManager {
+///
+/// `@unchecked Sendable`: `cacheDirectory` — `let`, вычисляется ровно один раз
+/// синхронно в `init`, до того как объект становится доступен другим потокам,
+/// поэтому безопасен для чтения без `cacheQueue` из любого потока.
+/// `cacheQueue` используется только для сериализации файловых операций (запись/удаление).
+final class VideoCacheDirectoryManager: @unchecked Sendable {
     // MARK: - Constants
     
     private enum Constants {
@@ -22,7 +27,7 @@ final class VideoCacheDirectoryManager {
     private let logger = Logger(subsystem: "com.rsl.videoCache", category: "DirectoryManager")
     
     /// Директория для хранения видео файлов
-    private(set) var cacheDirectory: URL?
+    let cacheDirectory: URL?
     
     /// Очередь для thread-safe операций
     private let cacheQueue = DispatchQueue(label: "com.rsl.videoCacheDirectory.queue")
@@ -45,50 +50,56 @@ final class VideoCacheDirectoryManager {
         self.fileManager = fileManager
         self.customCacheDirectory = cacheDirectory
         self.maxDiskCapacity = Constants.maxDiskCapacity
-        configureCacheDirectory()
+        self.cacheDirectory = Self.configureCacheDirectory(
+            fileManager: fileManager,
+            customCacheDirectory: cacheDirectory,
+            logger: logger
+        )
     }
-    
+
     // MARK: - Configuration
-    
+
     /// Настраивает директорию для кеша видео
-    private func configureCacheDirectory() {
-        cacheQueue.sync {
-            let videoCacheDir: URL
-            if let customCacheDirectory {
-                videoCacheDir = customCacheDirectory
-            } else {
-                guard let cachesDirectory = fileManager.urls(
-                    for: .cachesDirectory,
-                    in: .userDomainMask
-                ).first else {
-                    logger.error("❌ Не удалось получить директорию Caches")
-                    return
-                }
-                
-                videoCacheDir = cachesDirectory.appendingPathComponent(Constants.cacheDirectoryName)
+    private static func configureCacheDirectory(
+        fileManager: FileManager,
+        customCacheDirectory: URL?,
+        logger: Logger
+    ) -> URL? {
+        let videoCacheDir: URL
+        if let customCacheDirectory {
+            videoCacheDir = customCacheDirectory
+        } else {
+            guard let cachesDirectory = fileManager.urls(
+                for: .cachesDirectory,
+                in: .userDomainMask
+            ).first else {
+                logger.error("❌ Не удалось получить директорию Caches")
+                return nil
             }
-            
-            if !fileManager.fileExists(atPath: videoCacheDir.path) {
-                do {
-                    try fileManager.createDirectory(
-                        at: videoCacheDir,
-                        withIntermediateDirectories: true,
-                        attributes: nil
-                    )
-                    logger.info("✅ Директория кеша видео СОЗДАНА: \(videoCacheDir.path)")
-                } catch {
-                    logger.error("❌ Не удалось создать директорию кеша: \(error.localizedDescription)")
-                    return
-                }
-            } else {
-                let files = (try? fileManager.contentsOfDirectory(atPath: videoCacheDir.path)) ?? []
-                logger.info("📁 Директория кеша видео СУЩЕСТВУЕТ: \(videoCacheDir.path)")
-                logger.info("📁 Файлов в кеше при запуске: \(files.count)")
-            }
-            
-            cacheDirectory = videoCacheDir
-            logger.info("✅ Кеш видео настроен (макс: \(Constants.maxDiskCapacity / 1024 / 1024)MB)")
+
+            videoCacheDir = cachesDirectory.appendingPathComponent(Constants.cacheDirectoryName)
         }
+
+        if !fileManager.fileExists(atPath: videoCacheDir.path) {
+            do {
+                try fileManager.createDirectory(
+                    at: videoCacheDir,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+                logger.info("✅ Директория кеша видео СОЗДАНА: \(videoCacheDir.path)")
+            } catch {
+                logger.error("❌ Не удалось создать директорию кеша: \(error.localizedDescription)")
+                return nil
+            }
+        } else {
+            let files = (try? fileManager.contentsOfDirectory(atPath: videoCacheDir.path)) ?? []
+            logger.info("📁 Директория кеша видео СУЩЕСТВУЕТ: \(videoCacheDir.path)")
+            logger.info("📁 Файлов в кеше при запуске: \(files.count)")
+        }
+
+        logger.info("✅ Кеш видео настроен (макс: \(Constants.maxDiskCapacity / 1024 / 1024)MB)")
+        return videoCacheDir
     }
     
     // MARK: - File Path Helpers
