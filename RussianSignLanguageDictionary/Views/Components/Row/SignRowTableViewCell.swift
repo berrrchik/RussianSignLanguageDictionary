@@ -72,17 +72,29 @@ final class SignRowTableViewCell: UITableViewCell {
         signWordLabel.text = sign.word
         categoryLabel.text = categoryName
         favoriteIcon.isHidden = !isFavorite
+        favoriteIcon.isAccessibilityElement = isFavorite
+        favoriteIcon.accessibilityLabel = "В избранном"
         if let symbolName = offlineStatusSymbolName(for: offlineStatus) {
             offlineStatusIcon.image = UIImage(systemName: symbolName)
             offlineStatusIcon.tintColor = offlineStatusColor(for: offlineStatus)
             offlineStatusIcon.isHidden = false
             offlineStatusIcon.accessibilityIdentifier = "offline-status-\(symbolName)"
+            offlineStatusIcon.isAccessibilityElement = true
+            offlineStatusIcon.accessibilityLabel = offlineStatusAccessibilityLabel(for: offlineStatus)
         } else {
             offlineStatusIcon.image = nil
             offlineStatusIcon.tintColor = nil
             offlineStatusIcon.isHidden = true
             offlineStatusIcon.accessibilityIdentifier = nil
+            offlineStatusIcon.isAccessibilityElement = false
         }
+        contentView.isAccessibilityElement = true
+        contentView.accessibilityLabel = accessibilityLabel(
+            word: sign.word,
+            category: categoryName,
+            isFavorite: isFavorite,
+            offlineStatus: offlineStatus
+        )
     }
     
     // MARK: - UI Setup
@@ -134,6 +146,7 @@ final class SignRowTableViewCell: UITableViewCell {
         iconImageView.tintColor = .systemGray
         iconImageView.contentMode = .scaleAspectFit
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
+        iconImageView.isAccessibilityElement = false
         iconView.addSubview(iconImageView)
         
         NSLayoutConstraint.activate([
@@ -255,5 +268,33 @@ final class SignRowTableViewCell: UITableViewCell {
         case .pending, nil:
             return nil
         }
+    }
+
+    private func offlineStatusAccessibilityLabel(for status: FavoriteOfflineStatus?) -> String {
+        switch status {
+        case .readyOffline:
+            return "Доступно офлайн"
+        case .failed:
+            return "Ошибка загрузки офлайн-копии"
+        case .pending, nil:
+            return ""
+        }
+    }
+
+    private func accessibilityLabel(
+        word: String,
+        category: String,
+        isFavorite: Bool,
+        offlineStatus: FavoriteOfflineStatus?
+    ) -> String {
+        var parts = [word, category]
+        if isFavorite {
+            parts.append("в избранном")
+        }
+        let statusLabel = offlineStatusAccessibilityLabel(for: offlineStatus)
+        if !statusLabel.isEmpty {
+            parts.append(statusLabel)
+        }
+        return parts.joined(separator: ", ")
     }
 }

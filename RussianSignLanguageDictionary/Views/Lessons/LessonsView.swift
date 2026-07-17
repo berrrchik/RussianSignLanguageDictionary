@@ -57,6 +57,8 @@ struct LessonsView: View {
                 NavigationLink(destination: LessonDetailView(lesson: lesson)) {
                     lessonRow(lesson)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(lesson.title)
             }
         }
     }
@@ -69,6 +71,7 @@ struct LessonsView: View {
             Image(systemName: "chevron.right")
                 .foregroundColor(.secondary)
                 .font(.caption)
+                .accessibilityHidden(true)
         }
         .padding()
         .background(Color(.systemBackground))

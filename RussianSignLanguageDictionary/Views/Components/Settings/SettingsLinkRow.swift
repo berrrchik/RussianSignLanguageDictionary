@@ -13,6 +13,7 @@ struct SettingsLinkRow: View {
                 Image(systemName: icon)
                     .foregroundColor(.blue)
                     .frame(width: 24)
+                    .accessibilityHidden(true)
                 Text(title)
                     .foregroundColor(.primary)
                 Spacer()
@@ -20,8 +21,11 @@ struct SettingsLinkRow: View {
                     Image(systemName: "arrow.up.right.square")
                         .foregroundColor(.secondary)
                         .font(.caption)
+                        .accessibilityHidden(true)
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(showsExternalIndicator ? "Открывается во внешнем приложении" : "")
     }
 }

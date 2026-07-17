@@ -55,6 +55,8 @@ struct CategoriesView: View {
                         CategoryCardView(category: category)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(category.name)
                 }
             }
             .padding()

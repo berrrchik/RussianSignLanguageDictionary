@@ -18,15 +18,17 @@ struct VideoNavigationView: View {
                 }
             }
             .disabled(!canGoBack)
-            
+            .accessibilityLabel("Предыдущее видео")
+
             Spacer()
-            
+
             Text("\(currentIndex + 1) из \(totalCount)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-            
+                .accessibilityLabel("Видео \(currentIndex + 1) из \(totalCount)")
+
             Spacer()
-            
+
             Button(action: onNext) {
                 HStack {
                     Text("Следующее")
@@ -34,6 +36,7 @@ struct VideoNavigationView: View {
                 }
             }
             .disabled(!canGoNext)
+            .accessibilityLabel("Следующее видео")
         }
         .padding()
     }

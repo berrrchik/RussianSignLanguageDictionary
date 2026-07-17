@@ -38,6 +38,7 @@ struct SynonymListView: View {
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                                .accessibilityHidden(true)
                         }
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
@@ -45,6 +46,9 @@ struct SynonymListView: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(synonym.word)
+                    .accessibilityHint("Открыть жест")
                 }
             }
         }

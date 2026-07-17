@@ -62,6 +62,7 @@ struct StartupSplashScreen: View {
                 .font(.system(size: 74))
                 .foregroundStyle(Color.accentColor)
                 .scaleEffect(breatheActive ? 1.03 : 0.98)
+                .accessibilityHidden(true)
         }
         .frame(width: 132, height: 132)
     }
