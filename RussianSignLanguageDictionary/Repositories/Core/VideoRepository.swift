@@ -88,7 +88,7 @@ nonisolated final class VideoRepository: VideoRepositoryProtocol, Sendable {
         }
     }
 
-    func clearCache() {
+    nonisolated func clearCache() {
         shortTermCache.clear()
         logger.info("🗑️ Краткосрочный кеш очищен")
     }
