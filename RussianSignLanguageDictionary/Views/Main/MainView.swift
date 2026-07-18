@@ -5,21 +5,25 @@ struct MainView: View {
     
     @StateObject private var syncViewModel: SyncViewModel
     @StateObject private var appStatusViewModel: AppStatusViewModel
+    @StateObject private var trackingPermissionViewModel: TrackingPermissionViewModel
     @State private var showSyncError = false
 
     @MainActor
     init() {
         _syncViewModel = StateObject(wrappedValue: SyncViewModel())
         _appStatusViewModel = StateObject(wrappedValue: AppStatusViewModel())
+        _trackingPermissionViewModel = StateObject(wrappedValue: TrackingPermissionViewModel())
     }
 
     @MainActor
     init(
         syncViewModel: SyncViewModel,
-        appStatusViewModel: AppStatusViewModel
+        appStatusViewModel: AppStatusViewModel,
+        trackingPermissionViewModel: TrackingPermissionViewModel = TrackingPermissionViewModel()
     ) {
         _syncViewModel = StateObject(wrappedValue: syncViewModel)
         _appStatusViewModel = StateObject(wrappedValue: appStatusViewModel)
+        _trackingPermissionViewModel = StateObject(wrappedValue: trackingPermissionViewModel)
     }
     
     // MARK: - Body
@@ -67,6 +71,14 @@ struct MainView: View {
             if let error = syncViewModel.syncError {
                 Text(error)
             }
+        }
+        .sheet(isPresented: $trackingPermissionViewModel.showPrimer) {
+            TrackingPrimerView {
+                Task {
+                    await trackingPermissionViewModel.primerContinued()
+                }
+            }
+            .interactiveDismissDisabled(true)
         }
     }
     
@@ -118,7 +130,7 @@ struct MainView: View {
     // MARK: - Initialization
     
     private func initializeApp() async {
-        TrackingPermissionService.requestTrackingPermission()
+        await trackingPermissionViewModel.start()
         await syncViewModel.initializeApp()
     }
 
