@@ -85,6 +85,34 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         XCTAssertTrue(imageIdentifiers(in: cell).contains("offline-status-exclamationmark.circle"))
     }
 
+    func testCoordinatorConfiguresCell_ExposesSingleAccessibilityElementWithWordAndCategory() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: ["category-1": "Категория 1"],
+            favoriteOfflineStatusProvider: nil,
+            onSignSelected: { _ in }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+        tableView.register(SignRowTableViewCell.self, forCellReuseIdentifier: "SignCell")
+
+        let cell = coordinator.tableView(tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+
+        XCTAssertEqual(cell.contentView.accessibilityLabel, "Привет, Категория 1")
+        XCTAssertTrue(accessibleSubviews(of: cell.contentView).isEmpty)
+    }
+
     func testCoordinatorCleanupClearsTableState() {
         let sign = Sign(
             id: "sign-1",
@@ -127,6 +155,19 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         }
 
         return texts
+    }
+
+    private func accessibleSubviews(of view: UIView) -> [UIView] {
+        var elements: [UIView] = []
+
+        for subview in view.subviews {
+            if subview.isAccessibilityElement {
+                elements.append(subview)
+            }
+            elements.append(contentsOf: accessibleSubviews(of: subview))
+        }
+
+        return elements
     }
 
     private func imageIdentifiers(in view: UIView) -> [String] {

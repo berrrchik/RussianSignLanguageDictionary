@@ -140,6 +140,7 @@ final class SignRowTableViewCell: UITableViewCell {
         iconView.backgroundColor = .systemGray5
         iconView.layer.cornerRadius = 8
         iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.isAccessibilityElement = false
         contentView.addSubview(iconView)
         
         let iconImageView = UIImageView(image: UIImage(systemName: "hand.raised.fill"))
@@ -161,20 +162,23 @@ final class SignRowTableViewCell: UITableViewCell {
         signWordLabel.textColor = .label
         signWordLabel.numberOfLines = 1
         signWordLabel.translatesAutoresizingMaskIntoConstraints = false
+        signWordLabel.isAccessibilityElement = false
         contentView.addSubview(signWordLabel)
     }
-    
+
     private func setupCategoryBadge() {
         categoryContainer.backgroundColor = .systemBlue.withAlphaComponent(0.1)
         categoryContainer.layer.cornerRadius = 8
         categoryContainer.clipsToBounds = true
         categoryContainer.translatesAutoresizingMaskIntoConstraints = false
+        categoryContainer.isAccessibilityElement = false
         contentView.addSubview(categoryContainer)
-        
+
         categoryLabel.textColor = .systemBlue
         categoryLabel.backgroundColor = .clear
         categoryLabel.textAlignment = .center
         categoryLabel.translatesAutoresizingMaskIntoConstraints = false
+        categoryLabel.isAccessibilityElement = false
         categoryContainer.addSubview(categoryLabel)
     }
     
