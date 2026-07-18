@@ -1,60 +1,59 @@
 import Foundation
 import AppTrackingTransparency
 import FirebaseAnalytics
+import os.log
 
 /// Сервис для запроса разрешения на отслеживание пользовательской активности
-/// 
+///
 /// Начиная с iOS 17.4, Apple требует явного разрешения пользователя для отслеживания
 /// активности между приложениями и веб-сайтами. Этот сервис обрабатывает запрос разрешения.
+@MainActor
 enum TrackingPermissionService {
+    private static let logger = Logger(subsystem: "com.rsl.tracking", category: "TrackingPermissionService")
+
+    /// Определяет, нужно ли показать прайминг-экран перед системным диалогом ATT
+    ///
+    /// Прайминг-экран показывается только если пользователь ещё ни разу не отвечал
+    /// на системный запрос отслеживания.
+    static func shouldShowPrimingScreen(
+        status: ATTrackingManager.AuthorizationStatus = ATTrackingManager.trackingAuthorizationStatus
+    ) -> Bool {
+        status == .notDetermined
+    }
+
     /// Запрашивает разрешение на отслеживание и настраивает Analytics соответственно
-    /// 
-    /// Вызывается один раз при первом запуске приложения.
-    /// Если пользователь уже дал/отказал разрешение, запрос не показывается.
-    static func requestTrackingPermission() {
-        // Проверяем, что разрешение ещё не запрашивалось
-        guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
-            // Если разрешение уже было запрошено, обновляем состояние Analytics
-            updateAnalyticsCollection()
+    ///
+    /// Вызывается один раз при первом запуске приложения (после прайминг-экрана).
+    /// Если пользователь уже дал/отказал разрешение, системный запрос не показывается,
+    /// но состояние Analytics всё равно синхронизируется с текущим статусом.
+    ///
+    /// Зависимости от `ATTrackingManager`/`Analytics` инъецируются с дефолтами реальных
+    /// системных вызовов — это даёт возможность подменить их в тестах.
+    static func requestTrackingPermission(
+        currentStatus: () -> ATTrackingManager.AuthorizationStatus = { ATTrackingManager.trackingAuthorizationStatus },
+        requestAuthorization: @escaping () async -> ATTrackingManager.AuthorizationStatus = {
+            await ATTrackingManager.requestTrackingAuthorization()
+        },
+        setAnalyticsCollectionEnabled: @escaping (Bool) -> Void = { Analytics.setAnalyticsCollectionEnabled($0) }
+    ) async {
+        guard currentStatus() == .notDetermined else {
+            setAnalyticsCollectionEnabled(isTrackingAllowed(currentStatus()))
             return
         }
-        
-        // Запрашиваем разрешение с небольшой задержкой для лучшего UX
-        Task { @MainActor in
-            do {
-                // Небольшая задержка, чтобы пользователь увидел интерфейс приложения
-                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 секунда
-                
-                let status = await ATTrackingManager.requestTrackingAuthorization()
-                
-                // Обновляем состояние сбора аналитики в зависимости от ответа
-                switch status {
-                case .authorized, .restricted:
-                    // Пользователь разрешил отслеживание (или ограниченное отслеживание)
-                    Analytics.setAnalyticsCollectionEnabled(true)
-                case .denied, .notDetermined:
-                    // Пользователь отказал или статус не определён
-                    Analytics.setAnalyticsCollectionEnabled(false)
-                @unknown default:
-                    Analytics.setAnalyticsCollectionEnabled(false)
-                }
-            } catch {
-                // В случае ошибки отключаем аналитику для безопасности
-                Analytics.setAnalyticsCollectionEnabled(false)
-                print("⚠️ Ошибка при запросе разрешения на отслеживание: \(error.localizedDescription)")
-            }
-        }
+
+        let status = await requestAuthorization()
+        setAnalyticsCollectionEnabled(isTrackingAllowed(status))
     }
-    
-    /// Обновляет состояние сбора аналитики на основе текущего статуса разрешения
-    private static func updateAnalyticsCollection() {
-        switch ATTrackingManager.trackingAuthorizationStatus {
+
+    private static func isTrackingAllowed(_ status: ATTrackingManager.AuthorizationStatus) -> Bool {
+        switch status {
         case .authorized, .restricted:
-            Analytics.setAnalyticsCollectionEnabled(true)
+            return true
         case .denied, .notDetermined:
-            Analytics.setAnalyticsCollectionEnabled(false)
+            return false
         @unknown default:
-            Analytics.setAnalyticsCollectionEnabled(false)
+            logger.error("⚠️ Неизвестный статус разрешения ATT: \(String(describing: status))")
+            return false
         }
     }
 }
