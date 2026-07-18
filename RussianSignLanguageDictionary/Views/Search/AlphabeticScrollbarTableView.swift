@@ -7,7 +7,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
     let categoryNamesById: [String: String]
     let favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
     let onSignSelected: (Sign) -> Void
-    
+    var onDeleteSign: ((Sign) -> Void)? = nil
+
     func makeUIView(context: Context) -> UITableView {
         let tableView = UITableView(frame: .zero, style: .plain)
         tableView.delegate = context.coordinator
@@ -59,7 +60,8 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
             favoritesRepository: favoritesRepository,
             categoryNamesById: categoryNamesById,
             favoriteOfflineStatusProvider: favoriteOfflineStatusProvider,
-            onSignSelected: onSignSelected
+            onSignSelected: onSignSelected,
+            onDeleteSign: onDeleteSign
         )
     }
     
@@ -69,21 +71,24 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         var categoryNamesById: [String: String]
         var favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?
         let onSignSelected: (Sign) -> Void
+        let onDeleteSign: ((Sign) -> Void)?
         weak var tableView: UITableView?
         var isDismantled = false
-        
+
         init(
             sections: [SearchViewModel.SignSection],
             favoritesRepository: FavoritesRepositoryProtocol?,
             categoryNamesById: [String: String],
             favoriteOfflineStatusProvider: ((String) -> FavoriteOfflineStatus?)?,
-            onSignSelected: @escaping (Sign) -> Void
+            onSignSelected: @escaping (Sign) -> Void,
+            onDeleteSign: ((Sign) -> Void)? = nil
         ) {
             self.sections = sections
             self.favoritesRepository = favoritesRepository
             self.categoryNamesById = categoryNamesById
             self.favoriteOfflineStatusProvider = favoriteOfflineStatusProvider
             self.onSignSelected = onSignSelected
+            self.onDeleteSign = onDeleteSign
             super.init()
         }
         
@@ -166,6 +171,23 @@ struct AlphabeticScrollbarTableView: UIViewRepresentable {
         
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
             return 28
+        }
+
+        func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+            guard let onDeleteSign,
+                  indexPath.section < sections.count,
+                  indexPath.row < sections[indexPath.section].signs.count else {
+                return nil
+            }
+
+            let sign = sections[indexPath.section].signs[indexPath.row]
+            let deleteAction = UIContextualAction(style: .destructive, title: "Удалить") { [weak self] _, _, completion in
+                onDeleteSign(sign)
+                self?.tableView?.reloadData()
+                completion(true)
+            }
+            deleteAction.accessibilityLabel = "Удалить из избранного"
+            return UISwipeActionsConfiguration(actions: [deleteAction])
         }
     }
 }

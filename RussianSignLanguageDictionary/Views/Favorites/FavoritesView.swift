@@ -93,6 +93,9 @@ struct FavoritesView: View {
             },
             onSignSelected: { sign in
                 selectedSign = sign
+            },
+            onDeleteSign: { sign in
+                viewModel.removeFavorite(signId: sign.id)
             }
         )
     }

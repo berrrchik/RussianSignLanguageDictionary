@@ -143,6 +143,64 @@ final class AlphabeticScrollbarTableViewTests: XCTestCase {
         XCTAssertNil(coordinator.tableView)
     }
 
+    func testTrailingSwipeActionsReturnsNilWhenNoDeleteHandlerProvided() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: [:],
+            favoriteOfflineStatusProvider: nil,
+            onSignSelected: { _ in }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+
+        let configuration = coordinator.tableView(tableView, trailingSwipeActionsConfigurationForRowAt: IndexPath(row: 0, section: 0))
+
+        XCTAssertNil(configuration)
+    }
+
+    func testTrailingSwipeActionInvokesOnDeleteSignWithCorrectSign() {
+        let sign = Sign(
+            id: "sign-1",
+            word: "Привет",
+            description: "Тестовый жест",
+            categoryId: "category-1",
+            videos: [TestFixtures.video],
+            synonyms: nil
+        )
+        var deletedSign: Sign?
+        let tableViewWrapper = AlphabeticScrollbarTableView(
+            sections: [
+                SearchViewModel.SignSection(id: "section-a", letter: "П", signs: [sign])
+            ],
+            favoritesRepository: nil,
+            categoryNamesById: [:],
+            favoriteOfflineStatusProvider: nil,
+            onSignSelected: { _ in },
+            onDeleteSign: { deletedSign = $0 }
+        )
+        let coordinator = tableViewWrapper.makeCoordinator()
+        let tableView = UITableView(frame: .zero, style: .plain)
+
+        let configuration = coordinator.tableView(tableView, trailingSwipeActionsConfigurationForRowAt: IndexPath(row: 0, section: 0))
+        let action = configuration?.actions.first
+
+        XCTAssertEqual(action?.style, .destructive)
+        action?.handler(action!, UIView()) { _ in }
+
+        XCTAssertEqual(deletedSign?.id, "sign-1")
+    }
+
     private func viewHierarchy(of view: UIView) -> [String] {
         var texts: [String] = []
 
