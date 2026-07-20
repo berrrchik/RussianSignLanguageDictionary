@@ -43,7 +43,8 @@ final class SignRepositoryTests: XCTestCase {
         
         XCTAssertEqual(signs.count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(syncRepository.fetchAllDataCallCount, 1)
-        XCTAssertEqual(sut.currentDataStatus, .updated)
+        let status = await sut.currentDataStatus
+        XCTAssertEqual(status, .updated)
     }
     
     func testLoadAllSignsSavesDataToMemoryAndDiskCaches() async throws {
@@ -83,7 +84,8 @@ final class SignRepositoryTests: XCTestCase {
 
         await fulfillment(of: [fallbackExpectation], timeout: 1.0)
         XCTAssertTrue(statuses.contains(.availableLocally(.diskCache)))
-        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.noInternet))
+        let status = await sut.currentDataStatus
+        XCTAssertEqual(status, .usingCachedData(.noInternet))
     }
 
     func testLoadAllSignsUsesMemoryCacheOnSubsequentCalls() async throws {
@@ -306,7 +308,8 @@ final class SignRepositoryTests: XCTestCase {
         _ = try await sut.loadAllSigns()
 
         await fulfillment(of: [fallbackExpectation], timeout: 1.0)
-        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.serverUnavailable))
+        let status = await sut.currentDataStatus
+        XCTAssertEqual(status, .usingCachedData(.serverUnavailable))
     }
 }
 
