@@ -2,6 +2,7 @@ import XCTest
 import Combine
 @testable import RussianSignLanguageDictionary
 
+@MainActor
 final class SignRepositoryTests: XCTestCase {
     
     var sut: SignRepository!
@@ -43,8 +44,7 @@ final class SignRepositoryTests: XCTestCase {
         
         XCTAssertEqual(signs.count, TestFixtures.syncData.signs.count)
         XCTAssertEqual(syncRepository.fetchAllDataCallCount, 1)
-        let status = await sut.currentDataStatus
-        XCTAssertEqual(status, .updated)
+        XCTAssertEqual(sut.currentDataStatus, .updated)
     }
     
     func testLoadAllSignsSavesDataToMemoryAndDiskCaches() async throws {
@@ -84,8 +84,7 @@ final class SignRepositoryTests: XCTestCase {
 
         await fulfillment(of: [fallbackExpectation], timeout: 1.0)
         XCTAssertTrue(statuses.contains(.availableLocally(.diskCache)))
-        let status = await sut.currentDataStatus
-        XCTAssertEqual(status, .usingCachedData(.noInternet))
+        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.noInternet))
     }
 
     func testLoadAllSignsUsesMemoryCacheOnSubsequentCalls() async throws {
@@ -308,8 +307,7 @@ final class SignRepositoryTests: XCTestCase {
         _ = try await sut.loadAllSigns()
 
         await fulfillment(of: [fallbackExpectation], timeout: 1.0)
-        let status = await sut.currentDataStatus
-        XCTAssertEqual(status, .usingCachedData(.serverUnavailable))
+        XCTAssertEqual(sut.currentDataStatus, .usingCachedData(.serverUnavailable))
     }
 }
 

@@ -2,6 +2,7 @@ import XCTest
 @testable import RussianSignLanguageDictionary
 
 /// Тесты для проверки работы SignRepository с интернетом и без (офлайн-режим)
+@MainActor
 final class SignRepositoryOfflineTests: XCTestCase {
     
     var sut: SignRepository!
@@ -42,8 +43,7 @@ final class SignRepositoryOfflineTests: XCTestCase {
             XCTFail("Expected noDataAvailable")
         } catch let error as SignRepositoryError {
             XCTAssertEqual(error, .noDataAvailable)
-            let status = await sut.currentDataStatus
-            XCTAssertEqual(status, .noData(.noInternet))
+            XCTAssertEqual(sut.currentDataStatus, .noData(.noInternet))
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
@@ -58,8 +58,7 @@ final class SignRepositoryOfflineTests: XCTestCase {
             XCTFail("Expected noDataAvailable")
         } catch let error as SignRepositoryError {
             XCTAssertEqual(error, .noDataAvailable)
-            let status = await sut.currentDataStatus
-            XCTAssertEqual(status, .noData(.serverUnavailable))
+            XCTAssertEqual(sut.currentDataStatus, .noData(.serverUnavailable))
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
